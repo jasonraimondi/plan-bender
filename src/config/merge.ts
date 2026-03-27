@@ -9,12 +9,14 @@ function isPlainObject(val: unknown): val is Record<string, unknown> {
 export function deepMerge(
   ...layers: (PartialConfig | undefined)[]
 ): Config {
-  const result = structuredClone(DEFAULT_CONFIG) as Record<string, unknown>;
+  const result: Record<string, unknown> = structuredClone(
+    DEFAULT_CONFIG as unknown as Record<string, unknown>,
+  );
   for (const layer of layers) {
     if (!layer) continue;
-    mergeInto(result, layer as Record<string, unknown>);
+    mergeInto(result, layer as unknown as Record<string, unknown>);
   }
-  return result as Config;
+  return result as unknown as Config;
 }
 
 function mergeInto(

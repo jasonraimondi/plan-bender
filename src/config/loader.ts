@@ -1,13 +1,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { PartialConfigSchema } from "./schema.js";
 import type { PartialConfig } from "./schema.js";
 import { homedir } from "node:os";
 
 function readYamlSafe(path: string): PartialConfig | undefined {
   try {
     const content = readFileSync(path, "utf-8");
-    return parseYaml(content) as PartialConfig;
+    const raw = parseYaml(content);
+    const result = PartialConfigSchema.safeParse(raw);
+    return result.success ? result.data : undefined;
   } catch {
     return undefined;
   }

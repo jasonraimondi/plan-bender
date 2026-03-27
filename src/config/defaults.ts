@@ -1,6 +1,7 @@
+import { ConfigSchema } from "./schema.js";
 import type { Config } from "./schema.js";
 
-export const DEFAULT_CONFIG: Config = {
+export const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   backend: "yaml-fs",
   tracks: ["intent", "experience", "data", "rules", "resilience"],
   workflow_states: [
@@ -23,4 +24,4 @@ export const DEFAULT_CONFIG: Config = {
     custom_fields: [],
   },
   linear: {},
-};
+});
