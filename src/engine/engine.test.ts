@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render } from "./index.js";
+import { render, TemplateError } from "./index.js";
 
 describe("template engine", () => {
   describe("variable interpolation", () => {
@@ -15,6 +15,21 @@ describe("template engine", () => {
 
     it("errors on unresolved variable", () => {
       expect(() => render("${missing}", {})).toThrow(/missing/);
+    });
+
+    it("throws TemplateError on null value", () => {
+      expect(() => render("${x}", { x: null })).toThrow(TemplateError);
+      expect(() => render("${x}", { x: null })).toThrow(/null/i);
+    });
+
+    it("includes line number when null value on later line", () => {
+      try {
+        render("line one\n${x}", { x: null });
+        expect.unreachable("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(TemplateError);
+        expect((e as TemplateError).line).toBe(2);
+      }
     });
 
     it("renders multiple variables", () => {
@@ -88,6 +103,11 @@ describe("template engine", () => {
         }),
       ).toBe("debug on");
     });
+
+    it("treats !!flag as truthy check (double negation)", () => {
+      expect(render("@if !!flag\nyes\n@end", { flag: true })).toBe("yes");
+      expect(render("@if !!flag\nyes\n@end", { flag: false })).toBe("");
+    });
   });
 
   describe("@each blocks", () => {
@@ -153,6 +173,34 @@ describe("template engine", () => {
 
     it("reports unknown pipe", () => {
       expect(() => render("${x | bogus}", { x: "hi" })).toThrow(/bogus/);
+    });
+
+    it("throws on indent with non-numeric arg", () => {
+      expect(() => render("${x | indent(abc)}", { x: "text" })).toThrow(
+        TemplateError,
+      );
+      expect(() => render("${x | indent(abc)}", { x: "text" })).toThrow(
+        /numeric/i,
+      );
+    });
+
+    it("throws when join receives a non-array", () => {
+      expect(() => render("${x | join(, )}", { x: "not-array" })).toThrow(
+        TemplateError,
+      );
+      expect(() => render("${x | join(, )}", { x: "not-array" })).toThrow(
+        /array/i,
+      );
+    });
+
+    it("includes line number in pipe validation errors", () => {
+      try {
+        render("line one\n${x | indent(abc)}", { x: "text" });
+        expect.unreachable("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(TemplateError);
+        expect((e as TemplateError).line).toBe(2);
+      }
     });
   });
 

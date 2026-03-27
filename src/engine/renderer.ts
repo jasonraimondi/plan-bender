@@ -16,6 +16,9 @@ function resolve(name: string, ctx: Context, line?: number): unknown {
   if (current === undefined) {
     throw new TemplateError(`Unresolved variable "${name}"`, line);
   }
+  if (current === null) {
+    throw new TemplateError(`Null value for variable "${name}"`, line);
+  }
   return current;
 }
 

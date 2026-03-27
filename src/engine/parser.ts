@@ -67,9 +67,9 @@ function parseLine(text: string, lineNum: number): ASTNode[] {
         line: lineNum,
       });
     }
-    const inner = match[1].trim();
+    const inner = match[1]!.trim();
     const parts = splitPipes(inner);
-    const name = parts[0];
+    const name = parts[0]!;
     const pipes = parts.slice(1).map(parsePipeExpr);
     nodes.push({ type: "var", name, pipes, line: lineNum });
     lastIndex = VAR_RE.lastIndex;
@@ -88,19 +88,19 @@ export function parse(template: string): ASTNode[] {
   const stack: { body: ASTNode[]; type: "if" | "each"; line: number }[] = [];
 
   function current(): ASTNode[] {
-    return stack.length > 0 ? stack[stack.length - 1].body : root;
+    return stack.length > 0 ? stack[stack.length - 1]!.body : root;
   }
 
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
-    const line = lines[i];
+    const line = lines[i]!;
     const trimmed = line.trim();
 
     if (trimmed.startsWith("@if ")) {
       let condition = trimmed.slice(4).trim();
       let negated = false;
-      if (condition.startsWith("!")) {
-        negated = true;
+      while (condition.startsWith("!")) {
+        negated = !negated;
         condition = condition.slice(1).trim();
       }
       const node: IfNode = {
@@ -120,8 +120,8 @@ export function parse(template: string): ASTNode[] {
       if (!m) throw new TemplateError(`Invalid @each syntax: "${trimmed}"`, lineNum);
       const node: EachNode = {
         type: "each",
-        collection: m[1],
-        itemName: m[2],
+        collection: m[1]!,
+        itemName: m[2]!,
         body: [],
         line: lineNum,
       };
@@ -146,7 +146,7 @@ export function parse(template: string): ASTNode[] {
   }
 
   if (stack.length > 0) {
-    const unclosed = stack[stack.length - 1];
+    const unclosed = stack[stack.length - 1]!;
     throw new TemplateError(
       `Unclosed @${unclosed.type} block`,
       unclosed.line,

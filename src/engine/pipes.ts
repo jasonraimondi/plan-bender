@@ -1,6 +1,6 @@
 import { TemplateError } from "./errors.js";
 
-type PipeFn = (value: unknown, arg?: string) => string;
+type PipeFn = (value: unknown, arg: string | undefined, line: number | undefined) => string;
 
 const PIPES: Record<string, PipeFn> = {
   upper: (v) => String(v).toUpperCase(),
@@ -9,16 +9,25 @@ const PIPES: Record<string, PipeFn> = {
     String(v)
       .replace(/[\s_]+/g, "-")
       .toLowerCase(),
-  join: (v, arg) => {
-    if (!Array.isArray(v)) return String(v);
+  join: (v, arg, line) => {
+    if (!Array.isArray(v)) {
+      throw new TemplateError(`join pipe requires an array`, line);
+    }
     return v.join(arg ?? ", ");
   },
-  indent: (v, arg) => {
-    const n = parseInt(arg ?? "2", 10);
+  indent: (v, arg, line) => {
+    const raw = arg ?? "2";
+    const n = parseInt(raw, 10);
+    if (isNaN(n)) {
+      throw new TemplateError(
+        `indent pipe requires a numeric argument, got "${raw}"`,
+        line,
+      );
+    }
     const pad = " ".repeat(n);
     return String(v)
       .split("\n")
-      .map((line) => `${pad}${line}`)
+      .map((l) => `${pad}${l}`)
       .join("\n");
   },
 };
@@ -31,7 +40,7 @@ export interface ParsedPipe {
 export function parsePipeExpr(raw: string): ParsedPipe {
   const match = raw.match(/^(\w+)(?:\(([^)]*)\))?$/);
   if (!match) throw new TemplateError(`Invalid pipe: "${raw}"`);
-  return { name: match[1], arg: match[2] };
+  return { name: match[1]!, arg: match[2] };
 }
 
 export function applyPipes(
@@ -43,7 +52,7 @@ export function applyPipes(
   for (const pipe of pipes) {
     const fn = PIPES[pipe.name];
     if (!fn) throw new TemplateError(`Unknown pipe "${pipe.name}"`, line);
-    result = fn(result, pipe.arg);
+    result = fn(result, pipe.arg, line);
   }
   return String(result);
 }
