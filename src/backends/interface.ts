@@ -1,4 +1,5 @@
-import type { PrdYaml, IssueYaml } from "../schemas/types.js";
+import type { PrdYaml } from "../schemas/prd.js";
+import type { IssueYaml } from "../schemas/issue.js";
 import type { RemoteIssue, RemoteProject, SyncResult } from "./types.js";
 
 export interface TrackingBackend {

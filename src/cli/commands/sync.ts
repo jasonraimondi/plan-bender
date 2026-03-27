@@ -9,7 +9,7 @@ import { parse as parseYaml, stringify as toYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
 import { createBackend } from "../../backends/factory.js";
 import "../../backends/yaml-fs.js";
-import type { IssueYaml } from "../../schemas/types.js";
+import type { IssueYaml } from "../../schemas/issue.js";
 import type { SyncResult } from "../../backends/types.js";
 
 export const syncCommand = defineCommand({

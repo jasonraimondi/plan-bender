@@ -2,7 +2,7 @@ id: 2
 slug: config-zod-migration
 name: "Migrate config validation to Zod schemas"
 track: rules
-status: backlog
+status: done
 priority: high
 points: 3
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [1]
 blocking: [3]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-32
 linear_url: "https://linear.app/jboxralph/issue/RAL-32/migrate-config-validation-to-zod-schemas"

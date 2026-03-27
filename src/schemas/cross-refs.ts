@@ -1,4 +1,5 @@
-import type { IssueYaml, PrdYaml } from "./types.js";
+import type { IssueYaml } from "./issue.js";
+import type { PrdYaml } from "./prd.js";
 
 export function validateCrossRefs(
   prd: PrdYaml,

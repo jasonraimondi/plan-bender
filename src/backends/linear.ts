@@ -2,7 +2,8 @@ import { LinearClient } from "@linear/sdk";
 import type { Config } from "../config/schema.js";
 import type { TrackingBackend } from "./interface.js";
 import type { RemoteIssue, RemoteProject } from "./types.js";
-import type { PrdYaml, IssueYaml } from "../schemas/types.js";
+import type { PrdYaml } from "../schemas/prd.js";
+import type { IssueYaml } from "../schemas/issue.js";
 import { registerBackend } from "./factory.js";
 
 class LinearBackend implements TrackingBackend {

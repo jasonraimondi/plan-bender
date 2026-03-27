@@ -1,4 +1,4 @@
-import type { IssueYaml } from "./types.js";
+import type { IssueYaml } from "./issue.js";
 
 export function detectCycles(issues: IssueYaml[]): string[] {
   const adj = new Map<number, number[]>();

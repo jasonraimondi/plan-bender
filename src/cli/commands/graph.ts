@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml } from "../../schemas/types.js";
+import type { IssueYaml } from "../../schemas/issue.js";
 
 const STATUS_COLORS: Record<string, string> = {
   done: "#2da44e",

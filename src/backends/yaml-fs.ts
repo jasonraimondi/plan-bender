@@ -9,7 +9,8 @@ import { parse as parseYaml, stringify as toYaml } from "yaml";
 import type { Config } from "../config/schema.js";
 import type { TrackingBackend } from "./interface.js";
 import type { RemoteIssue, RemoteProject } from "./types.js";
-import type { PrdYaml, IssueYaml } from "../schemas/types.js";
+import type { PrdYaml } from "../schemas/prd.js";
+import type { IssueYaml } from "../schemas/issue.js";
 import { registerBackend } from "./factory.js";
 
 class YamlFsBackend implements TrackingBackend {

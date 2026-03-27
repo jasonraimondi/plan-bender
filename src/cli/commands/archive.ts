@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { consola } from "consola";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml } from "../../schemas/types.js";
+import type { IssueYaml } from "../../schemas/issue.js";
 
 export const archiveCommand = defineCommand({
   meta: {

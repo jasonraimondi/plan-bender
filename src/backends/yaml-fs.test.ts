@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
 import type { Config } from "../config/schema.js";
-import type { PrdYaml, IssueYaml } from "../schemas/types.js";
+import type { PrdYaml } from "../schemas/prd.js";
+import type { IssueYaml } from "../schemas/issue.js";
 import "./yaml-fs.js"; // side-effect: registers backend
 import { createBackend } from "./factory.js";
 

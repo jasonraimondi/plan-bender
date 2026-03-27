@@ -3,7 +3,8 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml, PrdYaml } from "../../schemas/types.js";
+import type { IssueYaml } from "../../schemas/issue.js";
+import type { PrdYaml } from "../../schemas/prd.js";
 
 export const statusCommand = defineCommand({
   meta: {

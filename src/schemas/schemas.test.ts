@@ -9,7 +9,8 @@ import { validateCrossRefs } from "./cross-refs.js";
 import { detectCycles } from "./cycles.js";
 import { validatePlan } from "./validate.js";
 import { DEFAULT_CONFIG } from "../config/defaults.js";
-import type { IssueYaml, PrdYaml } from "./types.js";
+import type { IssueYaml } from "./issue.js";
+import type { PrdYaml } from "./prd.js";
 
 const config = DEFAULT_CONFIG;
 
@@ -68,7 +69,7 @@ describe("validatePrd", () => {
   });
 
   it("rejects invalid status", () => {
-    const result = validatePrd(makePrd({ status: "bogus" }), "prd.yaml");
+    const result = validatePrd({ ...makePrd(), status: "bogus" }, "prd.yaml");
     expect(result.errors.some((e) => e.includes("status"))).toBe(true);
   });
 });
