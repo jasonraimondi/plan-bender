@@ -7,6 +7,7 @@ import { generateCommand } from "./commands/generate.js";
 import { installCommand } from "./commands/install.js";
 import { writePrdCommand } from "./commands/write-prd.js";
 import { writeIssueCommand } from "./commands/write-issue.js";
+import { initCommand } from "./commands/init.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +35,7 @@ const main = defineCommand({
     install: installCommand,
     "write-prd": writePrdCommand,
     "write-issue": writeIssueCommand,
+    init: initCommand,
   },
 });
 
