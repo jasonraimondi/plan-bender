@@ -5,3 +5,5 @@ coverage/
 *.log
 *.env
 .DS_Store
+.plan-bender/
+plan-bender.local.yaml

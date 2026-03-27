@@ -1,0 +1,29 @@
+{
+  "name": "plan-bender",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "plan-bender": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint src/",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "citty": "^0.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "oxlint": "^1.57.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}
