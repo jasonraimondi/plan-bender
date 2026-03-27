@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as toYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
 import { createBackend } from "../../backends/factory.js";
-import "../../backends/yaml-fs.js";
 import type { IssueYaml } from "../../schemas/issue.js";
 import type { SyncResult } from "../../backends/types.js";
 

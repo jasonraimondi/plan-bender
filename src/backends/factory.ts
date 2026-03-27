@@ -1,22 +1,5 @@
-import type { Config } from "../config/schema.js";
-import type { TrackingBackend } from "./interface.js";
+// Auto-register all backends by importing them (they call registerBackend)
+import "./yaml-fs.js";
+import "./linear.js";
 
-const registry = new Map<string, (config: Config) => TrackingBackend>();
-
-export function registerBackend(
-  name: string,
-  factory: (config: Config) => TrackingBackend,
-): void {
-  registry.set(name, factory);
-}
-
-export function createBackend(config: Config): TrackingBackend {
-  const factory = registry.get(config.backend);
-  if (!factory) {
-    const known = [...registry.keys()].join(", ") || "none";
-    throw new Error(
-      `Unknown backend "${config.backend}". Registered backends: ${known}`,
-    );
-  }
-  return factory(config);
-}
+export { registerBackend, createBackend } from "./registry.js";

@@ -21,6 +21,7 @@ vi.mock("@linear/sdk", () => {
     url: "https://linear.app/team/project/proj-1",
     issues: vi.fn().mockResolvedValue({
       nodes: [mockIssue],
+      pageInfo: { hasNextPage: false },
     }),
   };
 

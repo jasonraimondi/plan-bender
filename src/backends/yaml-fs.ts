@@ -9,9 +9,11 @@ import { parse as parseYaml, stringify as toYaml } from "yaml";
 import type { Config } from "../config/schema.js";
 import type { TrackingBackend } from "./interface.js";
 import type { RemoteIssue, RemoteProject } from "./types.js";
+import { PrdSchema } from "../schemas/prd.js";
 import type { PrdYaml } from "../schemas/prd.js";
+import { IssueSchema } from "../schemas/issue.js";
 import type { IssueYaml } from "../schemas/issue.js";
-import { registerBackend } from "./factory.js";
+import { registerBackend } from "./registry.js";
 
 class YamlFsBackend implements TrackingBackend {
   constructor(private config: Config) {}
@@ -46,14 +48,16 @@ class YamlFsBackend implements TrackingBackend {
 
   async pullIssue(remoteId: string): Promise<RemoteIssue> {
     // remoteId is "{projectSlug}/{id}" for yaml-fs
-    const [projectSlug, idStr] = remoteId.split("/");
+    const parts = remoteId.split("/");
+    const projectSlug = parts[0];
+    const idStr = parts[1];
+    if (!projectSlug || !idStr) throw new Error(`Invalid remoteId format: ${remoteId}`);
     const issuesDir = join(this.config.plans_dir, projectSlug, "issues");
     const files = readdirSync(issuesDir);
     const file = files.find((f: string) => f.startsWith(`${idStr}-`));
     if (!file) throw new Error(`Issue not found: ${remoteId}`);
-    const data = parseYaml(
-      readFileSync(join(issuesDir, file), "utf-8"),
-    ) as IssueYaml;
+    const raw = parseYaml(readFileSync(join(issuesDir, file), "utf-8"));
+    const data = IssueSchema.parse(raw);
     return this.issueToRemote(data);
   }
 
@@ -61,15 +65,15 @@ class YamlFsBackend implements TrackingBackend {
     projectId: string,
   ): Promise<{ project: RemoteProject; issues: RemoteIssue[] }> {
     const dir = join(this.config.plans_dir, projectId);
-    const prd = parseYaml(
-      readFileSync(join(dir, "prd.yaml"), "utf-8"),
-    ) as PrdYaml;
+    const prd = PrdSchema.parse(
+      parseYaml(readFileSync(join(dir, "prd.yaml"), "utf-8")),
+    );
     const issuesDir = join(dir, "issues");
     const files = readdirSync(issuesDir).filter((f: string) => f.endsWith(".yaml"));
     const issues = files.map((f: string) => {
-      const data = parseYaml(
-        readFileSync(join(issuesDir, f), "utf-8"),
-      ) as IssueYaml;
+      const data = IssueSchema.parse(
+        parseYaml(readFileSync(join(issuesDir, f), "utf-8")),
+      );
       return this.issueToRemote(data);
     });
     return {

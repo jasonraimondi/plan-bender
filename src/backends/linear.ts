@@ -1,10 +1,11 @@
 import { LinearClient } from "@linear/sdk";
+import { consola } from "consola";
 import type { Config } from "../config/schema.js";
 import type { TrackingBackend } from "./interface.js";
 import type { RemoteIssue, RemoteProject } from "./types.js";
 import type { PrdYaml } from "../schemas/prd.js";
 import type { IssueYaml } from "../schemas/issue.js";
-import { registerBackend } from "./factory.js";
+import { registerBackend } from "./registry.js";
 
 class LinearBackend implements TrackingBackend {
   private client: LinearClient;
@@ -79,7 +80,7 @@ class LinearBackend implements TrackingBackend {
     return {
       id: issue.identifier,
       title: issue.title,
-      status: this.reverseMapState(state?.name ?? ""),
+      status: this.reverseMapState(state?.name),
       priority: this.reversePriority(issue.priority),
       url: issue.url,
     };
@@ -89,18 +90,24 @@ class LinearBackend implements TrackingBackend {
     projectId: string,
   ): Promise<{ project: RemoteProject; issues: RemoteIssue[] }> {
     const project = await this.client.project(projectId);
-    const issuesConn = await project.issues();
     const issues: RemoteIssue[] = [];
-    for (const issue of issuesConn.nodes) {
-      const state = await issue.state;
-      issues.push({
-        id: issue.identifier,
-        title: issue.title,
-        status: this.reverseMapState(state?.name ?? ""),
-        priority: this.reversePriority(issue.priority),
-        url: issue.url,
-      });
+
+    let issuesConn = await project.issues();
+    while (true) {
+      for (const issue of issuesConn.nodes) {
+        const state = await issue.state;
+        issues.push({
+          id: issue.identifier,
+          title: issue.title,
+          status: this.reverseMapState(state?.name),
+          priority: this.reversePriority(issue.priority),
+          url: issue.url,
+        });
+      }
+      if (!issuesConn.pageInfo.hasNextPage) break;
+      issuesConn = await issuesConn.fetchNext();
     }
+
     return {
       project: { id: project.id, name: project.name, url: project.url },
       issues,
@@ -118,10 +125,20 @@ class LinearBackend implements TrackingBackend {
     return match?.id;
   }
 
-  private reverseMapState(linearName: string): string {
-    for (const [local, remote] of Object.entries(this.statusMap)) {
-      if (remote.toLowerCase() === linearName.toLowerCase()) return local;
+  private reverseMapState(linearName: string | undefined | null): string {
+    if (!linearName) {
+      consola.warn("Linear issue has no workflow state — defaulting to backlog");
+      return "backlog";
     }
+    const matches = Object.entries(this.statusMap).filter(
+      ([, remote]) => remote.toLowerCase() === linearName.toLowerCase(),
+    );
+    if (matches.length > 1) {
+      consola.warn(
+        `Ambiguous state mapping: Linear "${linearName}" matches ${matches.map(([l]) => `"${l}"`).join(", ")} — using first`,
+      );
+    }
+    if (matches.length > 0) return matches[0]![0];
     return linearName.toLowerCase().replace(/\s+/g, "-");
   }
 
