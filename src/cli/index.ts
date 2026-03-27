@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 import { defineCommand, runMain } from "citty";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

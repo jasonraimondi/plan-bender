@@ -17,11 +17,14 @@ const templateFiles = readdirSync(templatesDir).filter((f: string) =>
 
 describe("planning skill templates", () => {
   for (const file of templateFiles) {
-    it(`${file} renders without errors`, () => {
+    it(`${file} renders with expected structure`, () => {
       const content = readFileSync(join(templatesDir, file), "utf-8");
       const result = render(content, context);
-      expect(result).toBeTruthy();
+      expect(result.length).toBeGreaterThan(50);
       expect(result).toContain("---");
+      // Rendered templates should contain the skill name from the filename
+      const skillName = file.replace(".skill.tmpl", "");
+      expect(result.toLowerCase()).toContain(skillName.replace(/-/g, " ").substring(0, 8));
     });
   }
 

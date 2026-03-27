@@ -65,13 +65,27 @@ function makeTmpPlan(): string {
 describe("sync command", () => {
   it("syncs yaml-fs backend (push is no-op for yaml-fs but runs without error)", () => {
     const dir = makeTmpPlan();
-    // yaml-fs backend will try to create issues in plans_dir which is relative
-    // The sync should run without error for yaml-fs since it's essentially a local copy
     const out = execFileSync("node", [cli, "sync", "test"], {
       cwd: dir,
       encoding: "utf-8",
       env: { ...process.env },
     });
     expect(out).toContain("Sync push:");
+  });
+
+  it("rejects non-numeric issue ID", () => {
+    const dir = makeTmpPlan();
+    try {
+      execFileSync("node", [cli, "sync", "test#abc"], {
+        cwd: dir,
+        encoding: "utf-8",
+        env: { ...process.env },
+      });
+      expect.unreachable("should have exited with error");
+    } catch (err) {
+      const stderr = (err as { stderr: string }).stderr;
+      expect(stderr).toContain("Invalid issue ID");
+      expect(stderr).toContain("must be a number");
+    }
   });
 });
