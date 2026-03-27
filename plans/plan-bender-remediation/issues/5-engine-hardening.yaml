@@ -1,0 +1,46 @@
+id: 5
+slug: engine-hardening
+name: "Harden template engine: null, double negation, pipe args"
+track: rules
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [1]
+blocking: [10]
+branch: null
+pr: null
+linear_id: RAL-35
+linear_url: "https://linear.app/jboxralph/issue/RAL-35/harden-template-engine-null-double-negation-pipe-args"
+created: 2026-03-27
+updated: 2026-03-27
+tdd: true
+headed: false
+
+outcome: |
+  Template engine throws clear errors for null values, handles double negation correctly, and validates pipe arguments. No silent rendering of invalid data.
+
+scope: |
+  src/engine/ module only. Fixes three specific bugs: null handling, double negation parsing, pipe argument validation. Does not rewrite the parser beyond these targeted fixes.
+
+acceptance_criteria:
+  - "null value in template context throws TemplateError (not rendered as string 'null')"
+  - "@if !!flag evaluates as truthy check (equivalent to @if flag)"
+  - "${x | indent(abc)} throws TemplateError with message about non-numeric argument"
+  - "All new error paths include template line number in error message"
+
+steps:
+  - "src/engine/renderer.ts — resolve() (line 11): change null check to throw TemplateError like undefined does, with variable path and line number in message"
+  - "src/engine/parser.ts — parseCondition (lines 102-105): handle @if !!flag by checking for double ! prefix; strip both and set negated = false (double negation = truthy)"
+  - "src/engine/pipes.ts — applyPipes: validate indent() argument is numeric via Number.isNaN(Number(arg)); throw TemplateError if not"
+  - "src/engine/pipes.ts — applyPipes: validate join() receives an array value; throw TemplateError if value is not an array"
+  - "src/engine/errors.ts — verify TemplateError constructor accepts optional line number; add if missing"
+
+use_cases:
+  - UC-5
+  - UC-7
+
+notes: |
+  Review all .skill.tmpl files for intentional null usage before changing null behavior. If any template intentionally passes null (e.g., optional config field), it should use @if to guard instead of relying on null rendering.

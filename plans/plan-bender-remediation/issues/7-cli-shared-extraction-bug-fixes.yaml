@@ -1,0 +1,50 @@
+id: 7
+slug: cli-shared-extraction-bug-fixes
+name: "Extract CLI shared utilities and fix command bugs"
+track: intent
+status: backlog
+priority: medium
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [4, 6]
+blocking: [8, 10]
+branch: null
+pr: null
+linear_id: RAL-37
+linear_url: "https://linear.app/jboxralph/issue/RAL-37/extract-cli-shared-utilities-and-fix-command-bugs"
+created: 2026-03-27
+updated: 2026-03-27
+tdd: true
+headed: false
+
+outcome: |
+  Duplicated CLI logic extracted to shared module. NaN propagation, Mermaid escaping, and archive overwrite bugs fixed.
+
+scope: |
+  src/cli/ module. Extracts shared utilities and fixes three specific bugs. Does not add new CLI features or change command behavior beyond the bug fixes.
+
+acceptance_criteria:
+  - "loadIssues defined once in src/cli/shared.ts, used by status, graph, archive commands"
+  - "readInput defined once in src/cli/shared.ts, used by write-prd and write-issue commands"
+  - "generateAndInstallSkills defined once in src/cli/shared.ts, used by init and generate commands"
+  - "'plan-bender sync auth#abc' shows 'Invalid issue ID: must be a number' (not 'Issue #NaN not found')"
+  - "Mermaid graph output escapes quotes and angle brackets in issue names"
+  - "Archive to existing destination returns clear error (not silent overwrite or crash)"
+
+steps:
+  - "src/cli/shared.ts (NEW) — extract loadIssues(planDir) from src/cli/commands/status.ts (lines 108-119); reuse in graph.ts and archive.ts"
+  - "src/cli/shared.ts — extract readInput(args) from src/cli/commands/write-prd.ts and write-issue.ts (stdin/file reading logic)"
+  - "src/cli/shared.ts — extract generateAndInstallSkills(config, projectRoot) from src/cli/commands/init.ts and generate.ts (shared skill generation + symlink logic)"
+  - "src/cli/commands/sync.ts — replace parseInt(parts[1], 10) (line 39) with Number() + Number.isNaN() check; return Result err('Invalid issue ID: must be a number') if NaN"
+  - "src/cli/commands/graph.ts — escape issue.name before Mermaid embedding (line 41): replace '\"' with '&quot;', '<' with '&lt;', '>' with '&gt;'"
+  - "src/cli/commands/archive.ts — before renameSync (line 97): check existsSync(archiveDest); if exists, log error and exit instead of overwriting"
+  - "src/cli/commands/status.ts, graph.ts, archive.ts, write-prd.ts, write-issue.ts, init.ts, generate.ts — update to import from src/cli/shared.ts"
+
+use_cases:
+  - UC-3
+  - UC-5
+
+notes: |
+  The loadIssues pattern is duplicated in 3 files with near-identical code (read directory, filter YAML files, parse each). The readInput pattern is duplicated in 2 files (check stdin vs file arg). The generateAndInstallSkills pattern is duplicated in 2 files (load templates, render with context, write to .plan-bender/skills/, symlink).

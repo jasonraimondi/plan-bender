@@ -1,0 +1,48 @@
+id: 6
+slug: backend-fixes
+name: "Fix backend bugs: IDs, pagination, state mapping, auto-register"
+track: data
+status: backlog
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [3]
+blocking: [7]
+branch: null
+pr: null
+linear_id: RAL-36
+linear_url: "https://linear.app/jboxralph/issue/RAL-36/fix-backend-bugs-ids-pagination-state-mapping-auto-register"
+created: 2026-03-27
+updated: 2026-03-27
+tdd: true
+headed: false
+
+outcome: |
+  Linear pagination works for 100+ issues. Null state from Linear maps to backlog with warning. yaml-fs validates parsed YAML. Backends auto-register without side-effect imports.
+
+scope: |
+  src/backends/ module. Fixes pagination, state mapping, YAML validation, and auto-registration. Does not add new backend features or change the adapter interface.
+
+acceptance_criteria:
+  - "Linear pullProject paginates through all issues (not just first page)"
+  - "Null Linear state maps to 'backlog' (not malformed '-' status)"
+  - "Ambiguous reverseMapState logs warning and returns first match"
+  - "yaml-fs validates parsed YAML through Zod schemas (no raw 'as IssueYaml' casts)"
+  - "No side-effect imports (import '../../backends/yaml-fs.js') remain in CLI commands"
+  - "Backends auto-register in factory.ts at module level"
+
+steps:
+  - "src/backends/interface.ts — add JSDoc on RemoteIssue.id documenting that format is backend-specific (yaml-fs uses 'slug/id', Linear uses 'TEAM-123')"
+  - "src/backends/linear.ts — pullProject: add cursor-based pagination loop using Linear SDK's pagination API; continue fetching until no more pages"
+  - "src/backends/linear.ts — reverseMapState: handle null/undefined state parameter; return 'backlog' and log warning via consola.warn"
+  - "src/backends/linear.ts — reverseMapState: handle duplicate values in state map (multiple local states map to same Linear state); use first match and log warning"
+  - "src/backends/yaml-fs.ts — replace 'as IssueYaml' casts (lines 53, 64, 70) with IssueSchema.parse() / PrdSchema.parse() from Zod schemas"
+  - "src/backends/factory.ts — import and register all backends at module level (import linear and yaml-fs); remove side-effect import from src/cli/commands/sync.ts (line 11)"
+
+use_cases:
+  - UC-6
+
+notes: |
+  Linear SDK pagination: the SDK returns Connection objects with .nodes and .pageInfo.hasNextPage / .pageInfo.endCursor. Use a while loop with cursor to fetch all pages. Backend-specific ID format is already correct — yaml-fs uses 'slug/id' and Linear uses identifier like 'TEAM-123'. No changes needed to ID format, just documentation.

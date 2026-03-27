@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "plan-bender": "./dist/cli.js"
+    "plan-bender": "./src/cli/index.ts"
+  },
+  "publishConfig": {
+    "bin": {
+      "plan-bender": "./dist/cli.js"
+    }
   },
   "engines": {
     "node": ">=22"
@@ -14,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint src/",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "plan-bender": "tsx src/cli/index.ts"
   },
   "dependencies": {
     "@linear/sdk": "^80.0.0",

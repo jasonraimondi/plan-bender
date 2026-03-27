@@ -1,0 +1,51 @@
+id: 3
+slug: schema-zod-migration
+name: "Migrate PRD/Issue schemas to Zod, delete types.ts"
+track: rules
+status: backlog
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [2]
+blocking: [4, 6, 9]
+branch: null
+pr: null
+linear_id: RAL-33
+linear_url: "https://linear.app/jboxralph/issue/RAL-33/migrate-prdissue-schemas-to-zod-delete-typests"
+created: 2026-03-27
+updated: 2026-03-27
+tdd: true
+headed: false
+
+outcome: |
+  PRD and issue types inferred from Zod schemas. types.ts deleted. Custom fields handled via .passthrough() with separate validation against config. Missing field validations added.
+
+scope: |
+  src/schemas/ module. Replaces hand-rolled validators and types.ts with Zod schemas. Adds missing validations. Updates all imports across codebase.
+
+acceptance_criteria:
+  - "src/schemas/types.ts deleted"
+  - "PrdYaml and IssueYaml types inferred from Zod schemas"
+  - "Boolean fields (tdd, headed) reject string 'yes'/'no'"
+  - "blocked_by/blocking reject self-references and duplicates"
+  - "linear_id validated as non-empty string or null"
+  - "created/updated validated as date strings"
+  - "Custom fields validated against config.custom_fields definition"
+  - "All imports formerly pointing to types.ts updated"
+
+steps:
+  - "src/schemas/prd.ts — replace validatePrd with PrdSchema (z.object); add created/updated as z.string().date(), validate use_cases array elements as objects with id and description"
+  - "src/schemas/issue.ts — replace validateIssue with IssueSchema (z.object); validate tdd/headed as z.boolean(), labels as z.array(z.string()), linear_id as z.string().min(1).nullable()"
+  - "src/schemas/issue.ts — add .refine() for blocked_by/blocking: reject self-references (id in own blocked_by), reject duplicates"
+  - "src/schemas/issue.ts — add .passthrough() for custom fields; implement validateCustomFields(issue, config) checking extras against config.custom_fields definitions"
+  - "src/schemas/types.ts — DELETE file entirely"
+  - "src/backends/yaml-fs.ts, src/backends/linear.ts, src/backends/interface.ts, src/schemas/validate.ts, src/cli/commands/*.ts, src/templates/context.ts — update imports from types.ts to Zod schema modules"
+  - "src/schemas/validate.ts — update validatePlan to use new Zod-based PrdSchema.safeParse() and IssueSchema.safeParse()"
+
+use_cases:
+  - UC-4
+
+notes: |
+  The .passthrough() approach lets Zod validate known fields strictly while allowing unknown keys through. A second pass (validateCustomFields) checks those extra keys against config.custom_fields — enforcing type, required, and enum constraints. This two-phase validation is necessary because custom field definitions come from config, not from the schema itself.
