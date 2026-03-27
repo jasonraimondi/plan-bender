@@ -11,7 +11,7 @@ interface PipelinePhase {
   description: string;
 }
 
-export interface TemplateContext {
+export interface TemplateContext extends Record<string, unknown> {
   plans_dir: string;
   tracks: string[];
   workflow_states: string[];

@@ -155,7 +155,7 @@ function loadIssue(issuesDir: string, id: number): IssueYaml | undefined {
   const files = readdirSync(issuesDir).filter((f: string) => f.startsWith(`${id}-`));
   if (files.length === 0) return undefined;
   return parseYaml(
-    readFileSync(join(issuesDir, files[0]), "utf-8"),
+    readFileSync(join(issuesDir, files[0]!), "utf-8"),
   ) as IssueYaml;
 }
 
