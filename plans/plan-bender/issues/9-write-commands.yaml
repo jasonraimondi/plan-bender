@@ -2,7 +2,7 @@ id: 9
 slug: write-commands
 name: "write-prd + write-issue validated write commands"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 2
 labels:

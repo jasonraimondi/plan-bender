@@ -2,7 +2,7 @@ id: 7
 slug: schema-validation
 name: "Schema validation + validate CLI command"
 track: rules
-status: backlog
+status: done
 priority: high
 points: 3
 labels:

@@ -2,7 +2,7 @@ id: 11
 slug: yaml-fs-backend
 name: "yaml-fs backend implementation"
 track: data
-status: backlog
+status: done
 priority: medium
 points: 1
 labels:

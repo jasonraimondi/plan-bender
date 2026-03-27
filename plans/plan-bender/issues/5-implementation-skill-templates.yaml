@@ -2,7 +2,7 @@ id: 5
 slug: implementation-skill-templates
 name: "Implementation + orchestrator skill templates: review-prd, implement-prd, implement-issue, orchestrator"
 track: data
-status: backlog
+status: done
 priority: high
 points: 3
 labels:

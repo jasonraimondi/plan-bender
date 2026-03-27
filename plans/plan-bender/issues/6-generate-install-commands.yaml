@@ -2,7 +2,7 @@ id: 6
 slug: generate-install-commands
 name: "generate-skills + install CLI commands"
 track: intent
-status: backlog
+status: done
 priority: high
 points: 2
 labels:

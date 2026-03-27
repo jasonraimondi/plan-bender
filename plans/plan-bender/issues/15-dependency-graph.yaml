@@ -2,7 +2,7 @@ id: 15
 slug: dependency-graph
 name: "graph command: mermaid dependency DAG"
 track: experience
-status: backlog
+status: done
 priority: low
 points: 2
 labels:

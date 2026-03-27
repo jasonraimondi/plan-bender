@@ -2,7 +2,7 @@ id: 3
 slug: template-engine
 name: "Template engine: parser + renderer + pipes"
 track: rules
-status: backlog
+status: done
 priority: high
 points: 3
 labels:

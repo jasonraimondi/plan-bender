@@ -2,7 +2,7 @@ id: 13
 slug: sync-command
 name: "sync command: bidirectional, per-issue + batch"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 3
 labels:

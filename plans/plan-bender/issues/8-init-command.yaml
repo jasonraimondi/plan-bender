@@ -2,7 +2,7 @@ id: 8
 slug: init-command
 name: "init command: interactive setup + auto-generate + auto-install"
 track: intent
-status: backlog
+status: done
 priority: high
 points: 2
 labels:

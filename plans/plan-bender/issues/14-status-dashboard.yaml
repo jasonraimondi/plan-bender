@@ -2,7 +2,7 @@ id: 14
 slug: status-dashboard
 name: "status command: terminal dashboard"
 track: experience
-status: backlog
+status: done
 priority: low
 points: 2
 labels:

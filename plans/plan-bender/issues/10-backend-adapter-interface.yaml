@@ -2,7 +2,7 @@ id: 10
 slug: backend-adapter-interface
 name: "Backend adapter interface"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 2
 labels:

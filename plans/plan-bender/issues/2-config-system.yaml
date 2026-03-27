@@ -2,7 +2,7 @@ id: 2
 slug: config-system
 name: "Config schema + three-layer merge"
 track: data
-status: backlog
+status: done
 priority: high
 points: 3
 labels:

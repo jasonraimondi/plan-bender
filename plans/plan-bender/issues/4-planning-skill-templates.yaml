@@ -2,7 +2,7 @@ id: 4
 slug: planning-skill-templates
 name: "Planning skill templates: interview, write-prd, prd-to-issues, write-an-issue"
 track: data
-status: backlog
+status: done
 priority: high
 points: 3
 labels:

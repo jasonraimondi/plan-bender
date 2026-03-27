@@ -2,7 +2,7 @@ id: 16
 slug: archive-command
 name: "archive command: move completed plans"
 track: intent
-status: backlog
+status: done
 priority: low
 points: 1
 labels:
