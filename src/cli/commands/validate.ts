@@ -1,11 +1,16 @@
 import { defineCommand } from "citty";
+import { z } from "zod";
 import { resolveConfig } from "../../config/index.js";
 import { validatePlan } from "../../schemas/validate.js";
+
+const ValidateArgsSchema = z.object({
+  slug: z.string().min(1, "slug is required"),
+});
 
 export const validateCommand = defineCommand({
   meta: {
     name: "validate",
-    description: "Validate plan YAML files against schemas",
+    description: "Validate plan YAML files against schemas. Usage: plan-bender validate <slug>",
   },
   args: {
     slug: {
@@ -15,6 +20,11 @@ export const validateCommand = defineCommand({
     },
   },
   async run({ args }) {
+    const parsed = ValidateArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) console.error(issue.message);
+      process.exit(1);
+    }
     const config = resolveConfig(process.cwd());
     const result = validatePlan(args.slug, config);
 

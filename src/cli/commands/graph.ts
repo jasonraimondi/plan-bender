@@ -17,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
 export const graphCommand = defineCommand({
   meta: {
     name: "graph",
-    description: "Output mermaid dependency graph for a plan",
+    description: "Output mermaid dependency graph for a plan. Usage: plan-bender graph <slug>",
   },
   args: {
     slug: {

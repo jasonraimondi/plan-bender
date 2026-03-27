@@ -13,7 +13,7 @@ import { loadIssues } from "../shared.js";
 export const archiveCommand = defineCommand({
   meta: {
     name: "archive",
-    description: "Archive a completed plan",
+    description: "Archive a completed plan. Usage: plan-bender archive <slug> [--force]",
   },
   args: {
     slug: {

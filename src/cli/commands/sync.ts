@@ -6,15 +6,21 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as toYaml } from "yaml";
+import { z } from "zod";
 import { resolveConfig } from "../../config/index.js";
 import { createBackend } from "../../backends/factory.js";
 import type { IssueYaml } from "../../schemas/issue.js";
 import type { SyncResult } from "../../backends/types.js";
 
+const SyncArgsSchema = z.object({
+  target: z.string().min(1, "target is required (slug or slug#id)"),
+  pull: z.boolean(),
+});
+
 export const syncCommand = defineCommand({
   meta: {
     name: "sync",
-    description: "Sync plan state with configured backend",
+    description: "Sync plan state with configured backend. Usage: plan-bender sync <slug> [--pull] or plan-bender sync <slug>#<id>",
   },
   args: {
     target: {
@@ -29,6 +35,11 @@ export const syncCommand = defineCommand({
     },
   },
   async run({ args }) {
+    const parsed = SyncArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) console.error(issue.message);
+      process.exit(1);
+    }
     const config = resolveConfig(process.cwd());
     const backend = createBackend(config);
 
