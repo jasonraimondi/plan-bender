@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { validateCommand } from "./commands/validate.js";
 import { generateCommand } from "./commands/generate.js";
 import { installCommand } from "./commands/install.js";
+import { writePrdCommand } from "./commands/write-prd.js";
+import { writeIssueCommand } from "./commands/write-issue.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +32,8 @@ const main = defineCommand({
     validate: validateCommand,
     "generate-skills": generateCommand,
     install: installCommand,
+    "write-prd": writePrdCommand,
+    "write-issue": writeIssueCommand,
   },
 });
 
