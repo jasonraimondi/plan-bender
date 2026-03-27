@@ -34,6 +34,25 @@ export interface EachNode {
 
 const VAR_RE = /\$\{([^}]+)\}/g;
 
+/** Split on | but not inside parentheses */
+function splitPipes(expr: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const ch of expr) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "|" && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  parts.push(current.trim());
+  return parts;
+}
+
 function parseLine(text: string, lineNum: number): ASTNode[] {
   const nodes: ASTNode[] = [];
   let lastIndex = 0;
@@ -49,7 +68,7 @@ function parseLine(text: string, lineNum: number): ASTNode[] {
       });
     }
     const inner = match[1].trim();
-    const parts = inner.split("|").map((s) => s.trim());
+    const parts = splitPipes(inner);
     const name = parts[0];
     const pipes = parts.slice(1).map(parsePipeExpr);
     nodes.push({ type: "var", name, pipes, line: lineNum });

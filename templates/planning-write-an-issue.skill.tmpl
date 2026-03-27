@@ -1,0 +1,177 @@
+---
+name: planning-write-an-issue
+description: Create a single issue by interviewing the user, exploring the codebase, and writing a structured YAML issue file. Use when user says "write an issue", "create an issue", "add an issue", or wants to define a single work item — either standalone or inside an existing plan.
+---
+
+# Write an Issue
+
+Create a single implementation issue as a structured YAML file.
+
+## Placement
+
+An issue can live in two places:
+
+1. **Inside a plan**: `${plans_dir}{slug}/issues/{id}-{issue-slug}.yaml` — when a PRD already exists
+2. **Standalone**: `./issues/{issue-slug}.yaml` — for one-off work items without a parent PRD
+
+Ask the user which they want. If a plan exists, read the PRD to ground the issue in project context.
+
+## Process
+
+### 1. Clarify the work
+
+Ask the user for:
+
+- what needs to happen
+- why it matters (bug? feature? tech debt?)
+- expected outcome when done
+- known constraints or blockers
+
+### 2. Explore the codebase
+
+Investigate the areas of code the issue will touch. Ground the issue's steps and scope in the current system — not in assumptions.
+
+### 3. Interview to convergence
+
+Resolve with the user:
+
+- the narrowest useful scope (thin vertical slice)
+- acceptance criteria — what "done" looks like
+- track classification
+- whether TDD or headed verification applies
+- dependencies on other issues (if inside a plan)
+- AFK vs HITL routing
+
+Keep the issue to **${max_points} points maximum**. If it's bigger, recommend splitting and offer to write multiple issues.
+
+### 4. Draft the issue
+
+Write the issue YAML using this schema:
+
+```yaml
+id: 1
+slug: issue-slug
+name: "Short descriptive title"
+track: rules       # ${tracks | join( | )}
+status: backlog    # ${workflow_states | join( | )}
+priority: high     # urgent | high | medium | low
+points: 2          # fibonacci: 1, 2, 3 (max ${max_points})
+labels:
+  - AFK            # AFK = autonomous, HITL = needs human input
+assignee: null
+blocked_by: []     # issue IDs within this project
+blocking: []       # issue IDs within this project
+branch: null
+pr: null
+linear_id: null    # Linear issue identifier, set by sync
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tdd: true          # optional — issue has testable behavior
+headed: false      # optional — issue requires browser-visible verification
+@each custom_fields as field
+${field.name}: null     # custom field (${field.type})
+@end
+
+outcome: |
+  What this issue delivers.
+
+scope: |
+  What is included. Keep it narrow.
+
+acceptance_criteria:
+  - "Criterion 1"
+  - "Criterion 2"
+
+steps:
+  - "${step_pattern}"
+
+use_cases:
+  - UC-1
+
+notes: |
+  Relevant context, constraints, or prior art.
+```
+
+### Field guidance
+
+#### `track`
+
+| Track | When to use |
+|-------|-------------|
+@each track_descriptions as td
+| `${td.name}` | ${td.description} |
+@end
+
+#### `tdd`
+
+Mark `tdd: true` when the issue has testable behavior — `rules`, `data`, `intent` with API behavior, `resilience`. Skip for pure UI/styling or configuration-only work.
+
+#### `headed`
+
+Mark `headed: true` when correctness requires browser-visible verification. Include visual verification targets in steps when set.
+
+#### `steps`
+
+Ordered implementation actions using `${step_pattern}`:
+
+```yaml
+steps:
+  - "Route /auth/login — reject expired tokens with 401"
+  - "Auth middleware — attach user context to request on valid token"
+```
+
+Every step includes location context (route, file, service, component). No vague language.
+
+#### `points`
+
+Fibonacci: 1, 2, 3. **Maximum ${max_points} points.** If the issue estimates higher, split it.
+@each custom_fields as field
+
+#### `${field.name}`
+@if field.required
+Required custom field (${field.type}).
+@end
+@if !field.required
+Optional custom field (${field.type}).
+@end
+@if field.enum_values
+Allowed values: ${field.enum_values | join(, )}
+@end
+@end
+
+### 5. Review with the user
+
+Present the drafted issue. Ask:
+
+- Is the scope narrow enough?
+- Are the acceptance criteria verifiable?
+- Are the steps concrete and ordered correctly?
+- Is the track/tdd/headed classification right?
+
+Iterate until approved.
+
+### 6. Write the file
+
+**Inside a plan**: read existing issues to determine the next ID. Write `${plans_dir}{slug}/issues/{id}-{issue-slug}.yaml`. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
+
+**Standalone**: write `./issues/{issue-slug}.yaml`. Omit `id`, `blocked_by`, `blocking`, and `use_cases` fields.
+
+Rules:
+
+- set `created` and `updated` to today's date
+- `blocked_by` and `blocking` must be kept in sync across issues
+- filename uses the issue slug
+@if has_backend_sync
+
+### Sync to backend
+
+After writing the issue file, run `plan-bender sync {slug}#{id}` to push the issue to the configured backend.
+@end
+
+### 7. Hand off cleanly
+
+After creation, share:
+
+- the file path to the issue
+- whether it's ready to implement (`/implement-issue`) or still blocked
+- a one-line summary of what the issue delivers
