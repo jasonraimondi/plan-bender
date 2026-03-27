@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BUNDLED_DIR = join(__dirname, "..", "..", "templates");
+const FALLBACK_DIR = join(__dirname, "..", "templates");
 
 export function resolveTemplates(
   projectRoot: string,
@@ -11,13 +12,22 @@ export function resolveTemplates(
   const templates = new Map<string, string>();
 
   // Load bundled templates
-  const bundledDir = existsSync(BUNDLED_DIR) ? BUNDLED_DIR : join(__dirname, "..", "templates");
-  if (existsSync(bundledDir)) {
-    for (const file of readdirSync(bundledDir)) {
-      if (!file.endsWith(".skill.tmpl")) continue;
-      const name = file.replace(".skill.tmpl", "");
-      templates.set(name, readFileSync(join(bundledDir, file), "utf-8"));
-    }
+  const bundledDir = existsSync(BUNDLED_DIR)
+    ? BUNDLED_DIR
+    : existsSync(FALLBACK_DIR)
+      ? FALLBACK_DIR
+      : null;
+
+  if (!bundledDir) {
+    throw new Error(
+      `Bundled templates directory not found: ${BUNDLED_DIR}`,
+    );
+  }
+
+  for (const file of readdirSync(bundledDir)) {
+    if (!file.endsWith(".skill.tmpl")) continue;
+    const name = file.replace(".skill.tmpl", "");
+    templates.set(name, readFileSync(join(bundledDir, file), "utf-8"));
   }
 
   // Override with local templates

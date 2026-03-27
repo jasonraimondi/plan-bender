@@ -1,4 +1,4 @@
-import type { Config } from "../config/schema.js";
+import type { Config, CustomFieldDef, PipelineConfig } from "../config/schema.js";
 
 interface TrackDescription {
   name: string;
@@ -9,6 +9,20 @@ interface PipelinePhase {
   name: string;
   skill: string;
   description: string;
+}
+
+export interface TemplateContext {
+  plans_dir: string;
+  tracks: string[];
+  workflow_states: string[];
+  step_pattern: string;
+  max_points: number;
+  backend: string;
+  has_backend_sync: boolean;
+  custom_fields: CustomFieldDef[];
+  track_descriptions: TrackDescription[];
+  pipeline: PipelineConfig;
+  pipeline_phases: PipelinePhase[];
 }
 
 const ALL_PIPELINE_PHASES: PipelinePhase[] = [
@@ -33,7 +47,7 @@ const DEFAULT_TRACK_DESCRIPTIONS: Record<string, string> = {
 
 export function buildTemplateContext(
   config: Config,
-): Record<string, unknown> {
+): TemplateContext {
   const trackDescriptions: TrackDescription[] = config.tracks.map((t) => ({
     name: t,
     description: DEFAULT_TRACK_DESCRIPTIONS[t] ?? `${t} track`,
@@ -53,6 +67,5 @@ export function buildTemplateContext(
     pipeline_phases: ALL_PIPELINE_PHASES.filter(
       (p) => !config.pipeline.skip.includes(p.skill),
     ),
-    linear: config.linear,
   };
 }
