@@ -3,8 +3,8 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml } from "../../schemas/issue.js";
 import type { PrdYaml } from "../../schemas/prd.js";
+import { loadIssues } from "../shared.js";
 
 export const statusCommand = defineCommand({
   meta: {
@@ -103,19 +103,6 @@ function readYaml<T>(path: string): T | null {
     return parseYaml(readFileSync(path, "utf-8")) as T;
   } catch {
     return null;
-  }
-}
-
-function loadIssues(dir: string): IssueYaml[] {
-  try {
-    return readdirSync(dir)
-      .filter((f: string) => f.endsWith(".yaml"))
-      .sort()
-      .map((f: string) =>
-        parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
-      );
-  } catch {
-    return [];
   }
 }
 

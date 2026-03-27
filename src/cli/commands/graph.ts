@@ -1,9 +1,7 @@
 import { defineCommand } from "citty";
-import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml } from "../../schemas/issue.js";
+import { loadIssues } from "../shared.js";
 
 const STATUS_COLORS: Record<string, string> = {
   done: "#2da44e",
@@ -37,7 +35,11 @@ export const graphCommand = defineCommand({
 
     // Node definitions
     for (const issue of issues) {
-      const label = `${issue.id}: ${issue.name}`;
+      const escaped = issue.name
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const label = `${issue.id}: ${escaped}`;
       lines.push(`  ${issue.id}["${label}"]`);
     }
 
@@ -69,15 +71,3 @@ export const graphCommand = defineCommand({
   },
 });
 
-function loadIssues(dir: string): IssueYaml[] {
-  try {
-    return readdirSync(dir)
-      .filter((f: string) => f.endsWith(".yaml"))
-      .sort()
-      .map((f: string) =>
-        parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
-      );
-  } catch {
-    return [];
-  }
-}

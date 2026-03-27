@@ -1,9 +1,10 @@
 import { defineCommand } from "citty";
-import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
 import { validatePrd } from "../../schemas/prd.js";
+import { readInput } from "../shared.js";
 
 export const writePrdCommand = defineCommand({
   meta: {
@@ -23,9 +24,7 @@ export const writePrdCommand = defineCommand({
   },
   async run({ args }) {
     const config = resolveConfig(process.cwd());
-    const input = args.file
-      ? readFileSync(args.file, "utf-8")
-      : readFileSync(0, "utf-8");
+    const input = readInput(args);
 
     const data = parseYaml(input);
     const result = validatePrd(data, "input");

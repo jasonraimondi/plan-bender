@@ -34,8 +34,15 @@ export const syncCommand = defineCommand({
 
     // Parse target: "slug" or "slug#id"
     const parts = args.target.split("#");
-    const slug = parts[0];
-    const issueId = parts.length > 1 ? parseInt(parts[1], 10) : undefined;
+    const slug = parts[0]!;
+    let issueId: number | undefined;
+    if (parts.length > 1) {
+      issueId = Number(parts[1]);
+      if (Number.isNaN(issueId)) {
+        console.error(`Invalid issue ID: must be a number, got "${parts[1]}"`);
+        process.exit(1);
+      }
+    }
 
     const planDir = join(config.plans_dir, slug);
     const issuesDir = join(planDir, "issues");

@@ -1,9 +1,10 @@
 import { defineCommand } from "citty";
-import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveConfig } from "../../config/index.js";
 import { validateIssue } from "../../schemas/issue.js";
+import { readInput } from "../shared.js";
 
 export const writeIssueCommand = defineCommand({
   meta: {
@@ -28,9 +29,7 @@ export const writeIssueCommand = defineCommand({
   },
   async run({ args }) {
     const config = resolveConfig(process.cwd());
-    const input = args.file
-      ? readFileSync(args.file, "utf-8")
-      : readFileSync(0, "utf-8");
+    const input = readInput(args);
 
     const data = parseYaml(input) as Record<string, unknown>;
     const result = validateIssue(data, "input", config);

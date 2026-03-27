@@ -1,12 +1,10 @@
 import { defineCommand } from "citty";
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify as toYaml } from "yaml";
 import { consola } from "consola";
 import { resolveConfig } from "../../config/index.js";
-import { resolveTemplates } from "../../templates/loader.js";
-import { buildTemplateContext } from "../../templates/context.js";
-import { render } from "../../engine/index.js";
+import { generateSkills } from "../shared.js";
 import type { PartialConfig } from "../../config/schema.js";
 
 export const initCommand = defineCommand({
@@ -101,18 +99,7 @@ export const initCommand = defineCommand({
 
     // Generate skills
     const resolved = resolveConfig(projectRoot);
-    const templates = resolveTemplates(projectRoot);
-    const context = buildTemplateContext(resolved);
-    const outDir = join(projectRoot, ".plan-bender", "skills");
-
-    let count = 0;
-    for (const [name, template] of templates) {
-      const rendered = render(template, context);
-      const skillDir = join(outDir, name);
-      mkdirSync(skillDir, { recursive: true });
-      writeFileSync(join(skillDir, "SKILL.md"), rendered, "utf-8");
-      count++;
-    }
+    const count = generateSkills(resolved, projectRoot);
     console.log(`Generated ${count} skills in .plan-bender/skills/`);
 
     console.log("\nDone! Next steps:");

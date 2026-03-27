@@ -1,17 +1,14 @@
 import { defineCommand } from "citty";
 import {
-  readFileSync,
-  readdirSync,
   existsSync,
   mkdirSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { parse as parseYaml } from "yaml";
 import { consola } from "consola";
 import { resolveConfig } from "../../config/index.js";
-import type { IssueYaml } from "../../schemas/issue.js";
+import { loadIssues } from "../shared.js";
 
 export const archiveCommand = defineCommand({
   meta: {
@@ -93,6 +90,10 @@ export const archiveCommand = defineCommand({
     // Move to archive
     const archiveDir = join(config.plans_dir, ".archive");
     const archiveDest = join(archiveDir, args.slug);
+    if (existsSync(archiveDest)) {
+      console.error(`Archive destination already exists: ${archiveDest}`);
+      process.exit(1);
+    }
     mkdirSync(archiveDir, { recursive: true });
     renameSync(planDir, archiveDest);
 
@@ -103,14 +104,3 @@ export const archiveCommand = defineCommand({
   },
 });
 
-function loadIssues(dir: string): IssueYaml[] {
-  try {
-    return readdirSync(dir)
-      .filter((f: string) => f.endsWith(".yaml"))
-      .map((f: string) =>
-        parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
-      );
-  } catch {
-    return [];
-  }
-}
