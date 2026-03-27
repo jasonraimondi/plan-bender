@@ -2,6 +2,7 @@ import { defineCommand, runMain } from "citty";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { validateCommand } from "./commands/validate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +24,9 @@ const main = defineCommand({
     description:
       "A framework + CLI for configurable, template-driven planning with pluggable tracking backends.",
   },
-  subCommands: {},
+  subCommands: {
+    validate: validateCommand,
+  },
 });
 
 runMain(main);
