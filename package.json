@@ -17,7 +17,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "citty": "^0.2.1"
+    "citty": "^0.2.1",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
