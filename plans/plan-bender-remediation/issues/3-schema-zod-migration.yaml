@@ -2,7 +2,7 @@ id: 3
 slug: schema-zod-migration
 name: "Migrate PRD/Issue schemas to Zod, delete types.ts"
 track: rules
-status: backlog
+status: done
 priority: high
 points: 3
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [2]
 blocking: [4, 6, 9]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-33
 linear_url: "https://linear.app/jboxralph/issue/RAL-33/migrate-prdissue-schemas-to-zod-delete-typests"

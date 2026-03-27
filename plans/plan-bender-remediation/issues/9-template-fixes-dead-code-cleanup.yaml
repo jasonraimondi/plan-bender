@@ -2,7 +2,7 @@ id: 9
 slug: template-fixes-dead-code-cleanup
 name: "Fix template loader, type context, and remove dead code"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 2
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [3]
 blocking: [10]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-39
 linear_url: "https://linear.app/jboxralph/issue/RAL-39/fix-template-loader-type-context-and-remove-dead-code"

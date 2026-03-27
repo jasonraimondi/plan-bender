@@ -2,7 +2,7 @@ id: 7
 slug: cli-shared-extraction-bug-fixes
 name: "Extract CLI shared utilities and fix command bugs"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 3
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [4, 6]
 blocking: [8, 10]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-37
 linear_url: "https://linear.app/jboxralph/issue/RAL-37/extract-cli-shared-utilities-and-fix-command-bugs"

@@ -2,7 +2,7 @@ id: 6
 slug: backend-fixes
 name: "Fix backend bugs: IDs, pagination, state mapping, auto-register"
 track: data
-status: backlog
+status: done
 priority: high
 points: 3
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [3]
 blocking: [7]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-36
 linear_url: "https://linear.app/jboxralph/issue/RAL-36/fix-backend-bugs-ids-pagination-state-mapping-auto-register"

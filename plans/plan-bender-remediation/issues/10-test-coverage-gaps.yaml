@@ -2,7 +2,7 @@ id: 10
 slug: test-coverage-gaps
 name: "Close test coverage gaps and fix tautological tests"
 track: rules
-status: backlog
+status: done
 priority: medium
 points: 3
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [4, 5, 7, 9]
 blocking: []
-branch: null
+branch: main
 pr: null
 linear_id: RAL-40
 linear_url: "https://linear.app/jboxralph/issue/RAL-40/close-test-coverage-gaps-and-fix-tautological-tests"

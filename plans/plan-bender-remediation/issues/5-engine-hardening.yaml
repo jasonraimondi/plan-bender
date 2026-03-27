@@ -2,7 +2,7 @@ id: 5
 slug: engine-hardening
 name: "Harden template engine: null, double negation, pipe args"
 track: rules
-status: backlog
+status: done
 priority: high
 points: 2
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [1]
 blocking: [10]
-branch: null
+branch: main
 pr: null
 linear_id: RAL-35
 linear_url: "https://linear.app/jboxralph/issue/RAL-35/harden-template-engine-null-double-negation-pipe-args"

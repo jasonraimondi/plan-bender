@@ -2,7 +2,7 @@ id: 8
 slug: cli-zod-args-help-text
 name: "Add Zod validation for CLI arguments and improve help text"
 track: intent
-status: backlog
+status: done
 priority: medium
 points: 2
 labels:
@@ -10,7 +10,7 @@ labels:
 assignee: null
 blocked_by: [7]
 blocking: []
-branch: null
+branch: main
 pr: null
 linear_id: RAL-38
 linear_url: "https://linear.app/jboxralph/issue/RAL-38/add-zod-validation-for-cli-arguments-and-improve-help-text"
