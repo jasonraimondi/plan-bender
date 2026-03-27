@@ -9,6 +9,9 @@ import { writePrdCommand } from "./commands/write-prd.js";
 import { writeIssueCommand } from "./commands/write-issue.js";
 import { initCommand } from "./commands/init.js";
 import { syncCommand } from "./commands/sync.js";
+import { statusCommand } from "./commands/status.js";
+import { graphCommand } from "./commands/graph.js";
+import { archiveCommand } from "./commands/archive.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +41,9 @@ const main = defineCommand({
     "write-issue": writeIssueCommand,
     init: initCommand,
     sync: syncCommand,
+    status: statusCommand,
+    graph: graphCommand,
+    archive: archiveCommand,
   },
 });
 
