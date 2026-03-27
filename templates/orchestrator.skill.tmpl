@@ -1,0 +1,43 @@
+---
+name: plan-bender
+description: Menu-driven orchestrator for plan-bender. Lists active plans with status, offers actions (start new plan, continue existing, review, implement, dashboard). Use when user says "plan-bender", wants to manage plans, or asks about planning workflow.
+---
+
+# Plan Bender
+
+Menu-driven planning orchestrator. Show active plans and offer actions.
+
+## Startup
+
+1. Run `plan-bender status` to list all active plans in `${plans_dir}`.
+2. Present the results to the user.
+3. Show the action menu.
+
+## Action menu
+
+Offer these actions:
+
+### Planning pipeline
+
+@each pipeline_phases as phase
+- **${phase.name}**: ${phase.description} → invoke `/${phase.skill}`
+@end
+
+### Management
+
+- **Status dashboard**: show plan status → run `plan-bender status`
+- **Validate**: check plan YAML for errors → run `plan-bender validate {slug}`
+- **Dependency graph**: show mermaid DAG → run `plan-bender graph {slug}`
+@if has_backend_sync
+- **Sync to backend**: push/pull plan state → run `plan-bender sync {slug}`
+@end
+- **Archive**: archive completed plan → run `plan-bender archive {slug}`
+
+## Flow
+
+1. If no plans exist, suggest starting with **Interview** or **Write a PRD**.
+2. If plans exist, show their status and suggest the next logical action based on plan state:
+   - `draft` → Review PRD or PRD to Issues
+   - `active` with todo/backlog issues → Implement PRD
+   - `active` with all done → Archive
+3. Let the user choose. After completing an action, return to the menu.
