@@ -135,7 +135,7 @@ async function pullIssue(
 }
 
 function loadIssue(issuesDir: string, id: number): IssueYaml | undefined {
-  const files = readdirSync(issuesDir).filter((f) => f.startsWith(`${id}-`));
+  const files = readdirSync(issuesDir).filter((f: string) => f.startsWith(`${id}-`));
   if (files.length === 0) return undefined;
   return parseYaml(
     readFileSync(join(issuesDir, files[0]), "utf-8"),
@@ -145,9 +145,9 @@ function loadIssue(issuesDir: string, id: number): IssueYaml | undefined {
 function loadAllIssues(issuesDir: string): IssueYaml[] {
   try {
     return readdirSync(issuesDir)
-      .filter((f) => f.endsWith(".yaml"))
+      .filter((f: string) => f.endsWith(".yaml"))
       .sort()
-      .map((f) =>
+      .map((f: string) =>
         parseYaml(readFileSync(join(issuesDir, f), "utf-8")) as IssueYaml,
       );
   } catch {

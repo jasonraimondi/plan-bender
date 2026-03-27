@@ -72,9 +72,9 @@ export const graphCommand = defineCommand({
 function loadIssues(dir: string): IssueYaml[] {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".yaml"))
+      .filter((f: string) => f.endsWith(".yaml"))
       .sort()
-      .map((f) =>
+      .map((f: string) =>
         parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
       );
   } catch {

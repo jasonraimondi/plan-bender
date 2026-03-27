@@ -106,8 +106,8 @@ export const archiveCommand = defineCommand({
 function loadIssues(dir: string): IssueYaml[] {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".yaml"))
-      .map((f) =>
+      .filter((f: string) => f.endsWith(".yaml"))
+      .map((f: string) =>
         parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
       );
   } catch {

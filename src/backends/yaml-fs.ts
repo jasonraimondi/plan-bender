@@ -48,7 +48,7 @@ class YamlFsBackend implements TrackingBackend {
     const [projectSlug, idStr] = remoteId.split("/");
     const issuesDir = join(this.config.plans_dir, projectSlug, "issues");
     const files = readdirSync(issuesDir);
-    const file = files.find((f) => f.startsWith(`${idStr}-`));
+    const file = files.find((f: string) => f.startsWith(`${idStr}-`));
     if (!file) throw new Error(`Issue not found: ${remoteId}`);
     const data = parseYaml(
       readFileSync(join(issuesDir, file), "utf-8"),
@@ -64,8 +64,8 @@ class YamlFsBackend implements TrackingBackend {
       readFileSync(join(dir, "prd.yaml"), "utf-8"),
     ) as PrdYaml;
     const issuesDir = join(dir, "issues");
-    const files = readdirSync(issuesDir).filter((f) => f.endsWith(".yaml"));
-    const issues = files.map((f) => {
+    const files = readdirSync(issuesDir).filter((f: string) => f.endsWith(".yaml"));
+    const issues = files.map((f: string) => {
       const data = parseYaml(
         readFileSync(join(issuesDir, f), "utf-8"),
       ) as IssueYaml;
@@ -104,7 +104,7 @@ class YamlFsBackend implements TrackingBackend {
         const issuesDir = join(this.config.plans_dir, plan, "issues");
         try {
           const files = readdirSync(issuesDir);
-          if (files.some((f) => f.startsWith(`${issueId}-`))) return plan;
+          if (files.some((f: string) => f.startsWith(`${issueId}-`))) return plan;
         } catch {
           // no issues dir
         }

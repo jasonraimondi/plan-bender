@@ -11,7 +11,7 @@ const templatesDir = join(__dirname, "..", "..", "templates");
 
 const context = buildTemplateContext(DEFAULT_CONFIG);
 
-const templateFiles = readdirSync(templatesDir).filter((f) =>
+const templateFiles = readdirSync(templatesDir).filter((f: string) =>
   f.endsWith(".skill.tmpl"),
 );
 

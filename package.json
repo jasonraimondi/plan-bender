@@ -26,7 +26,8 @@
     "@linear/sdk": "^80.0.0",
     "citty": "^0.2.1",
     "consola": "^3.4.2",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

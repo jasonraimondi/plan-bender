@@ -67,9 +67,9 @@ function readYamlFile(path: string): unknown {
 function listYamlFiles(dir: string): string[] {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".yaml"))
+      .filter((f: string) => f.endsWith(".yaml"))
       .sort()
-      .map((f) => join(dir, f));
+      .map((f: string) => join(dir, f));
   } catch {
     return [];
   }

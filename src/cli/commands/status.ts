@@ -28,7 +28,7 @@ export const statusCommand = defineCommand({
 
     const slugs = args.slug
       ? [args.slug]
-      : readdirSync(plansDir).filter((d) => {
+      : readdirSync(plansDir).filter((d: string) => {
           return existsSync(join(plansDir, d, "prd.yaml"));
         });
 
@@ -108,9 +108,9 @@ function readYaml<T>(path: string): T | null {
 function loadIssues(dir: string): IssueYaml[] {
   try {
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".yaml"))
+      .filter((f: string) => f.endsWith(".yaml"))
       .sort()
-      .map((f) =>
+      .map((f: string) =>
         parseYaml(readFileSync(join(dir, f), "utf-8")) as IssueYaml,
       );
   } catch {
