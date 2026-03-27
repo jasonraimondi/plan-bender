@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { validateCommand } from "./commands/validate.js";
+import { generateCommand } from "./commands/generate.js";
+import { installCommand } from "./commands/install.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +28,8 @@ const main = defineCommand({
   },
   subCommands: {
     validate: validateCommand,
+    "generate-skills": generateCommand,
+    install: installCommand,
   },
 });
 
