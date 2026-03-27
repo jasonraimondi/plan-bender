@@ -4,15 +4,28 @@ import { parse as parseYaml } from "yaml";
 import { PartialConfigSchema } from "./schema.js";
 import type { PartialConfig } from "./schema.js";
 import { homedir } from "node:os";
+import { ok, err, DomainError } from "../result.js";
+import type { Result } from "../result.js";
 
-function readYamlSafe(path: string): PartialConfig | undefined {
+export function readYamlSafe(
+  path: string,
+): Result<PartialConfig, DomainError> {
   try {
     const content = readFileSync(path, "utf-8");
     const raw = parseYaml(content);
     const result = PartialConfigSchema.safeParse(raw);
-    return result.success ? result.data : undefined;
-  } catch {
-    return undefined;
+    if (!result.success) {
+      return err(
+        new DomainError(
+          `Invalid config in ${path}: ${result.error.issues.map((i) => i.message).join(", ")}`,
+        ),
+      );
+    }
+    return ok(result.data);
+  } catch (cause) {
+    return err(
+      new DomainError(`Failed to read config: ${path}`, { cause }),
+    );
   }
 }
 
@@ -32,9 +45,12 @@ export function loadConfigLayers(projectRoot: string): RawLayers {
   const projectPath = join(projectRoot, "plan-bender.yaml");
   const localPath = join(projectRoot, "plan-bender.local.yaml");
 
+  const unwrap = (r: Result<PartialConfig, DomainError>) =>
+    r.ok ? r.data : undefined;
+
   return {
-    global: readYamlSafe(globalPath),
-    project: readYamlSafe(projectPath),
-    local: readYamlSafe(localPath),
+    global: unwrap(readYamlSafe(globalPath)),
+    project: unwrap(readYamlSafe(projectPath)),
+    local: unwrap(readYamlSafe(localPath)),
   };
 }

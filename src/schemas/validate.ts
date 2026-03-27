@@ -9,6 +9,8 @@ import { validatePrd } from "./prd.js";
 import { validateIssue } from "./issue.js";
 import { validateCrossRefs } from "./cross-refs.js";
 import { detectCycles } from "./cycles.js";
+import { ok, err, DomainError } from "../result.js";
+import type { Result } from "../result.js";
 
 export function validatePlan(
   slug: string,
@@ -20,17 +22,33 @@ export function validatePlan(
   const issuesDir = join(planDir, "issues");
 
   // Validate PRD
-  const prdRaw = readYamlFile(prdPath);
-  const prdResult = validatePrd(prdRaw, prdPath);
+  const prdRead = readYamlFile(prdPath);
+  const prdRaw = prdRead.ok ? prdRead.data : null;
+  const prdResult = prdRead.ok
+    ? validatePrd(prdRaw, prdPath)
+    : { file: prdPath, errors: [prdRead.error.message] };
   const prd = prdRaw as PrdYaml;
 
   // Validate issues
-  const issueFiles = listYamlFiles(issuesDir);
+  const filesRead = listYamlFiles(issuesDir);
+  const issueFiles = filesRead.ok ? filesRead.data : [];
   const issueResults = [];
   const issues: IssueYaml[] = [];
 
+  if (!filesRead.ok) {
+    issueResults.push({
+      file: issuesDir,
+      errors: [filesRead.error.message],
+    });
+  }
+
   for (const file of issueFiles) {
-    const raw = readYamlFile(file);
+    const rawRead = readYamlFile(file);
+    if (!rawRead.ok) {
+      issueResults.push({ file, errors: [rawRead.error.message] });
+      continue;
+    }
+    const raw = rawRead.data;
     issueResults.push(validateIssue(raw, file, config));
     if (raw && typeof raw === "object") {
       issues.push(raw as IssueYaml);
@@ -58,21 +76,30 @@ export function validatePlan(
   };
 }
 
-function readYamlFile(path: string): unknown {
+export function readYamlFile(
+  path: string,
+): Result<unknown, DomainError> {
   try {
-    return parseYaml(readFileSync(path, "utf-8"));
-  } catch {
-    return null;
+    return ok(parseYaml(readFileSync(path, "utf-8")));
+  } catch (cause) {
+    return err(
+      new DomainError(`Failed to read YAML file: ${path}`, { cause }),
+    );
   }
 }
 
-function listYamlFiles(dir: string): string[] {
+export function listYamlFiles(
+  dir: string,
+): Result<string[], DomainError> {
   try {
-    return readdirSync(dir)
+    const files = readdirSync(dir)
       .filter((f: string) => f.endsWith(".yaml"))
       .sort()
       .map((f: string) => join(dir, f));
-  } catch {
-    return [];
+    return ok(files);
+  } catch (cause) {
+    return err(
+      new DomainError(`Failed to list YAML files in: ${dir}`, { cause }),
+    );
   }
 }

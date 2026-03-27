@@ -4,7 +4,7 @@ export { validateIssue, IssueSchema } from "./issue.js";
 export type { IssueYaml } from "./issue.js";
 export { validateCrossRefs } from "./cross-refs.js";
 export { detectCycles } from "./cycles.js";
-export { validatePlan } from "./validate.js";
+export { validatePlan, readYamlFile, listYamlFiles } from "./validate.js";
 export type {
   ValidationResult,
   PlanValidationResult,
