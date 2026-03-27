@@ -1,0 +1,123 @@
+name: "plan-bender"
+slug: plan-bender
+status: active
+created: 2026-03-26
+updated: 2026-03-26
+
+description: |
+  A framework + CLI that unifies planning/implementation skills into a configurable, template-driven system with pluggable tracking backends.
+
+why: |
+  The current planning skill pipeline (7 separate skills) works but is rigid: hardcoded YAML schemas, fixed tracks, no backend abstraction, duplicated patterns across skills. Adding a new tracking backend (Jira) or customizing tracks/workflows requires editing every skill. A shared framework with templates and a CLI eliminates this duplication and makes the system configurable per-project.
+
+outcome: |
+  Users run `plan-bender init` in any project to configure their planning workflow (backend, tracks, fields, pipeline phases), generate tailored Claude Code skills, and get a CLI for validation, sync, and status. The planning pipeline adapts to each project's needs without editing skill source files.
+
+in_scope:
+  - "Three-layer config system: global defaults, project config (plan-bender.yaml), local overrides (plan-bender.local.yaml)"
+  - "Custom template engine with @if/@each/@end and ${var | pipe} syntax"
+  - "Skill template files (.skill.tmpl) bundled in package, overridable per-project"
+  - "CLI: init (interactive), generate-skills, install (symlink), validate (on-write + explicit)"
+  - "CLI: write-prd, write-issue (validated write path — skills never write YAML directly)"
+  - "CLI: sync (per-issue and whole-plan, bidirectional), status dashboard, mermaid dependency graph, archive"
+  - "yaml-fs backend (local YAML files)"
+  - "Linear backend via @linear/sdk behind adapter interface"
+  - "Custom issue fields (type, required, enum values) via config"
+  - "Configurable tracks, workflow states, step patterns, point scale, plans directory"
+  - "Pipeline phase skipping via config"
+  - "Multi-plan support (multiple concurrent plans per project)"
+  - "Menu-driven orchestrator skill (generated from template)"
+  - "Generated skills written to .plan-bender/skills/, symlinked to ~/.claude/skills/"
+
+out_of_scope:
+  - "Jira backend (future, after adapter interface proven with Linear)"
+  - "MCP server mode (possible future alternative to CLI)"
+  - "Custom pipeline phase ordering or user-defined phases"
+  - "Arbitrary expression support in templates (no JS expressions, only pipes)"
+  - "Web UI or browser-based dashboard"
+  - "Multi-user conflict resolution (rely on git for now)"
+
+use_cases:
+  - id: UC-1
+    description: "User runs `plan-bender init` in a new project, answers interactive prompts (backend, tracks, step pattern), gets plan-bender.yaml + generated skills + symlinks installed in one command."
+  - id: UC-2
+    description: "User invokes the /plan-bender orchestrator skill, sees active plans with status, and picks an action (start new plan, continue existing, review, implement, dashboard)."
+  - id: UC-3
+    description: "A generated skill (e.g., write-an-issue) pipes issue YAML through `plan-bender write-issue auth 3` which validates against schema (including custom fields) and writes the file."
+  - id: UC-4
+    description: "User runs `plan-bender sync auth` to push all local issue status changes to Linear, or `plan-bender sync auth --pull` to pull Linear state back to local YAML."
+  - id: UC-5
+    description: "User runs `plan-bender validate auth` to batch-check all plan YAML against schemas, finding broken references, orphan issues, and dependency cycles."
+  - id: UC-6
+    description: "User adds custom fields (team, risk_level) to plan-bender.yaml. After running generate-skills, the write-an-issue skill prompts for those fields and validation enforces them."
+  - id: UC-7
+    description: "User overrides a bundled skill template by placing a custom .skill.tmpl in .plan-bender/templates/. generate-skills uses the local override instead of the bundled version."
+  - id: UC-8
+    description: "User runs `plan-bender graph auth` to get a mermaid DAG of issue dependencies, colored by status, for pasting into a PR or Notion doc."
+  - id: UC-9
+    description: "User runs `plan-bender archive auth` after a plan is complete, moving it to .archive/ with a summary."
+  - id: UC-10
+    description: "User has a global ~/.config/plan-bender/defaults.yaml setting their preferred backend and tracks. New projects inherit these defaults, overridden by project-level plan-bender.yaml."
+
+decisions:
+  - "Single npm package (not monorepo). Split later if needed."
+  - "TypeScript + Node runtime. Vite library mode for build, bin shim entry point."
+  - "TS 7 native preview (Go-based tsc) for type checking."
+  - "pnpm for package management."
+  - "Vitest for testing (snapshots + unit + integration)."
+  - "oxlint with minimal defaults for linting."
+  - "Custom template syntax (@if, @each, @end, ${var | pipe}) — not Handlebars or EJS."
+  - "Pipes: join, kebab, upper, lower, indent. No arbitrary expressions."
+  - "All YAML writes go through CLI (plan-bender write-issue, write-prd). Skills never write directly."
+  - "Validation runs on every write through CLI, plus explicit plan-bender validate for batch checking."
+  - "Linear backend uses @linear/sdk (not CLI wrapper or raw GraphQL)."
+  - "Config merge order: global defaults → project plan-bender.yaml → plan-bender.local.yaml (unrestricted deep merge, gitignored)."
+  - "Generated skills go to .plan-bender/skills/, then symlinked to ~/.claude/skills/ via plan-bender install."
+  - "Bundled templates in package, overridable by .plan-bender/templates/ in project."
+  - "Pipeline is preset (interview → write-prd → prd-to-issues → review-prd → implement-prd → implement-issue) with skip support, not reorderable."
+  - "Orchestrator skill is also generated from template (adapts to config)."
+  - "Dependency graph output in mermaid format."
+  - "plan-bender init runs interactive prompts then auto-generates skills and installs them."
+  - "Plans directory configurable (default ./plans/)."
+  - "Multi-plan support — multiple concurrent plans per project."
+
+open_questions:
+  - "How should existing 7 planning skills in ~/Code/jason/skills/ transition? Replaced by generated versions, archived, or kept as reference implementations?"
+  - "Distribution strategy: npm global install, npx, pnpm dlx, or GitHub releases?"
+  - "Should plan-bender.yaml be gitignored or committed? (Currently decided: committed, .local.yaml gitignored — but worth confirming for teams)"
+
+risks:
+  - "TS 7 native preview is bleeding edge — may have tooling gaps with Vite/Vitest integration."
+  - "Custom template syntax requires building and maintaining a parser. Must be simple enough that the parser stays small."
+  - "Generated skills must stay within Claude Code's skill size/complexity limits."
+  - "Linear SDK dependency adds weight to the package even for yaml-fs-only users (consider lazy loading or optional peer dep)."
+  - "Three-layer config merge with custom fields creates a complex validation surface — deep merge edge cases (arrays: replace vs append?)."
+
+validation:
+  - "plan-bender init in a fresh project produces a valid plan-bender.yaml and generates skills that Claude Code loads successfully."
+  - "Generated write-an-issue skill, when invoked, correctly pipes YAML through plan-bender write-issue and validation catches schema violations."
+  - "Template engine correctly renders all 7+ skill templates with various config combinations (different tracks, backends, custom fields)."
+  - "Config merge produces correct output for all three layers with conflicting values."
+  - "plan-bender validate catches: missing required fields, broken blocked_by references, dependency cycles, invalid custom field values."
+  - "plan-bender sync round-trips issue state between local YAML and Linear without data loss."
+  - "Snapshot tests confirm generated skill output matches expected content for each config variation."
+
+notes: |
+  Major modules:
+  - Template engine: custom parser for @if/@each/${var|pipe} syntax. Small, self-contained, heavily unit-tested. This is the core differentiator — must be rock-solid.
+  - Config loader: reads three layers, deep merges, validates merged result against config schema. Handles plans_dir, backend, tracks, workflow_states, step_pattern, custom_fields, pipeline.skip.
+  - Schema validator: validates PRD and issue YAML against base schema + custom fields from config. Used by write commands and explicit validate command.
+  - Backend adapters: interface with updateStatus, createIssue, syncIssue, pullIssue methods. yaml-fs is trivial (read/write files). Linear adapter wraps @linear/sdk.
+  - CLI commands: thin handlers that wire config + schemas + backends. Commander or citty for arg parsing.
+  - Skill templates: .skill.tmpl files for each planning skill + orchestrator. These are the user-facing output — must produce clean, readable SKILL.md files.
+
+  Testing strategy:
+  - Snapshot tests for template rendering are the highest-value tests — they catch regressions in generated skill content.
+  - Unit tests for engine pipes, config merge logic, schema validation.
+  - Integration tests for CLI commands against fixture projects (temp dirs with plan-bender.yaml + plan YAML files).
+  - Linear adapter tests against mock/stub (not live API in CI).
+
+  Deep merge behavior for arrays: replace, not append. If project config sets tracks: [frontend, backend], it replaces the global default entirely. This matches how most YAML config systems work and avoids surprising concatenation.
+
+dev_command: "pnpm dev"
+base_url: null

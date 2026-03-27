@@ -1,0 +1,48 @@
+id: 3
+slug: template-engine
+name: "Template engine: parser + renderer + pipes"
+track: rules
+status: backlog
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [1]
+blocking: [4, 5, 6]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-26
+updated: 2026-03-26
+tdd: true
+
+outcome: |
+  A custom template engine that parses and renders .skill.tmpl files using @if/@each/@end blocks and ${var | pipe} expressions.
+
+scope: |
+  Parser, AST, renderer, pipe functions. No template file loading or CLI integration — pure engine.
+
+acceptance_criteria:
+  - "${variable} resolves to value from context"
+  - "${var | pipe} applies transform (join, kebab, upper, lower, indent)"
+  - "@if condition renders block only when truthy"
+  - "@if negation (@if !condition) works"
+  - "@each items as item iterates and exposes item variable"
+  - "@end closes the nearest open block"
+  - "Nested @if/@each blocks render correctly"
+  - "Syntax errors produce errors with line numbers"
+  - "Unresolved variables produce errors (not silent empty strings)"
+
+steps:
+  - "src/engine/tokenizer.ts — scan template string into tokens: TEXT, VAR (${...}), IF (@if), EACH (@each), END (@end)"
+  - "src/engine/parser.ts — parse token stream into AST: TextNode, VarNode(name, pipes[]), IfNode(condition, body[]), EachNode(collection, itemName, body[])"
+  - "src/engine/pipes.ts — implement pipe functions: join(separator), kebab, upper, lower, indent(spaces)"
+  - "src/engine/renderer.ts — walk AST with context object, resolve variables, apply pipes, evaluate conditionals, iterate collections"
+  - "src/engine/errors.ts — TemplateError with line number, column, source snippet for parse and render errors"
+  - "src/engine/index.ts — render(template: string, context: Record<string, unknown>): string"
+
+use_cases: []
+
+notes: |
+  The template syntax is intentionally minimal. No arbitrary expressions, no nested property access beyond simple dot notation (config.backend), no ternaries. Pipes are the only transform mechanism.

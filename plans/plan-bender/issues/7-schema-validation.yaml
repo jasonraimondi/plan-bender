@@ -1,0 +1,49 @@
+id: 7
+slug: schema-validation
+name: "Schema validation + validate CLI command"
+track: rules
+status: backlog
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [2]
+blocking: [8, 9]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-26
+updated: 2026-03-26
+tdd: true
+
+outcome: |
+  YAML schema validation for PRD and issue files, including custom fields, cross-references, and dependency cycle detection, exposed as a CLI command.
+
+scope: |
+  PRD schema, issue schema (with custom field support), cross-reference checks, cycle detection, validate CLI command. No write-through — that's a separate issue.
+
+acceptance_criteria:
+  - "PRD YAML validates required fields (name, slug, status, description, why, outcome)"
+  - "Issue YAML validates required fields, enums (track, status, priority), and point range (1-max_points)"
+  - "Custom fields from config are validated (type, required, enum values)"
+  - "blocked_by/blocking sync is verified across all issues in a plan"
+  - "Dependency cycles are detected and reported"
+  - "use_case references in issues are checked against PRD use_cases"
+  - "plan-bender validate {slug} reports per-file results with exit code 1 on failure"
+
+steps:
+  - "src/schemas/prd.ts — PRD schema definition: required fields, type constraints, enum values for status"
+  - "src/schemas/issue.ts — issue schema definition: required fields, track/status/priority enums, points range, custom field integration from config"
+  - "src/schemas/cross-refs.ts — cross-reference validation: blocked_by/blocking sync, use_case references exist in PRD, no orphan issues"
+  - "src/schemas/cycles.ts — topological sort on blocked_by graph, detect and report cycles with involved issue IDs"
+  - "src/schemas/validate.ts — validatePlan(slug, config): load all plan files, run schema + cross-ref + cycle checks, return structured results"
+  - "src/cli/commands/validate.ts — CLI command: resolve plan path from slug + config.plans_dir, run validation, print per-file results, exit 1 on failure"
+
+use_cases:
+  - UC-3
+  - UC-5
+  - UC-6
+
+notes: |
+  Validation is also used by write-prd and write-issue commands (issue 9) to validate before writing. The validate module should be importable, not just a CLI command.

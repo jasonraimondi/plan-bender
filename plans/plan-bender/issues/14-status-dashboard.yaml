@@ -1,0 +1,44 @@
+id: 14
+slug: status-dashboard
+name: "status command: terminal dashboard"
+track: experience
+status: backlog
+priority: low
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 11]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-26
+updated: 2026-03-26
+tdd: true
+
+outcome: |
+  A CLI command that displays a terminal dashboard of all plans with issue statuses, track coverage, points, and blockers.
+
+scope: |
+  Read-only status display. All plans in plans_dir. No interactive elements.
+
+acceptance_criteria:
+  - "plan-bender status shows all plans in config.plans_dir"
+  - "Per-plan display: issue counts by status, points done/total, blocked issue IDs"
+  - "Track coverage summary per plan (issues per track)"
+  - "Cross-plan totals at bottom"
+  - "plan-bender status {slug} shows detailed view for one plan"
+
+steps:
+  - "src/cli/commands/status.ts — scan config.plans_dir for plan directories, read prd.yaml + all issues"
+  - "Aggregation — count issues by status, sum points by done/total, list blocked issue IDs, count by track"
+  - "Terminal output — formatted table/list per plan: name, status, progress bar or fraction, blockers, track coverage"
+  - "Single-plan mode — detailed per-issue list with status, track, points, assignee, blockers"
+  - "Register status command in CLI entry point"
+
+use_cases:
+  - UC-2
+
+notes: |
+  Keep output compact for terminal. No colors required but helpful. Consider using a simple table formatter (not a full TUI framework).

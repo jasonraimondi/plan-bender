@@ -1,0 +1,43 @@
+id: 15
+slug: dependency-graph
+name: "graph command: mermaid dependency DAG"
+track: experience
+status: backlog
+priority: low
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-26
+updated: 2026-03-26
+tdd: true
+
+outcome: |
+  A CLI command that outputs a mermaid-format dependency graph of issues in a plan, colored by status.
+
+scope: |
+  Mermaid graph output to stdout. One plan at a time. No interactive rendering.
+
+acceptance_criteria:
+  - "plan-bender graph {slug} outputs valid mermaid graph TD syntax"
+  - "Nodes labeled with issue ID and title"
+  - "Edges derived from blocked_by relationships"
+  - "Nodes colored by status: done=green, in-progress=yellow, blocked=red, backlog/todo=gray"
+  - "Output renders correctly when pasted into GitHub markdown"
+
+steps:
+  - "src/cli/commands/graph.ts — read all issues from plan, extract blocked_by edges"
+  - "Mermaid generation — build graph TD with node definitions (id[title]), edge definitions (blocked_by → blocking), style definitions (fill color by status)"
+  - "Output to stdout wrapped in mermaid code fence"
+  - "Register graph command in CLI entry point"
+
+use_cases:
+  - UC-8
+
+notes: |
+  Mermaid renders natively in GitHub markdown, Notion, and VS Code preview. No ASCII fallback for v0.3.

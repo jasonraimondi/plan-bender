@@ -1,0 +1,45 @@
+id: 6
+slug: generate-install-commands
+name: "generate-skills + install CLI commands"
+track: intent
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [3, 4, 5]
+blocking: [8]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-26
+updated: 2026-03-26
+tdd: true
+
+outcome: |
+  CLI commands that render skill templates with project config and symlink them to Claude Code's skills directory.
+
+scope: |
+  generate-skills command (load config, resolve templates, render, write) and install command (symlink). No interactive prompts — those belong to init.
+
+acceptance_criteria:
+  - "plan-bender generate-skills reads config, renders all templates, writes to .plan-bender/skills/{skill-name}/SKILL.md"
+  - "Local template overrides in .plan-bender/templates/ take precedence over bundled templates"
+  - "plan-bender install creates symlinks from .plan-bender/skills/* to ~/.claude/skills/"
+  - "Existing symlinks are updated (not duplicated)"
+  - "Both commands report what was generated/installed"
+
+steps:
+  - "src/cli/commands/generate.ts — load config via resolveConfig, scan bundled templates dir, check .plan-bender/templates/ for overrides, render each template with config context, write to .plan-bender/skills/{name}/SKILL.md"
+  - "src/cli/commands/install.ts — read .plan-bender/skills/ entries, create/update symlinks in ~/.claude/skills/, report installed skills"
+  - "src/templates/loader.ts — resolveTemplates(projectRoot): merge bundled templates with local overrides, return map of skill-name → template content"
+  - "Register both commands in CLI entry point with help text"
+
+use_cases:
+  - UC-1
+  - UC-2
+  - UC-7
+
+notes: |
+  Bundled templates live in the npm package at templates/. Local overrides at .plan-bender/templates/{skill-name}.skill.tmpl.
