@@ -1,11 +1,13 @@
 import { defineCommand } from "citty";
 import {
   readdirSync,
+  readFileSync,
   existsSync,
   symlinkSync,
   unlinkSync,
   lstatSync,
   mkdirSync,
+  appendFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -59,6 +61,22 @@ export const installCommand = defineCommand({
       count++;
     }
 
+    if (config.install_target === "project") {
+      ensureGitignore(projectRoot);
+    }
+
     console.log(`\n${count} skills installed to ${targetDir}`);
   },
 });
+
+const GITIGNORE_ENTRY = ".claude/skills/bender-*/";
+
+function ensureGitignore(projectRoot: string): void {
+  const gitignorePath = join(projectRoot, ".gitignore");
+  if (existsSync(gitignorePath)) {
+    const content = readFileSync(gitignorePath, "utf-8");
+    if (content.includes(GITIGNORE_ENTRY)) return;
+  }
+  appendFileSync(gitignorePath, `\n${GITIGNORE_ENTRY}\n`, "utf-8");
+  console.log(`  added ${GITIGNORE_ENTRY} to .gitignore`);
+}
