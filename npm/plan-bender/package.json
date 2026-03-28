@@ -1,0 +1,33 @@
+{
+  "name": "@jasonraimondi/plan-bender",
+  "version": "0.0.0",
+  "description": "Structured planning pipeline for Claude Code",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasonraimondi/plan-bender"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "bin": {
+    "plan-bender": "./bin/plan-bender",
+    "pb": "./bin/plan-bender"
+  },
+  "files": [
+    "bin/",
+    "src/index.mjs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@jasonraimondi/plan-bender-darwin-arm64": "0.0.0",
+    "@jasonraimondi/plan-bender-darwin-x64": "0.0.0",
+    "@jasonraimondi/plan-bender-linux-arm64": "0.0.0",
+    "@jasonraimondi/plan-bender-linux-x64": "0.0.0",
+    "@jasonraimondi/plan-bender-win32-x64": "0.0.0"
+  }
+}
