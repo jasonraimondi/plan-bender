@@ -13,6 +13,9 @@
 # OS
 .DS_Store
 
+# Node
+node_modules/
+
 # Local config
 .plan-bender.local.yaml
 .serena/serena.local.yaml

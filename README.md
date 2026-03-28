@@ -5,7 +5,7 @@ Structured planning pipeline for Claude Code. Interview, PRD, issues, review, im
 ## Quick start
 
 ```bash
-npm install -g plan-bender    # or npx plan-bender
+npm install -g @jasonraimondi/plan-bender    # or npx @jasonraimondi/plan-bender
 pb init                        # interactive setup → plan-bender.yaml
 pb install                     # symlink skills into Claude Code
 ```

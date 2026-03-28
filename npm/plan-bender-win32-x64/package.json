@@ -1,0 +1,16 @@
+{
+  "name": "@jasonraimondi/plan-bender-win32-x64",
+  "version": "0.0.0",
+  "description": "plan-bender native binary for Windows x64",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasonraimondi/plan-bender"
+  },
+  "license": "MIT",
+  "preferUnplugged": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "os": ["win32"],
+  "cpu": ["x64"]
+}
