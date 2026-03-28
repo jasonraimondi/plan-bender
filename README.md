@@ -18,10 +18,13 @@ Then in Claude Code:
 
 ## Pipeline
 
-```
-  Interview ──→ Write PRD ──→ Break into Issues ──→ Review
-                                                      │
-                              Archive ←── Implement ←──┘
+```mermaid
+graph LR
+    A[Interview] --> B[Write PRD]
+    B --> C[Break into Issues]
+    C --> D[Review]
+    D --> E[Implement]
+    E --> F[Archive]
 ```
 
 Each stage is a Claude Code skill. You can enter at any point or skip stages entirely.
