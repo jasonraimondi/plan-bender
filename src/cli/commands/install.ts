@@ -9,16 +9,25 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { resolveConfig } from "../../config/index.js";
+
+function resolveTargetDir(installTarget: string, projectRoot: string): string {
+  if (installTarget === "project") {
+    return join(projectRoot, ".claude", "skills");
+  }
+  return join(homedir(), ".claude", "skills");
+}
 
 export const installCommand = defineCommand({
   meta: {
     name: "install",
-    description: "Symlink generated skills to ~/.claude/skills/",
+    description: "Symlink generated skills to Claude skills directory",
   },
   async run() {
     const projectRoot = process.cwd();
+    const config = resolveConfig(projectRoot);
     const sourceDir = join(projectRoot, ".plan-bender", "skills");
-    const targetDir = join(homedir(), ".claude", "skills");
+    const targetDir = resolveTargetDir(config.install_target, projectRoot);
 
     if (!existsSync(sourceDir)) {
       console.error(

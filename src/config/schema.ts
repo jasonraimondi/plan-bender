@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const BackendSchema = z.enum(["yaml-fs", "linear"]);
+export const InstallTargetSchema = z.enum(["project", "user"]);
 
 export const CustomFieldDefSchema = z
   .object({
@@ -42,6 +43,7 @@ export const ConfigSchema = z
     pipeline: PipelineConfigSchema,
     issue_schema: IssueSchemaConfigSchema,
     linear: LinearConfigSchema,
+    install_target: InstallTargetSchema,
   })
   .superRefine((config, ctx) => {
     if (config.backend === "linear") {
@@ -73,10 +75,12 @@ export const PartialConfigSchema = z
     pipeline: PipelineConfigSchema.partial().optional(),
     issue_schema: IssueSchemaConfigSchema.partial().optional(),
     linear: LinearConfigSchema.partial().optional(),
+    install_target: InstallTargetSchema.optional(),
   })
   .passthrough();
 
 export type Backend = z.infer<typeof BackendSchema>;
+export type InstallTarget = z.infer<typeof InstallTargetSchema>;
 export type CustomFieldType = CustomFieldDef["type"];
 export type CustomFieldDef = z.infer<typeof CustomFieldDefSchema>;
 export type LinearConfig = z.infer<typeof LinearConfigSchema>;

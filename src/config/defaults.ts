@@ -24,4 +24,5 @@ export const DEFAULT_CONFIG: Config = ConfigSchema.parse({
     custom_fields: [],
   },
   linear: {},
+  install_target: "project",
 });
