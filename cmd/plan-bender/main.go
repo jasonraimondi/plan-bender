@@ -39,8 +39,8 @@ func rootCmd() *cobra.Command {
 
 	root.AddCommand(
 		initCmd(),
-		generateSkillsCmd(),
-		installCmd(),
+		cli.NewGenerateSkillsCmd(),
+		cli.NewInstallCmd(),
 		cli.NewValidateCmd(),
 		writePRDCmd(),
 		writeIssueCmd(),
@@ -66,14 +66,6 @@ func stub(name, short string) *cobra.Command {
 
 func initCmd() *cobra.Command {
 	return stub("init", "Initialize a new plan-bender project")
-}
-
-func generateSkillsCmd() *cobra.Command {
-	return stub("generate-skills", "Generate skill files from templates")
-}
-
-func installCmd() *cobra.Command {
-	return stub("install", "Install generated skills via symlinks")
 }
 
 func writePRDCmd() *cobra.Command {
