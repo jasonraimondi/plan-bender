@@ -42,12 +42,12 @@ func rootCmd() *cobra.Command {
 		cli.NewGenerateSkillsCmd(),
 		cli.NewInstallCmd(),
 		cli.NewValidateCmd(),
-		writePRDCmd(),
-		writeIssueCmd(),
-		statusCmd(),
-		graphCmd(),
+		cli.NewWritePrdCmd(),
+		cli.NewWriteIssueCmd(),
+		cli.NewStatusCmd(),
+		cli.NewGraphCmd(),
 		syncCmd(),
-		archiveCmd(),
+		cli.NewArchiveCmd(),
 	)
 
 	return root
@@ -68,26 +68,6 @@ func initCmd() *cobra.Command {
 	return stub("init", "Initialize a new plan-bender project")
 }
 
-func writePRDCmd() *cobra.Command {
-	return stub("write-prd", "Interactively write a new PRD")
-}
-
-func writeIssueCmd() *cobra.Command {
-	return stub("write-issue", "Interactively write a new issue")
-}
-
-func statusCmd() *cobra.Command {
-	return stub("status", "Show plan status dashboard")
-}
-
-func graphCmd() *cobra.Command {
-	return stub("graph", "Display issue dependency graph")
-}
-
 func syncCmd() *cobra.Command {
 	return stub("sync", "Sync issues with Linear")
-}
-
-func archiveCmd() *cobra.Command {
-	return stub("archive", "Archive a completed plan")
 }
