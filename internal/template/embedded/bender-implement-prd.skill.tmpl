@@ -1,9 +1,9 @@
 ---
 name: bender-implement-prd
 description: Work through a PRD's issues in dependency order using YAML workflow states, AFK/HITL routing, and proper status tracking.
-@if has_backend_sync
+{{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
-@end
+{{end}}
 ---
 
 # Work on PRD
@@ -12,21 +12,21 @@ Work through a PRD's implementation issues in dependency order.
 
 ## Input
 
-The user provides a project slug or path (e.g., `auth` or `${plans_dir}auth/`).
+The user provides a project slug or path (e.g., `auth` or `{{.plans_dir}}auth/`).
 
 If none provided, ask: "Which PRD should I work on? (project slug or path)"
 
 ## Workflow states
 
 ```
-${workflow_states | join( → )}
+{{join " → " .workflow_states}}
 ```
 
 ## Process
 
 ### 1. Read the PRD and issues
 
-Read `${plans_dir}{slug}/prd.yaml` and all files in `${plans_dir}{slug}/issues/`.
+Read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issues/`.
 
 If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
@@ -87,13 +87,13 @@ Points done: <sum> / <total>
 PRs:         <list of PR URLs>
 
 Track coverage:
-@each tracks as track
-  ${track}:     <done>/<total>
-@end
+{{range .tracks}}
+  {{.}}:     <done>/<total>
+{{end}}
 ```
 
 Update `prd.yaml` status to `complete` when all issues are done.
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 ## Linear sync
 
@@ -107,4 +107,4 @@ linear api --method POST --body '{"query":"mutation{projectUpdate(id:\"{linear.p
 ```
 
 Linear updates are best-effort — if they fail, log the failure and continue.
-@end
+{{end}}

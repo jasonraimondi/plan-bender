@@ -1,9 +1,9 @@
 ---
 name: bender-implement-issue
 description: Implement one or more plan issues end-to-end with proper branching, testing, and status tracking via YAML workflow states.
-@if has_backend_sync
+{{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
-@end
+{{end}}
 ---
 
 # Work on Issue
@@ -14,7 +14,7 @@ Implement one or more issues from a plan end-to-end. YAML fields are the source 
 
 The user provides one or more issue references:
 
-- file path: `${plans_dir}auth/issues/1-setup-middleware.yaml`
+- file path: `{{.plans_dir}}auth/issues/1-setup-middleware.yaml`
 - shorthand: `auth#1` (project slug + issue ID)
 
 If none provided, ask: "Which issue(s) should I work on?"
@@ -22,7 +22,7 @@ If none provided, ask: "Which issue(s) should I work on?"
 ## Workflow states
 
 ```
-${workflow_states | join( → )}
+{{join " → " .workflow_states}}
 ```
 
 ## Process (per issue)
@@ -52,14 +52,14 @@ Update the YAML file:
 - blocked → todo (when blocker is cleared)
 - todo → in-progress (when implementation starts)
 - always update the `updated` date on status changes
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 **Linear sync**: if the issue has `linear_id`, also update the Linear issue state:
 
 ```bash
 linear issue update {linear_id} --state "{new_status}"
 ```
-@end
+{{end}}
 
 ### 3. Branch setup
 
@@ -80,7 +80,7 @@ Understand:
 
 #### When `steps` exist
 
-Follow the steps in order. Each step provides a `${step_pattern}` pair that specifies where to work and what the behavior should be.
+Follow the steps in order. Each step provides a `{{.step_pattern}}` pair that specifies where to work and what the behavior should be.
 
 - **`tdd: true`**: invoke the `testing-tdd` skill. Use the steps to determine test boundaries — write tests for the behavior described in each step, then implement to make them pass.
 - **`headed: true`**: invoke the `tooling-agent-browser` skill for visual verification. Steps with verification targets define what to check in the browser.
@@ -122,7 +122,7 @@ Update the issue file:
 - after merge: `status: qa` if verification needed, or `status: done`
 - if blocked after starting: `status: blocked`, explain in `notes`
 - always update `updated` date
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 **Linear sync**: if the issue has `linear_id`, also push these changes to Linear:
 
@@ -135,7 +135,7 @@ Attach the PR to the Linear issue if one was created:
 ```bash
 linear api --method POST --body '{"query":"mutation{attachmentCreate(input:{issueId:\"{linear_id}\",url:\"{pr_url}\",title:\"Pull Request\"}){success}}"}'
 ```
-@end
+{{end}}
 
 ### 9. Next issue
 
@@ -144,14 +144,14 @@ If there are more issues, proceed to the next one.
 - stay on the same branch only when working on tightly coupled issues from the same project
 - otherwise create a new branch per issue
 - if any issue is blocked, skip it and report at the end
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 ## Linear sync
 
 When a plan has been synced to Linear (issues have a `linear_id` field), update both local YAML **and** Linear on every status change. Local YAML is always updated first — Linear updates are best-effort. If a Linear update fails, log the failure and continue.
 
 Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 2 and 8 push to Linear.
-@end
+{{end}}
 
 ## Multiple issues
 

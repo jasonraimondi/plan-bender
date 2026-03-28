@@ -1,18 +1,18 @@
 ---
 name: bender-write-a-prd
-description: Create a PRD by interviewing the user, exploring the codebase, and writing a structured YAML plan to ${plans_dir}{slug}/prd.yaml. Use when user says "write a PRD", "plan this feature", "create a plan", or wants structured project planning.
+description: Create a PRD by interviewing the user, exploring the codebase, and writing a structured YAML plan to {{.plans_dir}}{slug}/prd.yaml. Use when user says "write a PRD", "plan this feature", "create a plan", or wants structured project planning.
 ---
 
 # Write a PRD
 
-Create a PRD as a structured YAML file in the project's `${plans_dir}` directory.
+Create a PRD as a structured YAML file in the project's `{{.plans_dir}}` directory.
 
 ## Plan structure
 
 Every PRD lives in its own directory:
 
 ```
-${plans_dir}{project-slug}/
+{{.plans_dir}}{project-slug}/
   prd.yaml
   issues/          # created later by /bender-prd-to-issues
 ```
@@ -108,7 +108,7 @@ Keep it scannable. The PRD should support decomposition into issues — not be a
 
 ### 6. Write the file
 
-Create `${plans_dir}{slug}/prd.yaml` using the drafted content.
+Create `{{.plans_dir}}{slug}/prd.yaml` using the drafted content.
 
 Rules:
 

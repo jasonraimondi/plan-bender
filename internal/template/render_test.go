@@ -67,7 +67,8 @@ func TestRender_InvalidTemplate(t *testing.T) {
 func TestLoadTemplates_Embedded(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
-	assert.Contains(t, tmpls, "placeholder.tmpl")
+	assert.Len(t, tmpls, 8)
+	assert.Contains(t, tmpls, "bender-orchestrator.skill.tmpl")
 }
 
 func TestLoadTemplates_LocalOverride(t *testing.T) {

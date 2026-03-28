@@ -9,7 +9,7 @@ Review a PRD and its issues as a principal software engineer. Auto-fix mechanica
 
 ## Execution checklist
 
-1. **Load all plan files** — read `${plans_dir}{slug}/prd.yaml` and all files in `${plans_dir}{slug}/issues/`.
+1. **Load all plan files** — read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issues/`.
 2. **Load project context** — scan codebase for existing patterns: routes, schema, services, auth, error handling. This grounds the review in reality, not theory.
 3. **Run auto-fix pass** — apply mechanical fixes directly (see auto-fix rules below). Report what changed.
 4. **Run review pass** — evaluate each dimension in the rubric. Collect findings as `fix` (actionable, concrete) or `question` (needs user input).
@@ -32,7 +32,7 @@ These are mechanical violations of the issue schema spec. Fix silently and repor
 | Steps missing location context (no route, file, service, or component) | Add location context |
 | Steps using vague language ("handle errors appropriately", "set up properly") | Rewrite with specific behavior |
 | `blocked_by` / `blocking` out of sync across issues | Sync both directions |
-| Points > ${max_points} | Flag for split (cannot auto-fix — needs user input) |
+| Points > {{.max_points}} | Flag for split (cannot auto-fix — needs user input) |
 | Missing `updated` date or stale date | Set to today |
 
 ## Review rubric
@@ -42,7 +42,7 @@ Evaluate every issue against these dimensions. Only raise issues that matter —
 ### 1) Issue decomposition
 
 - **One outcome per issue** — flag issues that combine unrelated work.
-- **Right granularity** — max ${max_points} points. Issues with too many steps (>6) or too few (1 trivial step) are both problems.
+- **Right granularity** — max {{.max_points}} points. Issues with too many steps (>6) or too few (1 trivial step) are both problems.
 - **No orphan work** — every issue's output is consumed by a later issue or is a deliverable itself.
 - **Vertical, not horizontal** — each issue cuts through all relevant layers.
 
@@ -50,9 +50,9 @@ Evaluate every issue against these dimensions. Only raise issues that matter —
 
 For the full set of issues, check if relevant tracks are represented:
 
-@each tracks as track
-- Feature has `${track}` concerns? → needs `${track}` track issues.
-@end
+{{range .tracks}}
+- Feature has `{{.}}` concerns? → needs `{{.}}` track issues.
+{{end}}
 - Missing tracks are the highest-signal finding. Flag them.
 
 ### 3) Edge cases and failure paths
@@ -72,7 +72,7 @@ For the full set of issues, check if relevant tracks are represented:
 
 ### 5) Step quality
 
-- Every step follows `${step_pattern}` pattern.
+- Every step follows `{{.step_pattern}}` pattern.
 - Steps include location context (route, file path, service name, component).
 - No vague language: "handle errors appropriately", "set up properly", "add necessary validation".
 - `headed: true` steps specify what to verify visually.
@@ -107,9 +107,9 @@ After all fixes and questions are resolved:
 - [actionable findings with specific issue ID references]
 
 ### Track coverage
-@each tracks as track
-- ${track}:     N issues
-@end
+{{range .tracks}}
+- {{.}}:     N issues
+{{end}}
 - [flag missing tracks]
 
 ### Questions resolved

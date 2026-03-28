@@ -1,6 +1,6 @@
 ---
 name: bender-prd-to-issues
-description: Break a PRD into independently grabbable issues using thin vertical slices, writing structured YAML files to ${plans_dir}{slug}/issues/. Use when user says "break this down", "create issues", "decompose the PRD", or wants to convert a PRD into actionable work items.
+description: Break a PRD into independently grabbable issues using thin vertical slices, writing structured YAML files to {{.plans_dir}}{slug}/issues/. Use when user says "break this down", "create issues", "decompose the PRD", or wants to convert a PRD into actionable work items.
 ---
 
 # PRD to Issues
@@ -12,7 +12,7 @@ Break a PRD into implementation issues stored as YAML files.
 Issues live alongside their PRD:
 
 ```
-${plans_dir}{project-slug}/
+{{.plans_dir}}{project-slug}/
   prd.yaml
   issues/
     1-setup-auth-middleware.yaml
@@ -28,10 +28,10 @@ Filenames follow `{id}-{slug}.yaml`. IDs are integers starting at 1, assigned in
 id: 1
 slug: setup-auth-middleware
 name: "Set up authentication middleware"
-track: rules       # ${tracks | join( | )}
-status: backlog    # ${workflow_states | join( | )}
+track: rules       # {{join " | " .tracks}}
+status: backlog    # {{join " | " .workflow_states}}
 priority: high     # urgent | high | medium | low
-points: 3          # fibonacci: 1, 2, 3 (max ${max_points})
+points: 3          # fibonacci: 1, 2, 3 (max {{.max_points}})
 labels:
   - AFK            # AFK = autonomous, HITL = needs human input
 assignee: null
@@ -44,9 +44,9 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tdd: true          # optional — issue has testable behavior
 headed: false      # optional — issue requires browser-visible verification
-@each custom_fields as field
-${field.name}: null     # custom field (${field.type})
-@end
+{{range .custom_fields}}
+{{.name}}: null     # custom field ({{.type}})
+{{end}}
 
 outcome: |
   What this slice delivers.
@@ -59,7 +59,7 @@ acceptance_criteria:
   - "Criterion 2"
 
 steps:
-  - "${step_pattern}"
+  - "{{.step_pattern}}"
 
 use_cases:
   - UC-1
@@ -76,9 +76,9 @@ Classifies the issue's primary concern. Every issue gets exactly one track.
 
 | Track | When to use |
 |-------|-------------|
-@each track_descriptions as td
-| `${td.name}` | ${td.description} |
-@end
+{{range .track_descriptions}}
+| `{{.name}}` | {{.description}} |
+{{end}}
 
 #### `tdd`
 
@@ -109,7 +109,7 @@ The implementation agent invokes the `tooling-agent-browser` skill.
 
 #### `steps`
 
-Ordered implementation actions following the `${step_pattern}` pattern:
+Ordered implementation actions following the `{{.step_pattern}}` pattern:
 
 ```yaml
 steps:
@@ -120,36 +120,36 @@ steps:
 
 Steps tell the implementation agent **how** to build the issue. Acceptance criteria tell reviewers **what** to verify.
 
-Step count scales with issue complexity — a 1-point issue might have 2 steps, a ${max_points}-point issue might have 5-6. Every step must include location context (route, file path, service name, component).
+Step count scales with issue complexity — a 1-point issue might have 2 steps, a {{.max_points}}-point issue might have 5-6. Every step must include location context (route, file path, service name, component).
 
 #### `points`
 
-Fibonacci scale: 1, 2, 3. **Maximum ${max_points} points per issue.** Issues estimated at ${max_points}+ points must be split into smaller slices. If you cannot find a natural seam to split on, the issue scope is too broad — narrow the outcome.
-@each custom_fields as field
+Fibonacci scale: 1, 2, 3. **Maximum {{.max_points}} points per issue.** Issues estimated at {{.max_points}}+ points must be split into smaller slices. If you cannot find a natural seam to split on, the issue scope is too broad — narrow the outcome.
+{{range .custom_fields}}
 
-#### `${field.name}`
-@if field.required
-Required custom field (${field.type}).
-@end
-@if !field.required
-Optional custom field (${field.type}).
-@end
-@if field.enum_values
-Allowed values: ${field.enum_values | join(, )}
-@end
-@end
+#### `{{.name}}`
+{{if .required}}
+Required custom field ({{.type}}).
+{{end}}
+{{if not .required}}
+Optional custom field ({{.type}}).
+{{end}}
+{{if .enum_values}}
+Allowed values: {{join ", " .enum_values}}
+{{end}}
+{{end}}
 
 ## Workflow states
 
 ```
-${workflow_states | join( → )}
+{{join " → " .workflow_states}}
 ```
 
 ## Process
 
 ### 1. Locate the PRD
 
-Ask the user for the project slug or path. Read `${plans_dir}{slug}/prd.yaml`.
+Ask the user for the project slug or path. Read `{{.plans_dir}}{slug}/prd.yaml`.
 
 ### 2. Explore the codebase
 
@@ -172,22 +172,22 @@ Rules:
 - a completed slice is demoable or independently verifiable on its own
 - prefer many thin slices over few thick ones
 - avoid layer-only tickets unless they unlock multiple later slices or materially reduce risk
-- **maximum ${max_points} points per issue** — split anything larger
+- **maximum {{.max_points}} points per issue** — split anything larger
 - assign a `track` to every issue based on its primary concern
 
 #### Track coverage check
 
 After drafting all slices, verify track coverage against the PRD:
 
-@each tracks as track
-- Feature has `${track}` concerns? → needs `${track}` track issues
-@end
+{{range .tracks}}
+- Feature has `{{.}}` concerns? → needs `{{.}}` track issues
+{{end}}
 
 Missing tracks are the highest-signal gap. Flag them to the user.
 
 ### 4. Write steps for each issue
 
-For each issue, write concrete implementation steps using the `${step_pattern}` pattern.
+For each issue, write concrete implementation steps using the `{{.step_pattern}}` pattern.
 
 Rules:
 
@@ -202,7 +202,7 @@ Present the proposed breakdown as a numbered list. For each slice:
 
 - **Title** and **track**
 - **Routing label**: AFK / HITL
-- **Points estimate** (max ${max_points})
+- **Points estimate** (max {{.max_points}})
 - **Priority**: urgent / high / medium / low
 - **tdd** / **headed** flags
 - **Initial status**: backlog or todo
@@ -224,7 +224,7 @@ Iterate until the user approves.
 
 ### 6. Write the issue files
 
-Create `${plans_dir}{slug}/issues/` and write one YAML file per approved slice.
+Create `{{.plans_dir}}{slug}/issues/` and write one YAML file per approved slice.
 
 Rules:
 
@@ -232,12 +232,12 @@ Rules:
 - IDs are sequential integers starting at 1
 - filename is `{id}-{slug}.yaml`
 - structure lives in YAML fields — do not duplicate dependencies or status in prose
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 ### Sync to backend
 
 After writing issue files, run `plan-bender sync {slug}` to push issues to the configured backend.
-@end
+{{end}}
 
 ### 7. Update the PRD status
 

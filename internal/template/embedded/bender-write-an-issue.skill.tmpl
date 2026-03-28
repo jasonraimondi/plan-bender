@@ -11,7 +11,7 @@ Create a single implementation issue as a structured YAML file.
 
 An issue can live in two places:
 
-1. **Inside a plan**: `${plans_dir}{slug}/issues/{id}-{issue-slug}.yaml` — when a PRD already exists
+1. **Inside a plan**: `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.yaml` — when a PRD already exists
 2. **Standalone**: `./issues/{issue-slug}.yaml` — for one-off work items without a parent PRD
 
 Ask the user which they want. If a plan exists, read the PRD to ground the issue in project context.
@@ -42,7 +42,7 @@ Resolve with the user:
 - dependencies on other issues (if inside a plan)
 - AFK vs HITL routing
 
-Keep the issue to **${max_points} points maximum**. If it's bigger, recommend splitting and offer to write multiple issues.
+Keep the issue to **{{.max_points}} points maximum**. If it's bigger, recommend splitting and offer to write multiple issues.
 
 ### 4. Draft the issue
 
@@ -52,10 +52,10 @@ Write the issue YAML using this schema:
 id: 1
 slug: issue-slug
 name: "Short descriptive title"
-track: rules       # ${tracks | join( | )}
-status: backlog    # ${workflow_states | join( | )}
+track: rules       # {{join " | " .tracks}}
+status: backlog    # {{join " | " .workflow_states}}
 priority: high     # urgent | high | medium | low
-points: 2          # fibonacci: 1, 2, 3 (max ${max_points})
+points: 2          # fibonacci: 1, 2, 3 (max {{.max_points}})
 labels:
   - AFK            # AFK = autonomous, HITL = needs human input
 assignee: null
@@ -68,9 +68,9 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tdd: true          # optional — issue has testable behavior
 headed: false      # optional — issue requires browser-visible verification
-@each custom_fields as field
-${field.name}: null     # custom field (${field.type})
-@end
+{{range .custom_fields}}
+{{.name}}: null     # custom field ({{.type}})
+{{end}}
 
 outcome: |
   What this issue delivers.
@@ -83,7 +83,7 @@ acceptance_criteria:
   - "Criterion 2"
 
 steps:
-  - "${step_pattern}"
+  - "{{.step_pattern}}"
 
 use_cases:
   - UC-1
@@ -98,9 +98,9 @@ notes: |
 
 | Track | When to use |
 |-------|-------------|
-@each track_descriptions as td
-| `${td.name}` | ${td.description} |
-@end
+{{range .track_descriptions}}
+| `{{.name}}` | {{.description}} |
+{{end}}
 
 #### `tdd`
 
@@ -112,7 +112,7 @@ Mark `headed: true` when correctness requires browser-visible verification. Incl
 
 #### `steps`
 
-Ordered implementation actions using `${step_pattern}`:
+Ordered implementation actions using `{{.step_pattern}}`:
 
 ```yaml
 steps:
@@ -124,20 +124,20 @@ Every step includes location context (route, file, service, component). No vague
 
 #### `points`
 
-Fibonacci: 1, 2, 3. **Maximum ${max_points} points.** If the issue estimates higher, split it.
-@each custom_fields as field
+Fibonacci: 1, 2, 3. **Maximum {{.max_points}} points.** If the issue estimates higher, split it.
+{{range .custom_fields}}
 
-#### `${field.name}`
-@if field.required
-Required custom field (${field.type}).
-@end
-@if !field.required
-Optional custom field (${field.type}).
-@end
-@if field.enum_values
-Allowed values: ${field.enum_values | join(, )}
-@end
-@end
+#### `{{.name}}`
+{{if .required}}
+Required custom field ({{.type}}).
+{{end}}
+{{if not .required}}
+Optional custom field ({{.type}}).
+{{end}}
+{{if .enum_values}}
+Allowed values: {{join ", " .enum_values}}
+{{end}}
+{{end}}
 
 ### 5. Review with the user
 
@@ -152,7 +152,7 @@ Iterate until approved.
 
 ### 6. Write the file
 
-**Inside a plan**: read existing issues to determine the next ID. Write `${plans_dir}{slug}/issues/{id}-{issue-slug}.yaml`. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
+**Inside a plan**: read existing issues to determine the next ID. Write `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.yaml`. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
 
 **Standalone**: write `./issues/{issue-slug}.yaml`. Omit `id`, `blocked_by`, `blocking`, and `use_cases` fields.
 
@@ -161,12 +161,12 @@ Rules:
 - set `created` and `updated` to today's date
 - `blocked_by` and `blocking` must be kept in sync across issues
 - filename uses the issue slug
-@if has_backend_sync
+{{if .has_backend_sync}}
 
 ### Sync to backend
 
 After writing the issue file, run `plan-bender sync {slug}#{id}` to push the issue to the configured backend.
-@end
+{{end}}
 
 ### 7. Hand off cleanly
 
