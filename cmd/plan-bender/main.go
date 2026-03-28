@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 
@@ -46,24 +45,10 @@ func rootCmd() *cobra.Command {
 		cli.NewWriteIssueCmd(),
 		cli.NewStatusCmd(),
 		cli.NewGraphCmd(),
-		syncCmd(),
+		cli.NewSyncCmd(),
 		cli.NewArchiveCmd(),
 	)
 
 	return root
 }
 
-func stub(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name,
-		Short: short,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s: not implemented\n", name)
-			return nil
-		},
-	}
-}
-
-func syncCmd() *cobra.Command {
-	return stub("sync", "Sync issues with Linear")
-}
