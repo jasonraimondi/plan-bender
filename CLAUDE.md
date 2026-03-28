@@ -1,5 +1,5 @@
-- **IMPORTANT**: At the start of every session working with local code, call `mcp__plugin_serena_serena__activate_project` with the project root before doing any other work.
-- **IMPORTANT**: Prefer Serena's JetBrains-powered semantic tools (`jet_brains_find_symbol`, `jet_brains_get_symbols_overview`, `jet_brains_find_referencing_symbols`, `jet_brains_type_hierarchy`) for navigating code. Use Serena's mutation tools (`replace_symbol_body`, `insert_after_symbol`, `rename_symbol`) for refactoring. Prefer these over reading entire files when possible.
+- **CRITICAL**: At the start of every session working with local code, call `mcp__plugin_serena_serena__activate_project` with the project root before doing any other work.
+- **CRITICAL**: Prefer Serena's JetBrains-powered semantic tools (`jet_brains_find_symbol`, `jet_brains_get_symbols_overview`, `jet_brains_find_referencing_symbols`, `jet_brains_type_hierarchy`) for navigating code. Use Serena's mutation tools (`replace_symbol_body`, `insert_after_symbol`, `rename_symbol`) for refactoring. Prefer these over reading entire files when possible.
 
 # Code
 - Never use raw Date in business logic. Use Temporal API (TC39), or isolate Date behind a swappable abstraction — especially for formatting, arithmetic, and timezone handling.
