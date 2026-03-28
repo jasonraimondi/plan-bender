@@ -26,13 +26,13 @@ export interface TemplateContext extends Record<string, unknown> {
 }
 
 const ALL_PIPELINE_PHASES: PipelinePhase[] = [
-  { name: "Interview", skill: "planning-interview-me", description: "stress-test a plan idea" },
-  { name: "Write a PRD", skill: "planning-write-a-prd", description: "create a structured PRD" },
-  { name: "PRD to Issues", skill: "planning-prd-to-issues", description: "break PRD into issues" },
-  { name: "Write an Issue", skill: "planning-write-an-issue", description: "create a single issue" },
-  { name: "Review PRD", skill: "planning-review-prd", description: "review plan as principal engineer" },
-  { name: "Implement PRD", skill: "implement-prd", description: "work through issues in order" },
-  { name: "Implement Issue", skill: "implement-issue", description: "implement a single issue" },
+  { name: "Interview", skill: "bender-interview-me", description: "stress-test a plan idea" },
+  { name: "Write a PRD", skill: "bender-write-a-prd", description: "create a structured PRD" },
+  { name: "PRD to Issues", skill: "bender-prd-to-issues", description: "break PRD into issues" },
+  { name: "Write an Issue", skill: "bender-write-an-issue", description: "create a single issue" },
+  { name: "Review PRD", skill: "bender-review-prd", description: "review plan as principal engineer" },
+  { name: "Implement PRD", skill: "bender-implement-prd", description: "work through issues in order" },
+  { name: "Implement Issue", skill: "bender-implement-issue", description: "implement a single issue" },
 ];
 
 const DEFAULT_TRACK_DESCRIPTIONS: Record<string, string> = {

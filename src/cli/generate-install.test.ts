@@ -46,7 +46,7 @@ describe("generate-skills", () => {
     const overrideDir = join(dir, ".plan-bender", "templates");
     mkdirSync(overrideDir, { recursive: true });
     writeFileSync(
-      join(overrideDir, "planning-interview-me.skill.tmpl"),
+      join(overrideDir, "bender-interview-me.skill.tmpl"),
       "---\nname: custom-interview\n---\nCustom content for ${plans_dir}",
       "utf-8",
     );
@@ -57,7 +57,7 @@ describe("generate-skills", () => {
     });
 
     const content = readFileSync(
-      join(dir, ".plan-bender", "skills", "planning-interview-me", "SKILL.md"),
+      join(dir, ".plan-bender", "skills", "bender-interview-me", "SKILL.md"),
       "utf-8",
     );
     expect(content).toContain("Custom content");

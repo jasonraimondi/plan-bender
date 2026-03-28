@@ -1,5 +1,5 @@
 ---
-name: implement-prd
+name: bender-implement-prd
 description: Work through a PRD's issues in dependency order using YAML workflow states, AFK/HITL routing, and proper status tracking.
 @if has_backend_sync
 allowed-tools: Bash(linear:*), Bash(jq:*)
@@ -28,7 +28,7 @@ ${workflow_states | join( → )}
 
 Read `${plans_dir}{slug}/prd.yaml` and all files in `${plans_dir}{slug}/issues/`.
 
-If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/planning-prd-to-issues` first."
+If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
 ### 2. Build the execution queue
 
@@ -64,7 +64,7 @@ Present the plan as a numbered list showing:
 
 ### 3. Work through issues
 
-Process issues in dependency order using the `implement-issue` workflow.
+Process issues in dependency order using the `bender-implement-issue` workflow.
 
 **AFK issues**: proceed automatically, then move to the next ready issue.
 
@@ -99,7 +99,7 @@ Update `prd.yaml` status to `complete` when all issues are done.
 
 When `prd.yaml` has `linear.project_id`, the plan has been synced to Linear. In this case:
 
-- **Issue updates** flow through `implement-issue`, which handles per-issue Linear sync automatically
+- **Issue updates** flow through `bender-implement-issue`, which handles per-issue Linear sync automatically
 - **PRD completion**: when setting `prd.yaml` status to `complete`, also update the Linear project:
 
 ```bash

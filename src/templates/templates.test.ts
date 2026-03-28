@@ -22,15 +22,15 @@ describe("planning skill templates", () => {
       const result = render(content, context);
       expect(result.length).toBeGreaterThan(50);
       expect(result).toContain("---");
-      // Rendered templates should contain the skill name from the filename
+      // Rendered templates should contain the skill name in frontmatter
       const skillName = file.replace(".skill.tmpl", "");
-      expect(result.toLowerCase()).toContain(skillName.replace(/-/g, " ").substring(0, 8));
+      expect(result).toContain(`name: ${skillName}`);
     });
   }
 
   it("prd-to-issues template includes configured tracks", () => {
     const content = readFileSync(
-      join(templatesDir, "planning-prd-to-issues.skill.tmpl"),
+      join(templatesDir, "bender-prd-to-issues.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, context);
@@ -41,7 +41,7 @@ describe("planning skill templates", () => {
 
   it("prd-to-issues template includes workflow states", () => {
     const content = readFileSync(
-      join(templatesDir, "planning-prd-to-issues.skill.tmpl"),
+      join(templatesDir, "bender-prd-to-issues.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, context);
@@ -50,7 +50,7 @@ describe("planning skill templates", () => {
 
   it("prd-to-issues template includes step pattern", () => {
     const content = readFileSync(
-      join(templatesDir, "planning-prd-to-issues.skill.tmpl"),
+      join(templatesDir, "bender-prd-to-issues.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, context);
@@ -63,7 +63,7 @@ describe("planning skill templates", () => {
       tracks: ["frontend", "backend", "infra"],
     });
     const content = readFileSync(
-      join(templatesDir, "planning-prd-to-issues.skill.tmpl"),
+      join(templatesDir, "bender-prd-to-issues.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, customCtx);
@@ -82,7 +82,7 @@ describe("planning skill templates", () => {
       linear: { api_key: "test", team: "test" },
     });
     const content = readFileSync(
-      join(templatesDir, "planning-write-an-issue.skill.tmpl"),
+      join(templatesDir, "bender-write-an-issue.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, linearCtx);
@@ -91,7 +91,7 @@ describe("planning skill templates", () => {
 
   it("backend sync instructions hidden for yaml-fs", () => {
     const content = readFileSync(
-      join(templatesDir, "planning-write-an-issue.skill.tmpl"),
+      join(templatesDir, "bender-write-an-issue.skill.tmpl"),
       "utf-8",
     );
     const result = render(content, context);
