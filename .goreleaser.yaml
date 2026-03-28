@@ -42,14 +42,15 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
-  - repository:
-      owner: jasonraimondi
-      name: homebrew-tap
-    homepage: https://github.com/jasonraimondi/plan-bender
-    description: Plan management CLI tool
-    install: |
-      bin.install "plan-bender"
-      bin.install_symlink "plan-bender", "pb"
-    test: |
-      system "#{bin}/plan-bender", "--version"
+# TODO: add homebrew formula once jasonraimondi/homebrew-tap repo is created
+# brews:
+#   - repository:
+#       owner: jasonraimondi
+#       name: homebrew-tap
+#     homepage: https://github.com/jasonraimondi/plan-bender
+#     description: Plan management CLI tool
+#     install: |
+#       bin.install "plan-bender"
+#       bin.install_symlink "plan-bender", "pb"
+#     test: |
+#       system "#{bin}/plan-bender", "--version"
