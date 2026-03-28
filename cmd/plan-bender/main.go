@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/jasonraimondi/plan-bender/internal/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,7 @@ func rootCmd() *cobra.Command {
 		initCmd(),
 		generateSkillsCmd(),
 		installCmd(),
-		validateCmd(),
+		cli.NewValidateCmd(),
 		writePRDCmd(),
 		writeIssueCmd(),
 		statusCmd(),
@@ -73,10 +74,6 @@ func generateSkillsCmd() *cobra.Command {
 
 func installCmd() *cobra.Command {
 	return stub("install", "Install generated skills via symlinks")
-}
-
-func validateCmd() *cobra.Command {
-	return stub("validate", "Validate PRD and issue YAML files")
 }
 
 func writePRDCmd() *cobra.Command {
