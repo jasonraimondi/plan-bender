@@ -1,2 +1,2 @@
 - choose between linear mcp vs linear cli
-
+- archive plans to an optional second location
