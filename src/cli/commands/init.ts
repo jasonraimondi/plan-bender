@@ -41,24 +41,6 @@ export const initCommand = defineCommand({
       initial: "yaml-fs",
     });
 
-    const tracksChoice = await consola.prompt("Tracks:", {
-      type: "select",
-      options: [
-        "default (intent, experience, data, rules, resilience)",
-        "custom",
-      ],
-      initial: "default (intent, experience, data, rules, resilience)",
-    });
-
-    let tracks: string[] | undefined;
-    if (tracksChoice === "custom") {
-      const custom = await consola.prompt(
-        "Enter tracks (comma-separated):",
-        { type: "text" },
-      );
-      tracks = (custom as string).split(",").map((t) => t.trim()).filter(Boolean);
-    }
-
     const plansDir = await consola.prompt("Plans directory:", {
       type: "text",
       default: "./plans/",
@@ -71,13 +53,19 @@ export const initCommand = defineCommand({
       initial: "3",
     });
 
+    const installTarget = await consola.prompt("Install skills to:", {
+      type: "select",
+      options: ["project", "user"],
+      initial: "project",
+    });
+
     // Build config
     const config: PartialConfig = {
       backend: backend as "yaml-fs" | "linear",
     };
-    if (tracks) config.tracks = tracks;
     if (plansDir !== "./plans/") config.plans_dir = plansDir as string;
     if (maxPoints !== "3") config.max_points = parseInt(maxPoints as string, 10);
+    if (installTarget !== "project") config.install_target = installTarget as "project" | "user";
 
     if (backend === "linear") {
       const apiKey = await consola.prompt("Linear API key:", {
@@ -102,8 +90,9 @@ export const initCommand = defineCommand({
     const count = generateSkills(resolved, projectRoot);
     console.log(`Generated ${count} skills in .plan-bender/skills/`);
 
+    const targetLabel = installTarget === "project" ? ".claude/skills/" : "~/.claude/skills/";
     console.log("\nDone! Next steps:");
-    console.log("  1. Run `plan-bender install` to symlink skills to ~/.claude/skills/");
+    console.log(`  1. Run \`plan-bender install\` to symlink skills to ${targetLabel}`);
     console.log("  2. Try `/plan-bender` in Claude Code to get started");
   },
 });
