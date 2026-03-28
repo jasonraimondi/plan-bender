@@ -13,7 +13,7 @@ func New(ctx context.Context, cfg config.Config) (Backend, error) {
 	case config.BackendYAMLFS:
 		return NewYAMLFS(cfg), nil
 	case config.BackendLinear:
-		return nil, fmt.Errorf("linear backend: not implemented")
+		return NewLinear(ctx, cfg)
 	default:
 		return nil, fmt.Errorf("unknown backend: %q", cfg.Backend)
 	}
