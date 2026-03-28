@@ -1,1 +1,2 @@
 - archive plans to an optional second location
+- TODO: create jasonraimondi/homebrew-tap repo and re-enable brew formula in .goreleaser.yaml
