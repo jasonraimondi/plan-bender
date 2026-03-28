@@ -1,0 +1,94 @@
+name: "npm Distribution"
+slug: npm-distribution
+status: active
+created: 2026-03-28
+updated: 2026-03-28
+
+description: |
+  Distribute the plan-bender Go binary via npm using platform-specific packages.
+
+why: |
+  npm is the primary install path for Claude Code users. The README already advertises
+  `npm install -g plan-bender` but no npm package exists yet. The existing publish.yml
+  workflow references pnpm commands that have no backing source. Users who don't use
+  Homebrew or Go have no install path.
+
+outcome: |
+  `npm install -g @jasonraimondi/plan-bender` installs the correct native binary for the
+  user's OS/arch. `npx @jasonraimondi/plan-bender` works for one-off use. A JS API exposes
+  `execPath` and `exec()` for programmatic invocation. Publishing is fully automated on
+  GitHub Release events.
+
+in_scope:
+  - "Root npm package @jasonraimondi/plan-bender with optionalDependencies"
+  - "5 platform packages: darwin-arm64, darwin-x64, linux-arm64, linux-x64, win32-x64"
+  - "CLI bin entries for both plan-bender and pb"
+  - "JS exec helper API (execPath + exec function)"
+  - "Graceful error on unsupported platforms"
+  - "publish.mjs script to download release binaries and publish all packages"
+  - "GitHub Actions workflow triggered on release published event"
+  - "Version synced from Git tag"
+
+out_of_scope:
+  - "Typed command API (validate, status, etc.) — exec helper only"
+  - "npm package tests beyond minimal load check"
+  - "Windows ARM64 support (matches GoReleaser exclusion)"
+  - "Changes to the Go binary or GoReleaser config"
+  - "Homebrew distribution (already working)"
+
+use_cases:
+  - id: UC-1
+    description: "User runs `npm install -g @jasonraimondi/plan-bender` and gets the plan-bender binary on PATH as both `plan-bender` and `pb`"
+  - id: UC-2
+    description: "User runs `npx @jasonraimondi/plan-bender status` for one-off usage without global install"
+  - id: UC-3
+    description: "JS tooling imports `@jasonraimondi/plan-bender` and calls exec(['validate', slug]) to invoke the binary programmatically"
+  - id: UC-4
+    description: "User on unsupported platform (e.g. FreeBSD) gets a clear error message with alternative install methods"
+  - id: UC-5
+    description: "Maintainer pushes a Git tag, GoReleaser creates GitHub Release, then npm publish workflow automatically publishes all 6 packages with matching version"
+
+decisions:
+  - "Platform packages pattern (like esbuild/turbo/biome) over postinstall download"
+  - "Scope: @jasonraimondi"
+  - "Source lives in npm/ directory, not repo root"
+  - "publish.mjs with JSDoc types (not TypeScript)"
+  - "Separate publish.yml workflow triggered on release event, not combined with GoReleaser"
+  - "Versions always match Git tag — no independent npm versioning"
+  - "Minimal validation: verify JS loads and binary path resolves before publish"
+  - "Orphaned node_modules/ at repo root will be cleaned up (issue 5) — no pnpm workspace needed"
+  - "Scoped only (@jasonraimondi/plan-bender) — no unscoped wrapper package"
+  - "Fail fast on publish errors — re-run CI to retry, skip already-published packages (npm 403)"
+
+open_questions: []
+
+risks:
+  - "npm org @jasonraimondi must exist and the NPM_TOKEN secret must have publish access to it"
+  - "Platform package names must not already be taken on npm"
+  - "GoReleaser archive naming must match what publish.mjs expects when downloading"
+
+validation:
+  - "npm install -g @jasonraimondi/plan-bender on macOS ARM64 installs working binary"
+  - "npx @jasonraimondi/plan-bender --version prints correct version"
+  - "import { exec } from '@jasonraimondi/plan-bender' returns stdout from binary"
+  - "Install on unsupported platform prints actionable error"
+  - "Tag push triggers GoReleaser then npm publish with matching version"
+
+notes: |
+  Modules:
+  - npm/plan-bender/ — root package with bin scripts and exec helper
+  - npm/plan-bender-{platform}-{arch}/ — 5 platform packages (just package.json, binary injected at publish)
+  - npm/scripts/publish.mjs — orchestrates download + version injection + npm publish
+  - .github/workflows/publish.yml — rewritten to trigger on release event
+
+  The publish.mjs script should: read version from GITHUB_REF or release event payload,
+  download the 5 GoReleaser archives from the GitHub Release, extract binaries, copy
+  into platform package directories, update all package.json versions, npm publish
+  each platform package first, then publish root package last.
+
+  The exec helper resolves the binary by trying require.resolve on each platform
+  package name for the current os.platform()+os.arch() combo. Falls back to a
+  PATH lookup for users who installed via brew/go install.
+
+  First release target: v0.0.2. Platform package.json files use 0.0.0 as placeholder —
+  publish.mjs overwrites all versions from the Git tag at publish time.
