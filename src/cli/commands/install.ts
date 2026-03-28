@@ -69,14 +69,17 @@ export const installCommand = defineCommand({
   },
 });
 
-const GITIGNORE_ENTRY = ".claude/skills/bender-*/";
+const GITIGNORE_ENTRIES = [".plan-bender/", ".claude/skills/bender-*/"];
 
 function ensureGitignore(projectRoot: string): void {
   const gitignorePath = join(projectRoot, ".gitignore");
-  if (existsSync(gitignorePath)) {
-    const content = readFileSync(gitignorePath, "utf-8");
-    if (content.includes(GITIGNORE_ENTRY)) return;
+  const content = existsSync(gitignorePath)
+    ? readFileSync(gitignorePath, "utf-8")
+    : "";
+  const missing = GITIGNORE_ENTRIES.filter((e) => !content.includes(e));
+  if (missing.length === 0) return;
+  appendFileSync(gitignorePath, `\n${missing.join("\n")}\n`, "utf-8");
+  for (const entry of missing) {
+    console.log(`  added ${entry} to .gitignore`);
   }
-  appendFileSync(gitignorePath, `\n${GITIGNORE_ENTRY}\n`, "utf-8");
-  console.log(`  added ${GITIGNORE_ENTRY} to .gitignore`);
 }
