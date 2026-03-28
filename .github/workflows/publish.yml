@@ -27,7 +27,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Publish npm packages
-        run: node npm/scripts/publish.mjs ${{ github.event.inputs.version && format('--version {0}', github.event.inputs.version) || '' }}
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.workflow_run.head_branch }}"
+          node npm/scripts/publish.mjs --version "${VERSION#v}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
