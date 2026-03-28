@@ -38,7 +38,7 @@ func rootCmd() *cobra.Command {
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
 	root.AddCommand(
-		initCmd(),
+		cli.NewInitCmd(),
 		cli.NewGenerateSkillsCmd(),
 		cli.NewInstallCmd(),
 		cli.NewValidateCmd(),
@@ -62,10 +62,6 @@ func stub(name, short string) *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func initCmd() *cobra.Command {
-	return stub("init", "Initialize a new plan-bender project")
 }
 
 func syncCmd() *cobra.Command {
