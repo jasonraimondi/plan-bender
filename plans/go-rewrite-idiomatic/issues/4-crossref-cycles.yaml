@@ -1,0 +1,43 @@
+id: 4
+slug: crossref-cycles
+name: "Cross-reference + cycle detection"
+track: rules
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [3]
+blocking: [8, 13]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Cross-reference validation and dependency cycle detection for plan issues.
+
+scope: |
+  Cross-ref checks (blocked_by/blocking symmetry, use_case existence) and Kahn's algorithm. No CLI wiring.
+
+acceptance_criteria:
+  - "blocked_by/blocking IDs validated against issue set"
+  - "Symmetry enforced (A blocks B implies B blocked_by A)"
+  - "use_case IDs validated against PRD"
+  - "Kahn's algorithm detects cycles and reports involved issue IDs"
+
+steps:
+  - "internal/schema/crossrefs.go — ValidateCrossRefs(prd, issues) returning []ValidationError for missing refs, broken symmetry, unknown use_cases"
+  - "internal/schema/cycles.go — DetectCycles(issues) using Kahn's topological sort, returning ErrCycleDetected with issue ID list"
+  - "internal/schema/crossrefs_test.go — table-driven: valid refs, missing blocked_by target, broken symmetry, unknown use_case"
+  - "internal/schema/cycles_test.go — table-driven: no cycle, simple A->B->A cycle, complex multi-node cycle, disconnected graph"
+
+use_cases:
+  - UC-3
+
+notes: |
+  Kahn's algorithm: build in-degree map from blocked_by edges, BFS from zero-degree nodes, cycle exists if sorted count < total.

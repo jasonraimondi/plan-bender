@@ -1,0 +1,44 @@
+id: 12
+slug: status-dashboard
+name: "pb status dashboard"
+track: experience
+status: backlog
+priority: medium
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 3]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: false
+headed: false
+
+outcome: |
+  Styled plan status overview with per-issue and per-track breakdowns.
+
+scope: |
+  Status command with Lipgloss-styled output. Static snapshot (print and exit), not live TUI.
+
+acceptance_criteria:
+  - "pb status shows all plans with issue/point counts"
+  - "pb status <slug> shows per-issue listing with status, track, points, blocked-by"
+  - "Per-track breakdown showing done/total"
+  - "Blocked issues highlighted"
+  - "Lipgloss styled output with status colors"
+
+steps:
+  - "internal/cli/status.go — Cobra command: load config, scan plans_dir for plan directories"
+  - "internal/cli/status.go — summary view: plan name, status, issues done/total, points done/total, blocked list"
+  - "internal/cli/status.go — detail view (with slug): per-issue line (#ID [status] name (track, pts) blocked-by), per-track breakdown"
+  - "internal/cli/status.go — Lipgloss styling: status colors (done=green, in-progress=yellow, blocked=red, backlog=gray, qa=purple)"
+
+use_cases:
+  - UC-6
+
+notes: |
+  Static snapshot for now (print and exit). Bubbletea live TUI is a potential future enhancement per PRD open question.

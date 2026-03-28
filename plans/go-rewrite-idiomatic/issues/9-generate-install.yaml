@@ -1,0 +1,46 @@
+id: 9
+slug: generate-install
+name: "pb generate-skills + pb install"
+track: intent
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 6]
+blocking: [10]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Template rendering produces skill files, symlink installation wires them into Claude config.
+
+scope: |
+  Template context builder, generate-skills command, install command with symlinks + gitignore management.
+
+acceptance_criteria:
+  - "pb generate-skills renders all templates with config context to .plan-bender/skills/{name}/SKILL.md"
+  - "pb install creates symlinks from .plan-bender/skills/ to target skills directory"
+  - "Existing symlinks replaced, regular files skipped with warning"
+  - "Project install adds .plan-bender/ and .claude/skills/bender-* to .gitignore"
+
+steps:
+  - "internal/template/context.go — BuildContext(config) producing template context map (tracks, workflow_states, max_points, custom_fields, track_descriptions, pipeline_phases)"
+  - "internal/cli/generate.go — Cobra command: load config, load templates, render each to .plan-bender/skills/{name}/SKILL.md"
+  - "internal/cli/install.go — Cobra command: resolve target dir (project or user), create symlinks, manage .gitignore entries"
+  - "internal/cli/generate_test.go — verify rendered skills written to correct paths with expected content"
+  - "internal/cli/install_test.go — verify symlink creation, existing symlink replacement, gitignore updates"
+
+use_cases:
+  - UC-2
+  - UC-5
+
+notes: |
+  Template context flattens config into the shape expected by templates: tracks, workflow_states, step_pattern,
+  max_points, backend, has_backend_sync, custom_fields, track_descriptions, pipeline_phases.

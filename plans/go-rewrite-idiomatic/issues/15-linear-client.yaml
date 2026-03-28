@@ -1,0 +1,45 @@
+id: 15
+slug: linear-client
+name: "Linear genqlient client"
+track: data
+status: backlog
+priority: medium
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [1]
+blocking: [16]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Type-safe GraphQL client for Linear API generated via genqlient.
+
+scope: |
+  Vendored schema subset, query/mutation definitions, genqlient codegen, thin client wrapper. No backend interface impl.
+
+acceptance_criteria:
+  - "genqlient generates typed Go client from vendored Linear GraphQL schema"
+  - "Queries cover: create/update project, create/update/pull issue, list workflow states, pull project with paginated issues"
+  - "Generated code checked into repo"
+
+steps:
+  - "internal/linear/schema.graphql — vendored Linear GraphQL schema (relevant subset: Project, Issue, WorkflowState, User types + mutations)"
+  - "internal/linear/queries.graphql — query/mutation definitions for all backend operations"
+  - "internal/linear/genqlient.yaml — genqlient config pointing to schema + queries"
+  - "internal/linear/generate.go — go generate directive to run genqlient"
+  - "internal/linear/client.go — NewClient(apiKey) returning configured graphql.Client with auth header"
+  - "internal/linear/client_test.go — verify generated types compile, test client construction"
+
+use_cases:
+  - UC-4
+
+notes: |
+  genqlient generates type-safe query functions from .graphql files. Avoids hand-maintained query strings
+  that drift as Linear's API evolves. Generated code is checked in so builds don't require codegen step.

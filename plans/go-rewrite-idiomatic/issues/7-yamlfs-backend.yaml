@@ -1,0 +1,46 @@
+id: 7
+slug: yamlfs-backend
+name: "YAML-FS backend + fs.FS abstraction"
+track: data
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 3]
+blocking: [11, 16]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Backend interface and yaml-fs implementation with injectable file system for testability.
+
+scope: |
+  Backend interface, yaml-fs impl, PlanStore with fs.FS, factory switch, atomic writes. No Linear backend.
+
+acceptance_criteria:
+  - "Backend interface defined with context.Context on all methods"
+  - "yaml-fs reads/writes PRD and issue YAML files matching TS directory structure"
+  - "PlanStore accepts injected fs.FS for reads and WriteFunc for writes"
+  - "Factory switch returns correct backend by config.Backend"
+  - "Atomic writes via os.CreateTemp + os.Rename in production WriteFunc"
+
+steps:
+  - "internal/backend/backend.go — Backend interface (CreateProject, CreateIssue, UpdateIssue, PullIssue, PullProject) with context.Context"
+  - "internal/backend/factory.go — New(ctx, cfg) with switch on cfg.Backend"
+  - "internal/backend/store.go — PlanStore{fsys fs.FS, write WriteFunc} with ReadPrd, ReadIssues, WritePrd, WriteIssue methods"
+  - "internal/backend/yamlfs.go — yaml-fs Backend implementation using PlanStore, composite remote IDs ({slug}/{id})"
+  - "internal/backend/atomic.go — atomicWrite production WriteFunc (os.CreateTemp + os.Rename)"
+  - "internal/backend/yamlfs_test.go — table-driven with fstest.MapFS: read/write PRD, read/write issues, scan directory for issues by prefix"
+
+use_cases:
+  - UC-3
+
+notes: |
+  See PRD notes for PlanStore code sketch with fs.FS injection pattern.

@@ -1,0 +1,44 @@
+id: 11
+slug: write-commands
+name: "pb write-prd + pb write-issue"
+track: intent
+status: backlog
+priority: medium
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 3]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Atomic YAML write commands that validate before persisting PRD and issue files.
+
+scope: |
+  write-prd and write-issue Cobra commands with validation + atomic write. No backend interaction.
+
+acceptance_criteria:
+  - "pb write-prd <slug> validates then atomically writes PRD YAML"
+  - "pb write-issue <slug> validates then atomically writes issue YAML"
+  - "Validation errors printed with Lipgloss styling, exit 1"
+  - "Atomic write (tmp + rename) prevents partial writes"
+
+steps:
+  - "internal/cli/write_prd.go — Cobra command: read stdin or file arg, parse YAML, validate with schema, atomic write to plans/{slug}/prd.yaml"
+  - "internal/cli/write_issue.go — Cobra command: read stdin or file arg, parse YAML, validate with schema + config, atomic write to plans/{slug}/issues/{id}-{slug}.yaml"
+  - "internal/cli/write_prd_test.go — valid write succeeds, invalid YAML rejected, atomic write verified"
+  - "internal/cli/write_issue_test.go — valid write succeeds, invalid track rejected, points > max rejected"
+
+use_cases:
+  - UC-3
+
+notes: |
+  Atomic write is the same os.CreateTemp + os.Rename pattern used in the backend store.
+  Consider extracting to a shared utility if not already in backend/atomic.go.

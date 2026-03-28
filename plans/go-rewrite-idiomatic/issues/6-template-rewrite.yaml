@@ -1,0 +1,48 @@
+id: 6
+slug: template-rewrite
+name: "Rewrite 8 .skill.tmpl files"
+track: data
+status: backlog
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [5]
+blocking: [9]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  All 8 skill templates converted from custom syntax to Go text/template, producing identical output.
+
+scope: |
+  Template content conversion only. Template engine already exists from issue 5.
+
+acceptance_criteria:
+  - "All 8 templates converted from custom syntax (@if/@each/${var|pipe}) to Go text/template"
+  - "Rendered output matches TS engine output for identical config context"
+  - "Templates embed correctly via embed.FS"
+
+steps:
+  - "templates/bender-orchestrator.skill.tmpl — convert @if to {{if}}, @each to {{range}}, ${var} to {{.var}}, pipes to FuncMap calls"
+  - "templates/bender-write-a-prd.skill.tmpl — same conversion pattern"
+  - "templates/bender-write-an-issue.skill.tmpl — same conversion pattern"
+  - "templates/bender-prd-to-issues.skill.tmpl — same conversion pattern"
+  - "templates/bender-review-prd.skill.tmpl — same conversion pattern"
+  - "templates/bender-implement-prd.skill.tmpl — same conversion pattern"
+  - "templates/bender-implement-issue.skill.tmpl — same conversion pattern"
+  - "templates/bender-interview-me.skill.tmpl — same conversion pattern"
+  - "templates/bender-templates_test.go — golden file tests: render each template with fixture config, compare to expected output"
+
+use_cases:
+  - UC-5
+
+notes: |
+  Conversion pattern: @if cond -> {{if .cond}}, @if !cond -> {{if not .cond}}, @each items as item -> {{range .items}},
+  ${var | upper} -> {{upper .var}}, ${items | join(, )} -> {{join .items ", "}}.

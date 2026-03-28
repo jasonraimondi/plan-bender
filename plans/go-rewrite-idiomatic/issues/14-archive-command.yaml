@@ -1,0 +1,40 @@
+id: 14
+slug: archive-command
+name: "pb archive"
+track: intent
+status: backlog
+priority: low
+points: 1
+labels:
+  - AFK
+assignee: null
+blocked_by: [2, 3]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Archive completed plans with summary metadata.
+
+scope: |
+  Archive command: active issue check, summary generation, directory move. No backend interaction.
+
+acceptance_criteria:
+  - "Refuses to archive with active issues unless --force"
+  - "Generates summary.md with stats (issues done, points, by-status breakdown)"
+  - "Moves plan dir to .archive/{slug}/"
+
+steps:
+  - "internal/cli/archive.go — Cobra command: check for active issues (in-progress/blocked), generate summary.md, move plan dir to plans_dir/.archive/{slug}/"
+  - "internal/cli/archive_test.go — blocks on active issues without --force, moves with --force, summary contains correct stats"
+
+use_cases:
+  - UC-3
+
+notes: |
+  Summary.md includes: timestamp, issues done/total, points done/total, by-status breakdown.

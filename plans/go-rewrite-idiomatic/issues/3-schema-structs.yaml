@@ -1,0 +1,44 @@
+id: 3
+slug: schema-structs
+name: "PRD + Issue schema structs + validation"
+track: data
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [1]
+blocking: [4, 7, 8, 11, 12, 13, 14]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  Go structs for PRD and Issue YAML that round-trip identically to TS output, with hand-written validation.
+
+scope: |
+  Struct definitions, Validate() methods, ValidationError type. No cross-ref or cycle checks.
+
+acceptance_criteria:
+  - "PrdYaml and IssueYaml structs round-trip through go-yaml identically to TS output"
+  - "Validate() catches missing required fields, invalid enums, date format violations"
+  - "Config-dependent validation (track in config.tracks, status in config.workflow_states, points <= max_points)"
+  - "No self-references or duplicates in blocked_by/blocking"
+
+steps:
+  - "internal/schema/prd.go — PrdYaml struct with yaml tags, Validate() returning []ValidationError"
+  - "internal/schema/issue.go — IssueYaml struct with yaml tags, Validate(config) returning []ValidationError"
+  - "internal/schema/errors.go — ValidationError{Field, Message} type"
+  - "internal/schema/prd_test.go — table-driven: valid PRD, missing required fields, invalid date format, invalid status"
+  - "internal/schema/issue_test.go — table-driven: valid issue, self-reference in blocked_by, duplicate blocking, points exceeding max, invalid track/status"
+
+use_cases:
+  - UC-3
+
+notes: |
+  Hand-written validation functions, no go-playground/validator. Most validation is custom logic.

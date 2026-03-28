@@ -1,0 +1,43 @@
+id: 10
+slug: init-command
+name: "pb init interactive setup"
+track: experience
+status: backlog
+priority: medium
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: [9]
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: false
+headed: false
+
+outcome: |
+  Interactive init flow collects project config via huh forms and bootstraps skills.
+
+scope: |
+  Multi-step huh form, config YAML write, trigger generate + install. Same flow as TS init command.
+
+acceptance_criteria:
+  - "Multi-step huh form collects: backend, plans_dir, max_points, install_target, conditional Linear fields"
+  - "Writes .plan-bender.yaml with only non-default values"
+  - "Triggers generate-skills + install after config write"
+  - "Prompts to overwrite if .plan-bender.yaml exists"
+
+steps:
+  - "internal/cli/init.go — Cobra command with huh form: backend select (yaml-fs/linear), plans_dir text, max_points text, install_target select (project/user)"
+  - "internal/cli/init.go — conditional Linear fields group (api_key, team) shown only when backend=linear"
+  - "internal/cli/init.go — build PartialConfig from answers (omit default values), marshal to YAML, atomic write to .plan-bender.yaml"
+  - "internal/cli/init.go — after write: resolveConfig, generateSkills, install symlinks, print next-steps message"
+
+use_cases:
+  - UC-2
+
+notes: |
+  charmbracelet/huh for forms, not raw Bubbletea. huh handles select, text input, confirm prompts with styled output.
