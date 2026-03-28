@@ -1,0 +1,3 @@
+backend: yaml-fs
+plans_dir: ./jason/plans/
+max_points: 5

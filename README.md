@@ -113,7 +113,7 @@ Override bundled templates by placing `.skill.tmpl` files in `.plan-bender/templ
 
 ```bash
 pnpm install
-pnpm build        # tsup → dist/cli.js
+pnpm build        # tsdown → dist/cli.mjs
 pnpm test         # vitest
 pnpm dev          # watch mode
 pnpm lint         # oxlint
