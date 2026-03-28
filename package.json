@@ -1,6 +1,6 @@
 {
   "name": "plan-bender",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "bin": {
     "plan-bender": "./src/cli/index.ts",
@@ -12,6 +12,10 @@
       "pb": "./dist/cli.mjs"
     }
   },
+  "files": [
+    "dist",
+    "templates"
+  ],
   "engines": {
     "node": ">=22"
   },
