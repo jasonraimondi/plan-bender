@@ -8,7 +8,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const cli = join(__dirname, "..", "..", "dist", "cli.js");
+const cli = join(__dirname, "..", "..", "dist", "cli.mjs");
 
 function makeTmpProject(): string {
   const dir = mkdtempSync(join(tmpdir(), "pb-gen-"));

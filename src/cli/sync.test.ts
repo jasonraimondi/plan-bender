@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const cli = join(__dirname, "..", "..", "dist", "cli.js");
+const cli = join(__dirname, "..", "..", "dist", "cli.mjs");
 
 function makeTmpPlan(): string {
   const dir = mkdtempSync(join(tmpdir(), "pb-sync-"));
