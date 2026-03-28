@@ -1,0 +1,86 @@
+package template
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestRender_Variables(t *testing.T) {
+	out, err := Render("test", "Hello {{.Name}}!", map[string]string{"Name": "World"})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello World!", out)
+}
+
+func TestRender_Conditional(t *testing.T) {
+	tmpl := `{{if .Show}}visible{{else}}hidden{{end}}`
+	out, err := Render("test", tmpl, map[string]bool{"Show": true})
+	require.NoError(t, err)
+	assert.Equal(t, "visible", out)
+}
+
+func TestRender_Loop(t *testing.T) {
+	tmpl := `{{range .Items}}- {{.}}
+{{end}}`
+	out, err := Render("test", tmpl, map[string][]string{"Items": {"a", "b", "c"}})
+	require.NoError(t, err)
+	assert.Equal(t, "- a\n- b\n- c\n", out)
+}
+
+func TestRender_Pipes(t *testing.T) {
+	tmpl := `{{.Name | upper}}`
+	out, err := Render("test", tmpl, map[string]string{"Name": "hello"})
+	require.NoError(t, err)
+	assert.Equal(t, "HELLO", out)
+}
+
+func TestRender_KebabPipe(t *testing.T) {
+	tmpl := `{{.Name | kebab}}`
+	out, err := Render("test", tmpl, map[string]string{"Name": "HelloWorld"})
+	require.NoError(t, err)
+	assert.Equal(t, "hello-world", out)
+}
+
+func TestRender_JoinPipe(t *testing.T) {
+	tmpl := `{{join ", " .Items}}`
+	out, err := Render("test", tmpl, map[string][]string{"Items": {"a", "b"}})
+	require.NoError(t, err)
+	assert.Equal(t, "a, b", out)
+}
+
+func TestRender_IndentPipe(t *testing.T) {
+	tmpl := `{{indent 4 .Text}}`
+	out, err := Render("test", tmpl, map[string]string{"Text": "line1\nline2"})
+	require.NoError(t, err)
+	assert.Equal(t, "    line1\n    line2", out)
+}
+
+func TestRender_InvalidTemplate(t *testing.T) {
+	_, err := Render("bad", "{{.Unclosed", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parsing template")
+}
+
+func TestLoadTemplates_Embedded(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+	assert.Contains(t, tmpls, "placeholder.tmpl")
+}
+
+func TestLoadTemplates_LocalOverride(t *testing.T) {
+	dir := t.TempDir()
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "custom.tmpl"),
+		[]byte("custom content"),
+		0o644,
+	))
+
+	tmpls, err := LoadTemplates(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "custom content", tmpls["custom.tmpl"])
+}
