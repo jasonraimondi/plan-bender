@@ -69,7 +69,7 @@ export const installCommand = defineCommand({
   },
 });
 
-const GITIGNORE_ENTRIES = [".plan-bender/", ".claude/skills/bender-*/"];
+const GITIGNORE_ENTRIES = [".plan-bender/", ".claude/skills/bender-*", "plan-bender.local.yaml"];
 
 function ensureGitignore(projectRoot: string): void {
   const gitignorePath = join(projectRoot, ".gitignore");
