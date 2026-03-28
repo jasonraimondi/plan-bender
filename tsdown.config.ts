@@ -1,4 +1,4 @@
-import { defineConfig } from "tsup";
+import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: { cli: "src/cli/index.ts" },
@@ -6,5 +6,5 @@ export default defineConfig({
   target: "node22",
   outDir: "dist",
   clean: true,
-  banner: { js: "#!/usr/bin/env node" },
+  banner: "#!/usr/bin/env node",
 });

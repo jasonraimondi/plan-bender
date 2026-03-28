@@ -7,15 +7,15 @@
   },
   "publishConfig": {
     "bin": {
-      "plan-bender": "./dist/cli.js"
+      "plan-bender": "./dist/cli.mjs"
     }
   },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint src/",
@@ -32,7 +32,7 @@
   "devDependencies": {
     "@types/node": "^25.5.0",
     "oxlint": "^1.57.0",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.21.6",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   }
