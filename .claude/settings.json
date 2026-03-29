@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "if": "Bash(git commit:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "staged=$(git diff --cached --name-only 2>/dev/null); cli_go=$(echo \"$staged\" | grep -E '^(cmd/|internal/cli/).*\\.go$'); docs=$(echo \"$staged\" | grep -E '^(README\\.md|docs/)'); if [ -n \"$cli_go\" ] && [ -z \"$docs\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"CLI-facing Go files changed but no docs updated. Verify README.md reflects any command, flag, or behavior changes.\"}}'; fi",
+            "timeout": 5,
+            "statusMessage": "Checking docs freshness..."
+          }
+        ]
+      }
+    ]
+  }
+}

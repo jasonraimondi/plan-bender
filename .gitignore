@@ -19,3 +19,5 @@ node_modules/
 # Local config
 .plan-bender.local.yaml
 .serena/serena.local.yaml
+.plan-bender/
+.claude/skills/bender-*
