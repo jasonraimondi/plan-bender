@@ -15,9 +15,9 @@ import (
 // NewWritePrdCmd creates the write-prd command.
 func NewWritePrdCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "write-prd [file]",
+		Use:   "write-prd <slug> [file]",
 		Short: "Validate and write a PRD YAML file",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
 			cfg, err := config.Load(root)
@@ -25,7 +25,9 @@ func NewWritePrdCmd() *cobra.Command {
 				return err
 			}
 
-			data, err := readInput(cmd, args)
+			slug := args[0]
+
+			data, err := readInput(cmd, args[1:])
 			if err != nil {
 				return err
 			}
@@ -43,7 +45,7 @@ func NewWritePrdCmd() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 
-			dir := filepath.Join(cfg.PlansDir, prd.Slug)
+			dir := filepath.Join(cfg.PlansDir, slug)
 			if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
 				return err
 			}
@@ -67,6 +69,11 @@ func NewWritePrdCmd() *cobra.Command {
 func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
 	if len(args) > 0 {
 		return os.ReadFile(args[0])
+	}
+	if f, ok := cmd.InOrStdin().(*os.File); ok {
+		if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
+			return nil, fmt.Errorf("no input — pipe YAML or pass a file path")
+		}
 	}
 	return io.ReadAll(cmd.InOrStdin())
 }
