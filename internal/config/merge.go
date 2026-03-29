@@ -26,6 +26,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.InstallTarget != nil {
 		out.InstallTarget = *layer.InstallTarget
 	}
+	if layer.UpdateCheck != nil {
+		out.UpdateCheck = *layer.UpdateCheck
+	}
 	if layer.Pipeline != nil {
 		out.Pipeline.Skip = layer.Pipeline.Skip
 	}

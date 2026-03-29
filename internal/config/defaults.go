@@ -13,5 +13,6 @@ func Defaults() Config {
 		IssueSchema:    IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:         LinearConfig{},
 		InstallTarget:  InstallTargetProject,
+		UpdateCheck:    true,
 	}
 }
