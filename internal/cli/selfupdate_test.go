@@ -32,7 +32,7 @@ func TestSelfUpdate_AlreadyLatest(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
-	assert.Contains(t, out.String(), "plan-bender is up to date (v1.2.3)")
+	assert.Contains(t, out.String(), "pb is up to date (v1.2.3)")
 }
 
 func TestSelfUpdate_NPMDetected(t *testing.T) {
@@ -76,8 +76,8 @@ func TestSelfUpdate_DirectBinary_DownloadsAndReplaces(t *testing.T) {
 
 	assert.True(t, downloadCalled)
 	output := out.String()
-	assert.Contains(t, output, "Updating plan-bender to v1.2.3...")
-	assert.Contains(t, output, "Updated plan-bender: v1.0.0 → v1.2.3")
+	assert.Contains(t, output, "Updating pb to v1.2.3...")
+	assert.Contains(t, output, "Updated pb: v1.0.0 → v1.2.3")
 }
 
 func TestSelfUpdate_DirectBinary_PermissionDenied(t *testing.T) {

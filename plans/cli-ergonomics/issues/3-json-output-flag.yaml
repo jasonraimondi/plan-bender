@@ -1,0 +1,50 @@
+id: 3
+slug: json-output-flag
+name: "Add --json flag to status, validate, and graph"
+track: intent
+status: todo
+priority: high
+points: 3
+labels:
+  - AFK
+assignee: null
+blocked_by: []
+blocking: []
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  status, validate, and graph commands support --json for machine-readable output while preserving human-readable default.
+
+scope: |
+  Add --json flag and JSON output paths to status.go, validate.go, graph.go. Add json struct tags to schema types. No changes to default output format.
+
+acceptance_criteria:
+  - "pb status --json outputs JSON array of plan summaries"
+  - "pb status --json my-plan outputs JSON object with prd and issues fields"
+  - "pb validate --json my-plan outputs JSON with valid, prd, issues, cross_ref, cycles fields"
+  - "pb graph --json my-plan outputs JSON with nodes and edges arrays"
+  - "Human-readable output is identical when --json is absent"
+  - "All JSON output is valid (parseable by jq)"
+
+steps:
+  - "schema/validate.go:PlanValidationResult — add json struct tags to PlanValidationResult and ValidationResult"
+  - "status.go:NewStatusCmd — add --json bool flag"
+  - "status.go — add showAllPlansJSON and showPlanDetailJSON functions that build typed structs and marshal with encoding/json"
+  - "validate.go:NewValidateCmd — add --json bool flag, when set marshal PlanValidationResult directly as JSON"
+  - "graph.go:NewGraphCmd — add --json bool flag"
+  - "graph.go — add buildGraphJSON function that outputs {nodes: [{id, name, status}], edges: [{from, to}]} as JSON"
+  - "status_test.go — add tests for --json output on both list and detail modes"
+  - "validate_test.go — add test for --json output"
+  - "graph_test.go — add test for --json output"
+
+use_cases:
+  - UC-3
+
+notes: |
+  JSON struct types can be local to each command file — no need for a shared output package. Use json.NewEncoder(cmd.OutOrStdout()).Encode() for consistent output.

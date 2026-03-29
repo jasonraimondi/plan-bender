@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -11,7 +12,9 @@ import (
 
 // NewValidateCmd creates the validate command.
 func NewValidateCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOutput bool
+
+	cmd := &cobra.Command{
 		Use:   "validate <slug>",
 		Short: "Validate PRD and issue YAML files",
 		Args:  cobra.ExactArgs(1),
@@ -26,6 +29,10 @@ func NewValidateCmd() *cobra.Command {
 			fsys := os.DirFS(cfg.PlansDir)
 			result := schema.ValidatePlan(slug, cfg, fsys)
 
+			if jsonOutput {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+			}
+
 			printValidationResult(cmd, result)
 
 			if !result.Valid {
@@ -34,6 +41,9 @@ func NewValidateCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output as JSON")
+	return cmd
 }
 
 func printValidationResult(cmd *cobra.Command, result schema.PlanValidationResult) {

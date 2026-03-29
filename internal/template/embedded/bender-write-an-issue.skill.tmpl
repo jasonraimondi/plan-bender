@@ -152,9 +152,11 @@ Iterate until approved.
 
 ### 6. Write the file
 
-**Inside a plan**: read existing issues to determine the next ID. Write `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.yaml`. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
+Write the issue YAML to a temporary file, then run `plan-bender write-issue {slug} <tempfile>` to validate and write it atomically.
 
-**Standalone**: write `./issues/{issue-slug}.yaml`. Omit `id`, `blocked_by`, `blocking`, and `use_cases` fields.
+**Inside a plan**: read existing issues to determine the next ID. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
+
+**Standalone**: omit `id`, `blocked_by`, `blocking`, and `use_cases` fields.
 
 Rules:
 

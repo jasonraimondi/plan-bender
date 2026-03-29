@@ -1,0 +1,45 @@
+id: 1
+slug: write-prd-slug-positional
+name: "Refactor write-prd: slug as first positional arg"
+track: intent
+status: todo
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: []
+blocking: [2, 7, 8]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  pb write-prd takes slug as required first positional arg, file as optional second arg, and errors on TTY stdin with no file.
+
+scope: |
+  write_prd.go command definition, readInput TTY detection, write_prd_test.go updates. Does not change write-issue (separate issue).
+
+acceptance_criteria:
+  - "pb write-prd my-plan prd.yaml writes to {plans_dir}/my-plan/prd.yaml"
+  - "echo yaml | pb write-prd my-plan reads from stdin and writes to {plans_dir}/my-plan/prd.yaml"
+  - "pb write-prd on a TTY with no file arg exits non-zero with hint: no input — pipe YAML or pass a file path"
+  - "Existing write-prd tests updated and passing with new arg signature"
+
+steps:
+  - "write_prd.go:NewWritePrdCmd — change Use to 'write-prd <slug> [file]', set Args to cobra.RangeArgs(1, 2), extract slug from args[0]"
+  - "write_prd.go:NewWritePrdCmd — use CLI slug arg for directory path (filepath.Join(cfg.PlansDir, slug)) instead of prd.Slug"
+  - "write_prd.go:readInput — when len(args) < 2 and stdin is a terminal (os.Stdin.Stat() mode check), return error with hint message"
+  - "write_prd_test.go:TestWritePrd_ValidPrd — update SetArgs to include slug as first arg"
+  - "write_prd_test.go — add TestWritePrd_TTYStdinError that verifies error when no file and stdin is terminal"
+
+use_cases:
+  - UC-1
+  - UC-7
+
+notes: |
+  The readInput function is shared with write-issue. The TTY detection should be added to readInput so both commands benefit. Use os.Stdin.Stat() to check ModeCharDevice.

@@ -13,12 +13,10 @@ import (
 
 // NewWriteIssueCmd creates the write-issue command.
 func NewWriteIssueCmd() *cobra.Command {
-	var slug string
-
-	cmd := &cobra.Command{
-		Use:   "write-issue [file]",
+	return &cobra.Command{
+		Use:   "write-issue <slug> [file]",
 		Short: "Validate and write an issue YAML file",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
 			cfg, err := config.Load(root)
@@ -26,7 +24,9 @@ func NewWriteIssueCmd() *cobra.Command {
 				return err
 			}
 
-			data, err := readInput(cmd, args)
+			slug := args[0]
+
+			data, err := readInput(cmd, args[1:])
 			if err != nil {
 				return err
 			}
@@ -42,10 +42,6 @@ func NewWriteIssueCmd() *cobra.Command {
 					fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", e)
 				}
 				return fmt.Errorf("validation failed")
-			}
-
-			if slug == "" {
-				return fmt.Errorf("--slug is required")
 			}
 
 			dir := filepath.Join(cfg.PlansDir, slug, "issues")
@@ -68,7 +64,4 @@ func NewWriteIssueCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVar(&slug, "slug", "", "project slug (required)")
-	return cmd
 }

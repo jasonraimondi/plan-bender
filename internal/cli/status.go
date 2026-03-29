@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +13,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type planSummaryJSON struct {
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Issues  int    `json:"issues"`
+	Done    int    `json:"done"`
+	Points  int    `json:"points"`
+	Blocked int    `json:"blocked"`
+}
+
+type planDetailJSON struct {
+	Slug   string             `json:"slug"`
+	Name   string             `json:"name"`
+	Status string             `json:"status"`
+	Prd    *schema.PrdYaml    `json:"prd"`
+	Issues []schema.IssueYaml `json:"issues"`
+}
+
 // NewStatusCmd creates the status command.
 func NewStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOutput bool
+
+	cmd := &cobra.Command{
 		Use:   "status [slug]",
 		Short: "Show plan status dashboard",
 		Args:  cobra.MaximumNArgs(1),
@@ -26,17 +47,23 @@ func NewStatusCmd() *cobra.Command {
 			}
 
 			if len(args) == 1 {
-				return showPlanDetail(cmd, cfg, args[0])
+				return showPlanDetail(cmd, cfg, args[0], jsonOutput)
 			}
-			return showAllPlans(cmd, cfg)
+			return showAllPlans(cmd, cfg, jsonOutput)
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output as JSON")
+	return cmd
 }
 
-func showAllPlans(cmd *cobra.Command, cfg config.Config) error {
+func showAllPlans(cmd *cobra.Command, cfg config.Config, jsonOut bool) error {
 	entries, err := os.ReadDir(cfg.PlansDir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode([]planSummaryJSON{})
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "No plans found")
 			return nil
 		}
@@ -44,6 +71,7 @@ func showAllPlans(cmd *cobra.Command, cfg config.Config) error {
 	}
 
 	out := cmd.OutOrStdout()
+	var summaries []planSummaryJSON
 	found := false
 	for _, e := range entries {
 		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
@@ -63,13 +91,32 @@ func showAllPlans(cmd *cobra.Command, cfg config.Config) error {
 		issues, _ := loadIssues(cfg.PlansDir, e.Name())
 		done, total, donePoints, totalPoints, blocked := issueStats(issues)
 
-		fmt.Fprintf(out, "%s [%s] — %d/%d issues, %d/%d pts",
-			prd.Name, prd.Status, done, total, donePoints, totalPoints)
-		if blocked > 0 {
-			fmt.Fprintf(out, " (%d blocked)", blocked)
+		if jsonOut {
+			summaries = append(summaries, planSummaryJSON{
+				Slug:    e.Name(),
+				Name:    prd.Name,
+				Status:  prd.Status,
+				Issues:  total,
+				Done:    done,
+				Points:  totalPoints,
+				Blocked: blocked,
+			})
+		} else {
+			fmt.Fprintf(out, "%s [%s] — %d/%d issues, %d/%d pts",
+				prd.Name, prd.Status, done, total, donePoints, totalPoints)
+			if blocked > 0 {
+				fmt.Fprintf(out, " (%d blocked)", blocked)
+			}
+			fmt.Fprintln(out)
 		}
-		fmt.Fprintln(out)
 		found = true
+	}
+
+	if jsonOut {
+		if summaries == nil {
+			summaries = []planSummaryJSON{}
+		}
+		return json.NewEncoder(out).Encode(summaries)
 	}
 
 	if !found {
@@ -78,7 +125,7 @@ func showAllPlans(cmd *cobra.Command, cfg config.Config) error {
 	return nil
 }
 
-func showPlanDetail(cmd *cobra.Command, cfg config.Config, slug string) error {
+func showPlanDetail(cmd *cobra.Command, cfg config.Config, slug string, jsonOut bool) error {
 	out := cmd.OutOrStdout()
 
 	prdPath := filepath.Join(cfg.PlansDir, slug, "prd.yaml")
@@ -94,6 +141,16 @@ func showPlanDetail(cmd *cobra.Command, cfg config.Config, slug string) error {
 	issues, err := loadIssues(cfg.PlansDir, slug)
 	if err != nil {
 		return err
+	}
+
+	if jsonOut {
+		return json.NewEncoder(out).Encode(planDetailJSON{
+			Slug:   slug,
+			Name:   prd.Name,
+			Status: prd.Status,
+			Prd:    &prd,
+			Issues: issues,
+		})
 	}
 
 	done, total, donePoints, totalPoints, _ := issueStats(issues)

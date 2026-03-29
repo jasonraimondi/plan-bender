@@ -40,7 +40,7 @@ func TestStalenessNotice_PrintsWhenStale(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, stderr.String(), "A new version of plan-bender is available")
+	assert.Contains(t, stderr.String(), "A new version of pb is available")
 	assert.Contains(t, stderr.String(), "v1.0.0")
 	assert.Contains(t, stderr.String(), "v2.0.0")
 	assert.Contains(t, stderr.String(), "pb self-update")

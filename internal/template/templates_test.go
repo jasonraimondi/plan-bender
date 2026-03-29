@@ -96,6 +96,36 @@ func TestImplementPrdTemplate_HasLinearSyncWhenEnabled(t *testing.T) {
 	assert.Contains(t, out, "Linear sync")
 }
 
+func TestWritePrdTemplate_UsesCLIWriteThrough(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("write-a-prd", tmpls["bender-write-a-prd.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender write-prd")
+}
+
+func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("prd-to-issues", tmpls["bender-prd-to-issues.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender write-issue")
+}
+
+func TestWriteAnIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("write-an-issue", tmpls["bender-write-an-issue.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender write-issue")
+}
+
 func TestWorkflowStatesJoin(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)

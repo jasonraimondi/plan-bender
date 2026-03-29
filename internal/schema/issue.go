@@ -12,31 +12,31 @@ var validPriorities = map[string]bool{
 
 // IssueYaml represents an issue YAML file.
 type IssueYaml struct {
-	ID                 int      `yaml:"id"`
-	Slug               string   `yaml:"slug"`
-	Name               string   `yaml:"name"`
-	Track              string   `yaml:"track"`
-	Status             string   `yaml:"status"`
-	Priority           string   `yaml:"priority"`
-	Points             int      `yaml:"points"`
-	Labels             []string `yaml:"labels"`
-	Assignee           *string  `yaml:"assignee"`
-	BlockedBy          []int    `yaml:"blocked_by"`
-	Blocking           []int    `yaml:"blocking"`
-	Branch             *string  `yaml:"branch"`
-	PR                 *string  `yaml:"pr"`
-	LinearID           *string  `yaml:"linear_id"`
-	LinearURL          string   `yaml:"linear_url,omitempty"`
-	Created            string   `yaml:"created"`
-	Updated            string   `yaml:"updated"`
-	TDD                bool     `yaml:"tdd"`
-	Headed             *bool    `yaml:"headed,omitempty"`
-	Outcome            string   `yaml:"outcome"`
-	Scope              string   `yaml:"scope"`
-	AcceptanceCriteria []string `yaml:"acceptance_criteria"`
-	Steps              []string `yaml:"steps"`
-	UseCases           []string `yaml:"use_cases"`
-	Notes              *string  `yaml:"notes,omitempty"`
+	ID                 int      `yaml:"id" json:"id"`
+	Slug               string   `yaml:"slug" json:"slug"`
+	Name               string   `yaml:"name" json:"name"`
+	Track              string   `yaml:"track" json:"track"`
+	Status             string   `yaml:"status" json:"status"`
+	Priority           string   `yaml:"priority" json:"priority"`
+	Points             int      `yaml:"points" json:"points"`
+	Labels             []string `yaml:"labels" json:"labels"`
+	Assignee           *string  `yaml:"assignee" json:"assignee"`
+	BlockedBy          []int    `yaml:"blocked_by" json:"blocked_by"`
+	Blocking           []int    `yaml:"blocking" json:"blocking"`
+	Branch             *string  `yaml:"branch" json:"branch"`
+	PR                 *string  `yaml:"pr" json:"pr"`
+	LinearID           *string  `yaml:"linear_id" json:"linear_id"`
+	LinearURL          string   `yaml:"linear_url,omitempty" json:"linear_url,omitempty"`
+	Created            string   `yaml:"created" json:"created"`
+	Updated            string   `yaml:"updated" json:"updated"`
+	TDD                bool     `yaml:"tdd" json:"tdd"`
+	Headed             *bool    `yaml:"headed,omitempty" json:"headed,omitempty"`
+	Outcome            string   `yaml:"outcome" json:"outcome"`
+	Scope              string   `yaml:"scope" json:"scope"`
+	AcceptanceCriteria []string `yaml:"acceptance_criteria" json:"acceptance_criteria"`
+	Steps              []string `yaml:"steps" json:"steps"`
+	UseCases           []string `yaml:"use_cases" json:"use_cases"`
+	Notes              *string  `yaml:"notes,omitempty" json:"notes,omitempty"`
 }
 
 // Validate checks structural rules and config-dependent rules.

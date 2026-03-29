@@ -10,22 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInstall_CreatesSymlinks(t *testing.T) {
+func TestInstall_GeneratesAndCreatesSymlinks(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Generate first
-	genCmd := NewGenerateSkillsCmd()
-	genCmd.SetOut(&strings.Builder{})
-	require.NoError(t, genCmd.Execute())
-
-	// Install
 	installCmd := NewInstallCmd()
 	var out strings.Builder
 	installCmd.SetOut(&out)
 	require.NoError(t, installCmd.Execute())
 
-	assert.Contains(t, out.String(), "8 skills installed")
+	output := out.String()
+	assert.Contains(t, output, "8 skills generated")
+	assert.Contains(t, output, "8 skills installed")
 
 	// Verify symlinks exist
 	targetDir := filepath.Join(dir, ".claude", "skills")
@@ -45,12 +41,6 @@ func TestInstall_UpdatesGitignore(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Generate first
-	genCmd := NewGenerateSkillsCmd()
-	genCmd.SetOut(&strings.Builder{})
-	require.NoError(t, genCmd.Execute())
-
-	// Install
 	installCmd := NewInstallCmd()
 	installCmd.SetOut(&strings.Builder{})
 	require.NoError(t, installCmd.Execute())
@@ -67,11 +57,6 @@ func TestInstall_UpdatesGitignore(t *testing.T) {
 func TestInstall_ReplacesExistingSymlinks(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
-
-	// Generate
-	genCmd := NewGenerateSkillsCmd()
-	genCmd.SetOut(&strings.Builder{})
-	require.NoError(t, genCmd.Execute())
 
 	// Install twice — should not error
 	for i := 0; i < 2; i++ {

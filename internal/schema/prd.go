@@ -11,36 +11,36 @@ var validPrdStatuses = map[string]bool{
 
 // UseCase is a PRD use case entry.
 type UseCase struct {
-	ID          string `yaml:"id"`
-	Description string `yaml:"description"`
+	ID          string `yaml:"id" json:"id"`
+	Description string `yaml:"description" json:"description"`
 }
 
 // LinearRef holds Linear integration metadata on a PRD.
 type LinearRef struct {
-	ProjectID string `yaml:"project_id,omitempty"`
+	ProjectID string `yaml:"project_id,omitempty" json:"project_id,omitempty"`
 }
 
 // PrdYaml represents a PRD YAML file.
 type PrdYaml struct {
-	Name          string    `yaml:"name"`
-	Slug          string    `yaml:"slug"`
-	Status        string    `yaml:"status"`
-	Created       string    `yaml:"created"`
-	Updated       string    `yaml:"updated"`
-	Description   string    `yaml:"description"`
-	Why           string    `yaml:"why"`
-	Outcome       string    `yaml:"outcome"`
-	InScope       []string  `yaml:"in_scope,omitempty"`
-	OutOfScope    []string  `yaml:"out_of_scope,omitempty"`
-	UseCases      []UseCase `yaml:"use_cases,omitempty"`
-	Decisions     []string  `yaml:"decisions,omitempty"`
-	OpenQuestions []string  `yaml:"open_questions,omitempty"`
-	Risks         []string  `yaml:"risks,omitempty"`
-	Validation    []string  `yaml:"validation,omitempty"`
-	Notes         *string   `yaml:"notes,omitempty"`
-	DevCommand    *string   `yaml:"dev_command,omitempty"`
-	BaseURL       *string   `yaml:"base_url,omitempty"`
-	Linear        *LinearRef `yaml:"linear,omitempty"`
+	Name          string     `yaml:"name" json:"name"`
+	Slug          string     `yaml:"slug" json:"slug"`
+	Status        string     `yaml:"status" json:"status"`
+	Created       string     `yaml:"created" json:"created"`
+	Updated       string     `yaml:"updated" json:"updated"`
+	Description   string     `yaml:"description" json:"description"`
+	Why           string     `yaml:"why" json:"why"`
+	Outcome       string     `yaml:"outcome" json:"outcome"`
+	InScope       []string   `yaml:"in_scope,omitempty" json:"in_scope,omitempty"`
+	OutOfScope    []string   `yaml:"out_of_scope,omitempty" json:"out_of_scope,omitempty"`
+	UseCases      []UseCase  `yaml:"use_cases,omitempty" json:"use_cases,omitempty"`
+	Decisions     []string   `yaml:"decisions,omitempty" json:"decisions,omitempty"`
+	OpenQuestions []string   `yaml:"open_questions,omitempty" json:"open_questions,omitempty"`
+	Risks         []string   `yaml:"risks,omitempty" json:"risks,omitempty"`
+	Validation    []string   `yaml:"validation,omitempty" json:"validation,omitempty"`
+	Notes         *string    `yaml:"notes,omitempty" json:"notes,omitempty"`
+	DevCommand    *string    `yaml:"dev_command,omitempty" json:"dev_command,omitempty"`
+	BaseURL       *string    `yaml:"base_url,omitempty" json:"base_url,omitempty"`
+	Linear        *LinearRef `yaml:"linear,omitempty" json:"linear,omitempty"`
 }
 
 // Validate checks required fields, enum values, and date formats.

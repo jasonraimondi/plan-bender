@@ -224,7 +224,7 @@ Iterate until the user approves.
 
 ### 6. Write the issue files
 
-Create `{{.plans_dir}}{slug}/issues/` and write one YAML file per approved slice.
+For each issue, write the YAML to a temporary file, then run `plan-bender write-issue {slug} <tempfile>` to validate and write it atomically.
 
 Rules:
 

@@ -38,7 +38,7 @@ func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "plan-bender",
 		Aliases: []string{"pb"},
-		Short:   "Plan-bender CLI — plan management tool",
+		Short:   "pb — plan management tool",
 		Version: version,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			level := slog.LevelInfo
@@ -71,7 +71,7 @@ func rootCmd() *cobra.Command {
 			case result := <-updateCh:
 				if result.isNewer {
 					fmt.Fprintf(cmd.ErrOrStderr(),
-						"\nA new version of plan-bender is available: v%s → v%s\n  Run 'pb self-update' to upgrade\n",
+						"\nA new version of pb is available: v%s → v%s\n  Run 'pb self-update' to upgrade\n",
 						version, result.latest)
 				}
 			case <-time.After(500 * time.Millisecond):
@@ -83,18 +83,40 @@ func rootCmd() *cobra.Command {
 
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
+	slugComplete := cli.SlugCompletionFunc()
+
+	validateCmd := cli.NewValidateCmd()
+	validateCmd.ValidArgsFunction = slugComplete
+
+	writePrdCmd := cli.NewWritePrdCmd()
+	writePrdCmd.ValidArgsFunction = slugComplete
+
+	statusCmd := cli.NewStatusCmd()
+	statusCmd.ValidArgsFunction = slugComplete
+
+	graphCmd := cli.NewGraphCmd()
+	graphCmd.ValidArgsFunction = slugComplete
+
+	archiveCmd := cli.NewArchiveCmd()
+	archiveCmd.ValidArgsFunction = slugComplete
+
+	syncCmd := cli.NewSyncCmd()
+	for _, sub := range syncCmd.Commands() {
+		sub.ValidArgsFunction = slugComplete
+	}
+
 	root.AddCommand(
 		cli.NewInitCmd(),
-		cli.NewGenerateSkillsCmd(),
 		cli.NewInstallCmd(),
-		cli.NewValidateCmd(),
-		cli.NewWritePrdCmd(),
+		validateCmd,
+		writePrdCmd,
 		cli.NewWriteIssueCmd(),
-		cli.NewStatusCmd(),
-		cli.NewGraphCmd(),
-		cli.NewSyncCmd(),
-		cli.NewArchiveCmd(),
+		statusCmd,
+		graphCmd,
+		syncCmd,
+		archiveCmd,
 		cli.NewSelfUpdateCmd(version),
+		cli.NewCompletionCmd(),
 	)
 
 	return root

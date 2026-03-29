@@ -17,7 +17,7 @@ import (
 func NewInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialize a new plan-bender project",
+		Short: "Initialize a new pb project",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
 			cfgPath := filepath.Join(root, ".plan-bender.yaml")
@@ -129,13 +129,6 @@ func NewInitCmd() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", cfgPath)
 
 			// Generate + install
-			genCmd := NewGenerateSkillsCmd()
-			genCmd.SetOut(cmd.OutOrStdout())
-			genCmd.SetErr(cmd.ErrOrStderr())
-			if err := genCmd.RunE(genCmd, nil); err != nil {
-				return fmt.Errorf("generate-skills: %w", err)
-			}
-
 			installCmd := NewInstallCmd()
 			installCmd.SetOut(cmd.OutOrStdout())
 			installCmd.SetErr(cmd.ErrOrStderr())
