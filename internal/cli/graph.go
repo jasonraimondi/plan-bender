@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -26,9 +27,27 @@ var statusColors = map[string]string{
 	"qa":          "#8250df",
 }
 
+type graphJSON struct {
+	Nodes []graphNodeJSON `json:"nodes"`
+	Edges []graphEdgeJSON `json:"edges"`
+}
+
+type graphNodeJSON struct {
+	ID     int    `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type graphEdgeJSON struct {
+	From int `json:"from"`
+	To   int `json:"to"`
+}
+
 // NewGraphCmd creates the graph command.
 func NewGraphCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOutput bool
+
+	cmd := &cobra.Command{
 		Use:   "graph <slug>",
 		Short: "Display issue dependency graph as Mermaid",
 		Args:  cobra.ExactArgs(1),
@@ -46,11 +65,44 @@ func NewGraphCmd() *cobra.Command {
 				return err
 			}
 
+			if jsonOutput {
+				g := buildGraphJSON(issues)
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(g)
+			}
+
 			mermaid := buildMermaidGraph(issues)
 			fmt.Fprint(cmd.OutOrStdout(), mermaid)
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output as JSON")
+	return cmd
+}
+
+func buildGraphJSON(issues []schema.IssueYaml) graphJSON {
+	var nodes []graphNodeJSON
+	var edges []graphEdgeJSON
+
+	for _, iss := range issues {
+		nodes = append(nodes, graphNodeJSON{
+			ID:     iss.ID,
+			Name:   iss.Name,
+			Status: iss.Status,
+		})
+		for _, dep := range iss.BlockedBy {
+			edges = append(edges, graphEdgeJSON{From: dep, To: iss.ID})
+		}
+	}
+
+	if nodes == nil {
+		nodes = []graphNodeJSON{}
+	}
+	if edges == nil {
+		edges = []graphEdgeJSON{}
+	}
+
+	return graphJSON{Nodes: nodes, Edges: edges}
 }
 
 func loadIssues(plansDir, slug string) ([]schema.IssueYaml, error) {

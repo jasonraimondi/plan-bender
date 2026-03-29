@@ -13,17 +13,17 @@ import (
 
 // ValidationResult holds errors for a single file.
 type ValidationResult struct {
-	File   string
-	Errors []string
+	File   string   `json:"file"`
+	Errors []string `json:"errors"`
 }
 
 // PlanValidationResult is the full validation output.
 type PlanValidationResult struct {
-	PRD      ValidationResult
-	Issues   []ValidationResult
-	CrossRef []string
-	Cycles   []string
-	Valid    bool
+	PRD      ValidationResult   `json:"prd"`
+	Issues   []ValidationResult `json:"issues"`
+	CrossRef []string           `json:"cross_ref"`
+	Cycles   []string           `json:"cycles"`
+	Valid    bool               `json:"valid"`
 }
 
 // ValidatePlan runs full validation on a plan directory.
