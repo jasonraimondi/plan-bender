@@ -1,0 +1,123 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	"github.com/jasonraimondi/plan-bender/internal/update"
+	"github.com/spf13/cobra"
+)
+
+type selfUpdateCmd struct {
+	version             string
+	checkForUpdate      func(currentVersion string) (latest string, isNewer bool, err error)
+	detectInstallMethod func() (update.InstallMethod, error)
+	downloadAndReplace  func(version string) error
+}
+
+// NewSelfUpdateCmd creates the self-update command.
+func NewSelfUpdateCmd(version string) *cobra.Command {
+	sc := &selfUpdateCmd{
+		version: version,
+		checkForUpdate: func(currentVersion string) (string, bool, error) {
+			return update.CheckForUpdate(currentVersion, &http.Client{})
+		},
+		detectInstallMethod: func() (update.InstallMethod, error) {
+			return update.DetectCurrentInstallMethod()
+		},
+		downloadAndReplace: defaultDownloadAndReplace,
+	}
+
+	cmd := &cobra.Command{
+		Use:   "self-update",
+		Short: "Update plan-bender to the latest version",
+		Args:  cobra.NoArgs,
+		RunE:  sc.run,
+	}
+
+	selfUpdateRegistry[cmd] = sc
+	return cmd
+}
+
+// selfUpdateRegistry allows tests to access the selfUpdateCmd for dependency injection.
+var selfUpdateRegistry = map[*cobra.Command]*selfUpdateCmd{}
+
+// selfUpdateFromCmd retrieves the selfUpdateCmd associated with a cobra.Command.
+func selfUpdateFromCmd(cmd *cobra.Command) *selfUpdateCmd {
+	return selfUpdateRegistry[cmd]
+}
+
+func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
+	out := cmd.OutOrStdout()
+
+	if sc.version == "dev" {
+		fmt.Fprintln(out, "Skipping update check for development build")
+		return nil
+	}
+
+	latest, isNewer, err := sc.checkForUpdate(sc.version)
+	if err != nil {
+		return fmt.Errorf("checking for update: %w", err)
+	}
+
+	if !isNewer {
+		fmt.Fprintf(out, "plan-bender is up to date (v%s)\n", sc.version)
+		return nil
+	}
+
+	method, err := sc.detectInstallMethod()
+	if err != nil {
+		return fmt.Errorf("detecting install method: %w", err)
+	}
+
+	switch method {
+	case update.InstallMethodNPM:
+		fmt.Fprintf(out, "A newer version is available: %s → %s\n", sc.version, latest)
+		fmt.Fprintln(out, "  Run: npm install -g @jasonraimondi/plan-bender@latest")
+	case update.InstallMethodDirect:
+		fmt.Fprintf(out, "Updating plan-bender to v%s...\n", latest)
+		if err := sc.downloadAndReplace(latest); err != nil {
+			if errors.Is(err, os.ErrPermission) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "Permission denied. Try: sudo pb self-update")
+			}
+			return err
+		}
+		fmt.Fprintf(out, "Updated plan-bender: v%s → v%s\n", sc.version, latest)
+	}
+
+	return nil
+}
+
+func defaultDownloadAndReplace(version string) error {
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding executable path: %w", err)
+	}
+
+	// Resolve symlinks to get the real binary path
+	realPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return fmt.Errorf("resolving symlinks: %w", err)
+	}
+
+	newBinaryPath, err := update.DownloadAndVerify(version, runtime.GOOS, runtime.GOARCH, "")
+	if err != nil {
+		return fmt.Errorf("downloading update: %w", err)
+	}
+	defer os.RemoveAll(filepath.Dir(newBinaryPath))
+
+	if err := update.ReplaceBinary(newBinaryPath, realPath); err != nil {
+		return err
+	}
+
+	binaryDir := filepath.Dir(realPath)
+	if err := update.RecreateSymlink(binaryDir); err != nil {
+		return fmt.Errorf("recreating symlink: %w", err)
+	}
+
+	return nil
+}

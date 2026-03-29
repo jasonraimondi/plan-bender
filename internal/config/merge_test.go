@@ -94,6 +94,18 @@ func TestMerge_ThreeLayerOrdering(t *testing.T) {
 	assert.Equal(t, 8, result.MaxPoints)
 }
 
+func TestMerge_UpdateCheckDefaultTrue(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.True(t, result.UpdateCheck)
+}
+
+func TestMerge_UpdateCheckOverrideToFalse(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{UpdateCheck: ptr(false)})
+	assert.False(t, result.UpdateCheck)
+}
+
 func TestMerge_DefaultsImmutable(t *testing.T) {
 	before := Defaults()
 	base := Defaults()
