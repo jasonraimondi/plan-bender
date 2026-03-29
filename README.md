@@ -52,9 +52,10 @@ Skip skills you don't need: `pipeline.skip: [bender-interview-me]` in config.
 | `pb generate-skills` | Re-render skills from templates + config |
 | `pb install` | Symlink skills into Claude Code |
 | `pb validate <slug>` | Schema checks, cross-refs, cycle detection |
-| `pb write-prd <slug>` | Validate + atomically write a PRD |
-| `pb write-issue <slug> <id>` | Validate + atomically write an issue |
-| `pb sync <slug>` | Push to backend (`--pull` to pull, `<slug>#<id>` for one issue) |
+| `pb write-prd [file]` | Validate + atomically write a PRD (reads stdin if no file) |
+| `pb write-issue [file] --slug <slug>` | Validate + atomically write an issue |
+| `pb sync push <slug>` | Push local issues to backend |
+| `pb sync pull <slug>` | Pull remote state to local |
 | `pb status [slug]` | Dashboard — all plans or per-issue detail |
 | `pb graph <slug>` | Mermaid dependency DAG |
 | `pb archive <slug>` | Move to `.archive/` with summary |
