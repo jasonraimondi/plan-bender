@@ -71,7 +71,7 @@ Three layers, deep-merged (later wins):
 ```yaml
 backend: yaml-fs               # yaml-fs | linear
 install_target: project        # project (.claude/skills/) | user (~/.claude/skills/)
-plans_dir: ./plans/
+plans_dir: ./.plan-bender/plans/
 max_points: 3                  # cap per issue — forces thin slices
 step_pattern: "Target — behavior"
 

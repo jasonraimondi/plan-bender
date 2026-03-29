@@ -53,5 +53,5 @@ func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "bender-interview-me", "SKILL.md"))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "Custom content for ./plans/")
+	assert.Contains(t, string(data), "Custom content for ./.plan-bender/plans/")
 }

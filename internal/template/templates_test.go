@@ -11,7 +11,7 @@ import (
 // fixtureContext returns a template rendering context matching default config.
 func fixtureContext() map[string]any {
 	return map[string]any{
-		"plans_dir":    "./plans/",
+		"plans_dir":    "./.plan-bender/plans/",
 		"max_points":   3,
 		"step_pattern": "Target — behavior",
 		"tracks":       []string{"intent", "experience", "data", "rules", "resilience"},
@@ -71,7 +71,7 @@ func TestOrchestratorTemplate_ContainsPipelinePhases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "Interview")
 	assert.Contains(t, out, "Write PRD")
-	assert.Contains(t, out, "./plans/")
+	assert.Contains(t, out, "./.plan-bender/plans/")
 }
 
 func TestImplementPrdTemplate_NoLinearSyncWhenDisabled(t *testing.T) {

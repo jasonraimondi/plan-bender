@@ -13,7 +13,7 @@ import (
 func TestWritePrd_ValidPrd(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "plans"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	prdYaml := `name: Test
 slug: test
@@ -34,7 +34,7 @@ outcome: Success
 	require.NoError(t, cmd.Execute())
 
 	assert.Contains(t, out.String(), "wrote")
-	_, err := os.Stat(filepath.Join(dir, "plans", "test", "prd.yaml"))
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test", "prd.yaml"))
 	assert.NoError(t, err)
 }
 
