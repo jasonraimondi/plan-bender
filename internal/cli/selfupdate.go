@@ -34,7 +34,7 @@ func NewSelfUpdateCmd(version string) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "self-update",
-		Short: "Update plan-bender to the latest version",
+		Short: "Update pb to the latest version",
 		Args:  cobra.NoArgs,
 		RunE:  sc.run,
 	}
@@ -65,7 +65,7 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 	}
 
 	if !isNewer {
-		fmt.Fprintf(out, "plan-bender is up to date (v%s)\n", sc.version)
+		fmt.Fprintf(out, "pb is up to date (v%s)\n", sc.version)
 		return nil
 	}
 
@@ -79,14 +79,14 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(out, "A newer version is available: %s → %s\n", sc.version, latest)
 		fmt.Fprintln(out, "  Run: npm install -g @jasonraimondi/plan-bender@latest")
 	case update.InstallMethodDirect:
-		fmt.Fprintf(out, "Updating plan-bender to v%s...\n", latest)
+		fmt.Fprintf(out, "Updating pb to v%s...\n", latest)
 		if err := sc.downloadAndReplace(latest); err != nil {
 			if errors.Is(err, os.ErrPermission) {
 				fmt.Fprintln(cmd.ErrOrStderr(), "Permission denied. Try: sudo pb self-update")
 			}
 			return err
 		}
-		fmt.Fprintf(out, "Updated plan-bender: v%s → v%s\n", sc.version, latest)
+		fmt.Fprintf(out, "Updated pb: v%s → v%s\n", sc.version, latest)
 	}
 
 	return nil

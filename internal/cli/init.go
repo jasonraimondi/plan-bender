@@ -17,7 +17,7 @@ import (
 func NewInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialize a new plan-bender project",
+		Short: "Initialize a new pb project",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
 			cfgPath := filepath.Join(root, ".plan-bender.yaml")

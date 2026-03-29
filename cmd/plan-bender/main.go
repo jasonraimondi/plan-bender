@@ -38,7 +38,7 @@ func rootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "plan-bender",
 		Aliases: []string{"pb"},
-		Short:   "Plan-bender CLI — plan management tool",
+		Short:   "pb — plan management tool",
 		Version: version,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			level := slog.LevelInfo
@@ -71,7 +71,7 @@ func rootCmd() *cobra.Command {
 			case result := <-updateCh:
 				if result.isNewer {
 					fmt.Fprintf(cmd.ErrOrStderr(),
-						"\nA new version of plan-bender is available: v%s → v%s\n  Run 'pb self-update' to upgrade\n",
+						"\nA new version of pb is available: v%s → v%s\n  Run 'pb self-update' to upgrade\n",
 						version, result.latest)
 				}
 			case <-time.After(500 * time.Millisecond):
