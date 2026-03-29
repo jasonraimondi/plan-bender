@@ -10,12 +10,6 @@ Skills (`/bender-*`) are the primary interface. The `pb` CLI is plumbing: valida
 curl -fsSL https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/install.sh | bash
 ```
 
-Or with npm:
-
-```sh
-npm install -g @jasonraimondi/plan-bender
-```
-
 ## Usage
 
 ```sh
