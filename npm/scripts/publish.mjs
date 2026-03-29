@@ -104,11 +104,14 @@ async function downloadFile(url, destPath) {
  */
 function extractTarGz(archivePath, binaryName, destDir) {
   mkdirSync(destDir, { recursive: true });
+  // Use --wildcards + --strip-components=1 for GNU tar (Linux runners)
+  // The archive structure is: <name>_<ver>_<os>_<arch>/<binary>
   execFileSync("tar", [
     "xzf", archivePath,
-    "--include", binaryName,
     "-C", destDir,
-    "--strip-components=0",
+    "--strip-components=1",
+    "--wildcards",
+    `*/${binaryName}`,
   ]);
 }
 
