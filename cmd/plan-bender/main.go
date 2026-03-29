@@ -17,7 +17,7 @@ var version = "dev"
 // checkForUpdateFn is the function used to check for updates.
 // Package-level variable for testability.
 var checkForUpdateFn = func(currentVersion string) (string, bool, error) {
-	return update.CheckForUpdate(currentVersion, nil)
+	return update.CheckForUpdate(currentVersion, nil, false)
 }
 
 type updateResult struct {

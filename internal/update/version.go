@@ -28,7 +28,7 @@ type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
-func CheckForUpdate(currentVersion string, client *http.Client) (latest string, isNewer bool, err error) {
+func CheckForUpdate(currentVersion string, client *http.Client, force bool) (latest string, isNewer bool, err error) {
 	if currentVersion == "dev" {
 		return "", false, nil
 	}
@@ -44,16 +44,16 @@ func CheckForUpdate(currentVersion string, client *http.Client) (latest string, 
 		client = &http.Client{Timeout: httpTimeout}
 	}
 
-	return checkForUpdateWith(currentVersion, client, githubAPI, cachePath)
+	return checkForUpdateWith(currentVersion, client, githubAPI, cachePath, force)
 }
 
-func checkForUpdateWith(currentVersion string, client *http.Client, baseURL string, cachePath string) (string, bool, error) {
+func checkForUpdateWith(currentVersion string, client *http.Client, baseURL string, cachePath string, force bool) (string, bool, error) {
 	if currentVersion == "dev" {
 		return "", false, nil
 	}
 
 	cached, err := readCache(cachePath)
-	if err == nil && time.Since(cached.CheckedAt) < cacheTTL {
+	if !force && err == nil && time.Since(cached.CheckedAt) < cacheTTL {
 		newer, err := isNewerVersion(currentVersion, cached.Version)
 		if err != nil {
 			return "", false, err

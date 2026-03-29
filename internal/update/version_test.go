@@ -14,7 +14,7 @@ import (
 )
 
 func TestCheckForUpdate_SkipsDevVersion(t *testing.T) {
-	latest, isNewer, err := CheckForUpdate("dev", nil)
+	latest, isNewer, err := CheckForUpdate("dev", nil, false)
 	require.NoError(t, err)
 	assert.Empty(t, latest)
 	assert.False(t, isNewer)
@@ -88,10 +88,35 @@ func TestCacheTTL_FreshCacheReused(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath)
+	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath, false)
 	require.NoError(t, err)
 	assert.False(t, fetchCalled, "should not fetch when cache is fresh")
 	assert.Equal(t, "2.0.0", latest)
+	assert.True(t, isNewer)
+}
+
+func TestCacheTTL_ForceBypassesFreshCache(t *testing.T) {
+	dir := t.TempDir()
+	cachePath := filepath.Join(dir, "latest-version.json")
+
+	info := VersionInfo{
+		Version:   "2.0.0",
+		CheckedAt: time.Now().UTC(),
+	}
+	require.NoError(t, writeCache(cachePath, info))
+
+	fetchCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetchCalled = true
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"tag_name": "v3.0.0"})
+	}))
+	defer srv.Close()
+
+	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath, true)
+	require.NoError(t, err)
+	assert.True(t, fetchCalled, "should fetch even when cache is fresh with force=true")
+	assert.Equal(t, "3.0.0", latest)
 	assert.True(t, isNewer)
 }
 
@@ -113,7 +138,7 @@ func TestCacheTTL_ExpiredCacheRefetches(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath)
+	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath, false)
 	require.NoError(t, err)
 	assert.True(t, fetchCalled, "should fetch when cache is expired")
 	assert.Equal(t, "3.0.0", latest)
@@ -173,7 +198,7 @@ func TestCheckForUpdate_NoCacheDir(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath)
+	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath, false)
 	require.NoError(t, err)
 	assert.Equal(t, "2.0.0", latest)
 	assert.True(t, isNewer)
@@ -193,7 +218,7 @@ func TestCheckForUpdate_SameVersion(t *testing.T) {
 	dir := t.TempDir()
 	cachePath := filepath.Join(dir, "latest-version.json")
 
-	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath)
+	latest, isNewer, err := checkForUpdateWith("1.0.0", srv.Client(), srv.URL, cachePath, false)
 	require.NoError(t, err)
 	assert.Equal(t, "1.0.0", latest)
 	assert.False(t, isNewer)

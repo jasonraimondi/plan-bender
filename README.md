@@ -69,7 +69,7 @@ Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 | `pb sync pull <slug>` | Pull remote state to local |
 | `pb archive <slug>` | Move completed plan to `.archive/` |
 | `pb completion <shell>` | Shell completion (bash/zsh/fish) |
-| `pb self-update` | Update to latest release |
+| `pb self-update [--force]` | Update to latest release |
 
 `status`, `validate`, and `graph` accept `--json`.
 
