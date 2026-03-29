@@ -108,7 +108,7 @@ Keep it scannable. The PRD should support decomposition into issues — not be a
 
 ### 6. Write the file
 
-Create `{{.plans_dir}}{slug}/prd.yaml` using the drafted content.
+Write the PRD YAML to a temporary file, then run `plan-bender write-prd {slug} <tempfile>` to validate and write it atomically. This ensures schema validation before the file is placed in the plans directory.
 
 Rules:
 
