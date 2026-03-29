@@ -83,18 +83,40 @@ func rootCmd() *cobra.Command {
 
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
+	slugComplete := cli.SlugCompletionFunc()
+
+	validateCmd := cli.NewValidateCmd()
+	validateCmd.ValidArgsFunction = slugComplete
+
+	writePrdCmd := cli.NewWritePrdCmd()
+	writePrdCmd.ValidArgsFunction = slugComplete
+
+	statusCmd := cli.NewStatusCmd()
+	statusCmd.ValidArgsFunction = slugComplete
+
+	graphCmd := cli.NewGraphCmd()
+	graphCmd.ValidArgsFunction = slugComplete
+
+	archiveCmd := cli.NewArchiveCmd()
+	archiveCmd.ValidArgsFunction = slugComplete
+
+	syncCmd := cli.NewSyncCmd()
+	for _, sub := range syncCmd.Commands() {
+		sub.ValidArgsFunction = slugComplete
+	}
+
 	root.AddCommand(
 		cli.NewInitCmd(),
-		cli.NewGenerateSkillsCmd(),
 		cli.NewInstallCmd(),
-		cli.NewValidateCmd(),
-		cli.NewWritePrdCmd(),
+		validateCmd,
+		writePrdCmd,
 		cli.NewWriteIssueCmd(),
-		cli.NewStatusCmd(),
-		cli.NewGraphCmd(),
-		cli.NewSyncCmd(),
-		cli.NewArchiveCmd(),
+		statusCmd,
+		graphCmd,
+		syncCmd,
+		archiveCmd,
 		cli.NewSelfUpdateCmd(version),
+		cli.NewCompletionCmd(),
 	)
 
 	return root
