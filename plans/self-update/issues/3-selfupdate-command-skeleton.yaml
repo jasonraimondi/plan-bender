@@ -1,0 +1,49 @@
+id: 3
+slug: selfupdate-command-skeleton
+name: "Self-update command skeleton (npm + already-latest paths)"
+track: intent
+status: done
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [1, 2]
+blocking: [5]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  A working `pb self-update` command that handles the npm and already-latest paths.
+  The direct-binary update path prints a placeholder until issue 5 wires in the download flow.
+
+scope: |
+  Cobra command registration, version check integration, install method branching,
+  npm instructions output, already-latest confirmation. Does not include binary download or replacement.
+
+acceptance_criteria:
+  - "`pb self-update` is registered and callable"
+  - "When already on latest, prints confirmation and exits 0"
+  - "When npm install detected, prints 'npm install -g @jasonraimondi/plan-bender@latest'"
+  - "When version is 'dev', prints message and exits 0"
+
+steps:
+  - "internal/cli/selfupdate.go — create NewSelfUpdateCmd() following existing command pattern with RunE"
+  - "internal/cli/selfupdate.go — implement RunE: call CheckForUpdate, branch on dev / already-latest / npm / direct"
+  - "cmd/plan-bender/main.go — register self-update command via root.AddCommand(cli.NewSelfUpdateCmd())"
+  - "internal/cli/selfupdate_test.go — test already-latest output, npm-detected output, dev-version skip"
+
+use_cases:
+  - UC-3
+  - UC-4
+  - UC-7
+
+notes: |
+  The direct-binary branch will initially be a stub that prints "update available" until issue 5 completes.
+  Pass version string from main.go to the command via a constructor parameter or package variable.
+  Use cmd.ErrOrStderr() for notices and cmd.OutOrStdout() for primary output.

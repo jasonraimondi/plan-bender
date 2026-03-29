@@ -1,0 +1,42 @@
+id: 2
+slug: write-issue-slug-positional
+name: "Refactor write-issue: slug as first positional arg"
+track: intent
+status: backlog
+priority: high
+points: 2
+labels:
+  - AFK
+assignee: null
+blocked_by: [1]
+blocking: [7, 8]
+branch: null
+pr: null
+linear_id: null
+created: 2026-03-28
+updated: 2026-03-28
+tdd: true
+headed: false
+
+outcome: |
+  pb write-issue takes slug as required first positional arg, file as optional second arg, --slug flag removed.
+
+scope: |
+  write_issue.go command definition and flag removal. TTY detection already handled by readInput in issue #1.
+
+acceptance_criteria:
+  - "pb write-issue my-plan issue.yaml writes to {plans_dir}/my-plan/issues/{id}-{slug}.yaml"
+  - "echo yaml | pb write-issue my-plan reads from stdin"
+  - "pb write-issue on TTY with no file arg errors with hint (via shared readInput)"
+  - "--slug flag no longer exists"
+
+steps:
+  - "write_issue.go:NewWriteIssueCmd — change Use to 'write-issue <slug> [file]', set Args to cobra.RangeArgs(1, 2), extract slug from args[0]"
+  - "write_issue.go:NewWriteIssueCmd — remove var slug string, remove cmd.Flags().StringVar for --slug, remove manual slug-empty check"
+  - "write_issue.go:NewWriteIssueCmd — update readInput call to pass args[1:] so file arg is at correct position"
+
+use_cases:
+  - UC-2
+  - UC-7
+
+notes: null
