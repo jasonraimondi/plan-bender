@@ -21,3 +21,4 @@ node_modules/
 .serena/serena.local.yaml
 .plan-bender/
 .claude/skills/bender-*
+.claude/worktrees/

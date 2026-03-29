@@ -3,6 +3,7 @@
 
 # Code
 - Adapter pattern for prod 3rd-party APIs. I/O translation only — no business logic in adapters. Prototypes exempt.
+- **IMPORTANT**: Be idiomatic to the language and framework
 
 # Tests
 - No tautological tests. Assert non-trivial outcomes on real logic paths. If deleting the implementation doesn't fail the test, delete the test.
