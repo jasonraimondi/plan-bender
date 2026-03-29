@@ -2,10 +2,23 @@
 
 Structured planning pipeline for Claude Code. Interview, PRD, issues, review, implement, archive — driven by YAML and slash commands.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/install.sh | bash
+```
+
+Installs the latest release to `/usr/local/bin/plan-bender` with a `pb` symlink.
+
+Also available via npm:
+
+```bash
+npm install -g @jasonraimondi/plan-bender
+```
+
 ## Quick start
 
 ```bash
-npm install -g @jasonraimondi/plan-bender    # or npx @jasonraimondi/plan-bender
 pb init                        # interactive setup → plan-bender.yaml
 pb install                     # symlink skills into Claude Code
 ```
