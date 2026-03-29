@@ -136,6 +136,11 @@ func NewInitCmd() *cobra.Command {
 				return fmt.Errorf("install: %w", err)
 			}
 
+			// TODO: next steps output is wrong — actual commands are "pb write-prd" and "pb status"
+			// but the displayed text uses "pb write-prd" and "pb status" which is correct;
+			// however the spacing/alignment and command names shown to user need review.
+			// Shown: "pb write-prd — create a new PRD" and "pb status — view plan dashboard"
+			// Verify these match real subcommand names and add any missing useful commands.
 			fmt.Fprintln(cmd.OutOrStdout(), "\nNext steps:")
 			fmt.Fprintln(cmd.OutOrStdout(), "  pb write-prd    — create a new PRD")
 			fmt.Fprintln(cmd.OutOrStdout(), "  pb status        — view plan dashboard")
