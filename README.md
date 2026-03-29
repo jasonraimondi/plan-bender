@@ -1,90 +1,89 @@
 # plan-bender
 
-Structured planning pipeline for Claude Code. Interview, PRD, issues, review, implement, archive — driven by YAML and slash commands.
+> Structured planning pipeline for Claude Code — interview, PRD, issues, review, implement, archive
+
+Skills (`/bender-*`) are the primary interface. The `pb` CLI is plumbing: validation, atomic writes, sync, and `--json` output for scripts.
 
 ## Install
 
-```bash
+```sh
 curl -fsSL https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/install.sh | bash
 ```
 
-Installs the latest release to `/usr/local/bin/plan-bender` with a `pb` symlink.
+Or with npm:
 
-Also available via npm:
-
-```bash
+```sh
 npm install -g @jasonraimondi/plan-bender
 ```
 
-## Quick start
+## Usage
 
-```bash
-pb init                        # interactive setup → .plan-bender.yaml
-pb install                     # generate + symlink skills into Claude Code
+```sh
+pb init
+pb install
 ```
 
 Then in Claude Code:
 
 ```
-/bender-orchestrator           # shows your plans, suggests next action
+/bender-orchestrator
 ```
 
-**How it works:** Skills (`/bender-*`) are the primary interface — they read plan state, interview you, and drive implementation. The `pb` CLI is plumbing: validation, atomic writes, sync, and machine-readable output for scripts and agents.
+That's it. The orchestrator reads your plan state and suggests the next action.
 
 ## Pipeline
 
-```mermaid
-graph LR
-    A[Interview] --> B[Write PRD]
-    B --> C[Break into Issues]
-    C --> D[Review]
-    D --> E[Implement]
-    E --> F[Archive]
+```
+Interview → Write PRD → Break into Issues → Review → Implement → Archive
 ```
 
-Each stage is a Claude Code skill. You can enter at any point or skip stages entirely.
+Each stage is a Claude Code skill. Enter at any point. Skip what you don't need.
 
 ## Skills
 
-| Slash command | What it does |
-|---------------|-------------|
+| Skill | Purpose |
+|---|---|
 | `/bender-orchestrator` | Menu — shows plans, suggests next action |
 | `/bender-interview-me` | Stress-test an idea before writing anything |
-| `/bender-write-a-prd` | Interview → explore codebase → write `prd.yaml` |
+| `/bender-write-a-prd` | Interview + explore codebase + write `prd.yaml` |
 | `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-write-an-issue` | Create a single issue |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
 | `/bender-implement-prd` | Work all issues in dependency order |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
 
-Skip skills you don't need: `pipeline.skip: [bender-interview-me]` in config.
+Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 
-## CLI Reference
+## CLI
 
-| Command | What it does |
-|---------|-------------|
+| Command | Purpose |
+|---|---|
 | `pb init` | Interactive setup |
-| `pb install` | Generate skills from templates + symlink into Claude Code |
+| `pb install` | Generate skills + symlink into Claude Code |
+| `pb status [slug]` | Dashboard — all plans or single plan detail |
 | `pb validate <slug>` | Schema checks, cross-refs, cycle detection |
-| `pb write-prd <slug> [file]` | Validate + atomically write a PRD (reads stdin if no file) |
-| `pb write-issue <slug> [file]` | Validate + atomically write an issue (reads stdin if no file) |
-| `pb sync push <slug>` | Push local issues to backend |
+| `pb graph <slug>` | Mermaid dependency graph |
+| `pb write-prd <slug> [file]` | Validate + atomically write a PRD |
+| `pb write-issue <slug> [file]` | Validate + atomically write an issue |
+| `pb sync push <slug>` | Push local issues to Linear |
 | `pb sync pull <slug>` | Pull remote state to local |
-| `pb status [slug]` | Dashboard — all plans or per-issue detail |
-| `pb graph <slug>` | Mermaid dependency DAG |
-| `pb archive <slug>` | Move to `.archive/` with summary |
-| `pb completion <shell>` | Generate shell completion (bash/zsh/fish) |
-| `pb self-update` | Update to the latest release |
+| `pb archive <slug>` | Move completed plan to `.archive/` |
+| `pb completion <shell>` | Shell completion (bash/zsh/fish) |
+| `pb self-update` | Update to latest release |
 
-Data commands (`status`, `validate`, `graph`) support `--json` for machine-readable output.
+`status`, `validate`, and `graph` accept `--json`.
+
+`write-prd` and `write-issue` read from stdin when no file is given.
 
 ## Configuration
 
 Three layers, deep-merged (later wins):
 
-- `~/.config/plan-bender/defaults.yaml` — shared across projects
-- `.plan-bender.yaml` — committed to repo
-- `.plan-bender.local.yaml` — gitignored (secrets, personal overrides)
+| File | Purpose |
+|---|---|
+| `~/.config/plan-bender/defaults.yaml` | Shared across projects |
+| `.plan-bender.yaml` | Committed to repo |
+| `.plan-bender.local.yaml` | Gitignored — secrets, personal overrides |
 
 ```yaml
 backend: yaml-fs               # yaml-fs | linear
@@ -93,14 +92,14 @@ plans_dir: ./.plan-bender/plans/
 max_points: 3                  # cap per issue — forces thin slices
 step_pattern: "Target — behavior"
 
-tracks:                        # classify issues by concern
-  - intent                     # API endpoints, service wiring, core flow
-  - experience                 # UI, navigation, visual feedback
-  - data                       # schema, migrations, CRUD, queries
-  - rules                      # auth, validation, business rules
-  - resilience                 # error handling, retries, fallbacks
+tracks:
+  - intent
+  - experience
+  - data
+  - rules
+  - resilience
 
-workflow_states:               # issue lifecycle
+workflow_states:
   - backlog
   - todo
   - in-progress
@@ -114,22 +113,22 @@ pipeline:
   skip: []                     # skill names to exclude
 
 issue_schema:
-  custom_fields:               # extend issues with typed fields
+  custom_fields:
     - name: team
-      type: enum               # string | number | boolean | enum
+      type: enum
       required: true
       enum_values: [frontend, backend, platform]
 
-# required when backend: linear — put api_key in .plan-bender.local.yaml
+# Put api_key in .plan-bender.local.yaml
 linear:
   api_key: "lin_api_..."
   team: "TEAM-ID"
-  status_map:                  # local state → Linear state name
+  status_map:
     in-progress: "In Progress"
     in-review: "In Review"
 ```
 
-Tracks and workflow states are fully customizable. The defaults are a starting point.
+Tracks and workflow states are fully customizable.
 
 ## Plan structure
 
@@ -144,7 +143,7 @@ plans/
   .archive/
 ```
 
-### PRD example
+### PRD
 
 ```yaml
 name: "Auth System"
@@ -165,17 +164,12 @@ out_of_scope:
   - "Social login providers"
   - "MFA"
 
-use_cases:                     # numbered — issues reference these
+use_cases:
   - id: UC-1
     description: "User logs in with email and password, receives access + refresh tokens"
-  - id: UC-2
-    description: "Expired access token is refreshed transparently using refresh token"
-  - id: UC-3
-    description: "Admin-only route rejects non-admin users with 403"
 
 decisions:
   - "Short-lived JWTs (15m) + long-lived refresh tokens (7d)"
-  - "Refresh tokens stored in httpOnly cookies, not localStorage"
 open_questions:
   - "Do we need to support multiple concurrent sessions per user?"
 risks:
@@ -184,32 +178,26 @@ validation:
   - "All use cases pass integration tests"
   - "Auth middleware adds < 5ms p99 latency"
 
-dev_command: "npm run dev"     # optional — used by implementation skills
+dev_command: "npm run dev"
 base_url: "http://localhost:3000"
-notes: null
 ```
 
-### Issue example
+### Issue
 
 ```yaml
 id: 1
 slug: setup-middleware
 name: "Set up authentication middleware"
-track: rules                   # from config.tracks
-status: backlog                # from config.workflow_states
+track: rules
+status: backlog
 priority: high                 # urgent | high | medium | low
-points: 2                     # 1 to config.max_points
+points: 2                     # 1 to max_points
 labels: [AFK]                 # AFK = autonomous | HITL = needs human input
 assignee: null
-blocked_by: []                # issue IDs that must complete first
-blocking: [2, 3]              # issue IDs this unblocks
-branch: null                  # set during implementation
-pr: null                      # set when PR is opened
-linear_id: null               # set by pb sync
-created: 2025-03-15
-updated: 2025-03-15
-tdd: true                     # use test-driven development
-headed: false                 # use browser verification
+blocked_by: []
+blocking: [2, 3]
+tdd: true                     # write tests first
+headed: false                 # verify in browser
 
 outcome: "Auth middleware validates JWTs and attaches user context to requests."
 scope: "Middleware only — no login UI, no token issuance."
@@ -219,39 +207,34 @@ acceptance_criteria:
   - "Expired JWT → 401"
   - "Missing JWT → 401"
 
-steps:                        # "Target — behavior" (matches config.step_pattern)
+steps:
   - "Auth middleware — reject requests with missing or malformed Authorization header"
   - "Auth middleware — decode JWT, verify signature and expiry"
   - "Auth middleware — attach decoded user context to request object"
 
-use_cases: [UC-1]             # references PRD use case IDs
-notes: null
+use_cases: [UC-1]
 ```
 
-**Key fields:**
+#### Key fields
 
-- **`track`** — classifies the issue's primary concern. PRD-to-issues checks track coverage and flags gaps.
-- **`tdd: true`** — implementation agent writes tests first from the steps, then makes them pass.
-- **`headed: true`** — implementation agent verifies visual outcomes in a browser.
-- **`AFK` / `HITL`** — AFK issues run autonomously. HITL issues pause for human input.
-- **`blocked_by` / `blocking`** — dependency graph. `pb graph` renders it. Implementation respects ordering.
-- **`steps`** — ordered implementation actions following `step_pattern`. Steps tell the agent *how to build*; acceptance criteria tell reviewers *what to verify*.
+- **`track`** classifies the concern. PRD-to-issues checks track coverage.
+- **`tdd`** — agent writes tests first, then makes them pass.
+- **`headed`** — agent verifies visual outcomes in a browser.
+- **`AFK` / `HITL`** — autonomous vs. needs human input.
+- **`blocked_by` / `blocking`** — dependency graph for `pb graph` and implementation ordering.
+- **`steps`** — ordered build actions. Steps tell the agent *how*; acceptance criteria tell reviewers *what*.
 
 ## Customizing templates
 
-Skills are generated from `.skill.tmpl` files bundled with plan-bender. To override a template, copy it to `.plan-bender/templates/` and edit. Run `pb install` to re-render and symlink.
-
-Template source: [`templates/`](./templates/)
+Copy a bundled `.skill.tmpl` to `.plan-bender/templates/` and edit. Run `pb install` to re-render.
 
 ## Tips
 
-- **Start with the orchestrator.** It reads plan state and suggests the right next action.
-- **Review before decomposing.** `/bender-review-prd` catches scope gaps before you create 15 issues.
-- **Keep issues small.** `max_points` forces thin slices. If you can't split it, the scope is too broad.
-- **Validate early.** `pb validate` catches schema errors, missing cross-refs, and dependency cycles.
-- **Visualize dependencies.** `pb graph` shows the critical path at a glance.
-- **Use local overrides.** `.plan-bender.local.yaml` lets you experiment without touching committed config.
-- **Skip what you don't use.** `pipeline.skip` removes skills from generation and the orchestrator menu.
+- Start with `/bender-orchestrator`. It reads plan state and suggests next actions.
+- Run `/bender-review-prd` before decomposing. Catches scope gaps early.
+- Keep issues small. `max_points` forces thin slices.
+- Run `pb validate` early. Catches schema errors, missing cross-refs, and cycles.
+- Use `.plan-bender.local.yaml` for secrets and experiments.
 
 ## License
 
