@@ -47,6 +47,7 @@ func rootCmd() *cobra.Command {
 		cli.NewGraphCmd(),
 		cli.NewSyncCmd(),
 		cli.NewArchiveCmd(),
+		cli.NewSelfUpdateCmd(version),
 	)
 
 	return root
