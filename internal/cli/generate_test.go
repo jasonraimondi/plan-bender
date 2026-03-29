@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,11 +15,14 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	cmd := NewGenerateSkillsCmd()
-	var out strings.Builder
-	cmd.SetOut(&out)
-	require.NoError(t, cmd.Execute())
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
 
+	var out strings.Builder
+	count, err := GenerateSkills(dir, cfg, &out)
+	require.NoError(t, err)
+
+	assert.Equal(t, 8, count)
 	assert.Contains(t, out.String(), "8 skills generated")
 
 	// Verify skill dirs exist
@@ -47,9 +51,11 @@ func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 		0o644,
 	))
 
-	cmd := NewGenerateSkillsCmd()
-	cmd.SetOut(&strings.Builder{})
-	require.NoError(t, cmd.Execute())
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
 
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "bender-interview-me", "SKILL.md"))
 	require.NoError(t, err)

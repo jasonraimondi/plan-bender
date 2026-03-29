@@ -14,7 +14,7 @@ import (
 func NewInstallCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "install",
-		Short: "Install generated skills via symlinks",
+		Short: "Generate and install skills via symlinks",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
 
@@ -23,10 +23,11 @@ func NewInstallCmd() *cobra.Command {
 				return err
 			}
 
-			sourceDir := filepath.Join(root, ".plan-bender", "skills")
-			if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
-				return fmt.Errorf("no skills found — run `plan-bender generate-skills` first")
+			if _, err := GenerateSkills(root, cfg, cmd.OutOrStdout()); err != nil {
+				return err
 			}
+
+			sourceDir := filepath.Join(root, ".plan-bender", "skills")
 
 			targetDir, err := resolveTargetDir(root, cfg.InstallTarget)
 			if err != nil {

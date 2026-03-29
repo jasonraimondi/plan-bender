@@ -129,13 +129,6 @@ func NewInitCmd() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", cfgPath)
 
 			// Generate + install
-			genCmd := NewGenerateSkillsCmd()
-			genCmd.SetOut(cmd.OutOrStdout())
-			genCmd.SetErr(cmd.ErrOrStderr())
-			if err := genCmd.RunE(genCmd, nil); err != nil {
-				return fmt.Errorf("generate-skills: %w", err)
-			}
-
 			installCmd := NewInstallCmd()
 			installCmd.SetOut(cmd.OutOrStdout())
 			installCmd.SetErr(cmd.ErrOrStderr())
