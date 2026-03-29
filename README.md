@@ -19,8 +19,8 @@ npm install -g @jasonraimondi/plan-bender
 ## Quick start
 
 ```bash
-pb init                        # interactive setup → plan-bender.yaml
-pb install                     # symlink skills into Claude Code
+pb init                        # interactive setup → .plan-bender.yaml
+pb install                     # generate + symlink skills into Claude Code
 ```
 
 Then in Claude Code:
@@ -28,6 +28,8 @@ Then in Claude Code:
 ```
 /bender-orchestrator           # shows your plans, suggests next action
 ```
+
+**How it works:** Skills (`/bender-*`) are the primary interface — they read plan state, interview you, and drive implementation. The `pb` CLI is plumbing: validation, atomic writes, sync, and machine-readable output for scripts and agents.
 
 ## Pipeline
 
@@ -57,29 +59,32 @@ Each stage is a Claude Code skill. You can enter at any point or skip stages ent
 
 Skip skills you don't need: `pipeline.skip: [bender-interview-me]` in config.
 
-## Commands
+## CLI Reference
 
 | Command | What it does |
 |---------|-------------|
 | `pb init` | Interactive setup |
-| `pb generate-skills` | Re-render skills from templates + config |
-| `pb install` | Symlink skills into Claude Code |
+| `pb install` | Generate skills from templates + symlink into Claude Code |
 | `pb validate <slug>` | Schema checks, cross-refs, cycle detection |
-| `pb write-prd [file]` | Validate + atomically write a PRD (reads stdin if no file) |
-| `pb write-issue [file] --slug <slug>` | Validate + atomically write an issue |
+| `pb write-prd <slug> [file]` | Validate + atomically write a PRD (reads stdin if no file) |
+| `pb write-issue <slug> [file]` | Validate + atomically write an issue (reads stdin if no file) |
 | `pb sync push <slug>` | Push local issues to backend |
 | `pb sync pull <slug>` | Pull remote state to local |
 | `pb status [slug]` | Dashboard — all plans or per-issue detail |
 | `pb graph <slug>` | Mermaid dependency DAG |
 | `pb archive <slug>` | Move to `.archive/` with summary |
+| `pb completion <shell>` | Generate shell completion (bash/zsh/fish) |
+| `pb self-update` | Update to the latest release |
+
+Data commands (`status`, `validate`, `graph`) support `--json` for machine-readable output.
 
 ## Configuration
 
 Three layers, deep-merged (later wins):
 
 - `~/.config/plan-bender/defaults.yaml` — shared across projects
-- `plan-bender.yaml` — committed to repo
-- `plan-bender.local.yaml` — gitignored (secrets, personal overrides)
+- `.plan-bender.yaml` — committed to repo
+- `.plan-bender.local.yaml` — gitignored (secrets, personal overrides)
 
 ```yaml
 backend: yaml-fs               # yaml-fs | linear
@@ -115,7 +120,7 @@ issue_schema:
       required: true
       enum_values: [frontend, backend, platform]
 
-# required when backend: linear — put api_key in plan-bender.local.yaml
+# required when backend: linear — put api_key in .plan-bender.local.yaml
 linear:
   api_key: "lin_api_..."
   team: "TEAM-ID"
@@ -234,7 +239,7 @@ notes: null
 
 ## Customizing templates
 
-Skills are generated from `.skill.tmpl` files bundled with plan-bender. To override a template, copy it to `.plan-bender/templates/` and edit. Run `pb generate-skills` to re-render.
+Skills are generated from `.skill.tmpl` files bundled with plan-bender. To override a template, copy it to `.plan-bender/templates/` and edit. Run `pb install` to re-render and symlink.
 
 Template source: [`templates/`](./templates/)
 
@@ -245,7 +250,7 @@ Template source: [`templates/`](./templates/)
 - **Keep issues small.** `max_points` forces thin slices. If you can't split it, the scope is too broad.
 - **Validate early.** `pb validate` catches schema errors, missing cross-refs, and dependency cycles.
 - **Visualize dependencies.** `pb graph` shows the critical path at a glance.
-- **Use local overrides.** `plan-bender.local.yaml` lets you experiment without touching committed config.
+- **Use local overrides.** `.plan-bender.local.yaml` lets you experiment without touching committed config.
 - **Skip what you don't use.** `pipeline.skip` removes skills from generation and the orchestrator menu.
 
 ## License
