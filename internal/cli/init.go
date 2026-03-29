@@ -136,14 +136,11 @@ func NewInitCmd() *cobra.Command {
 				return fmt.Errorf("install: %w", err)
 			}
 
-			// TODO: next steps output is wrong — actual commands are "pb write-prd" and "pb status"
-			// but the displayed text uses "pb write-prd" and "pb status" which is correct;
-			// however the spacing/alignment and command names shown to user need review.
-			// Shown: "pb write-prd — create a new PRD" and "pb status — view plan dashboard"
-			// Verify these match real subcommand names and add any missing useful commands.
+			// TODO: next steps should direct users to Claude, not raw CLI commands.
+			// Users interact via Claude using the installed skills — pb commands are Claude's interface.
 			fmt.Fprintln(cmd.OutOrStdout(), "\nNext steps:")
-			fmt.Fprintln(cmd.OutOrStdout(), "  pb write-prd    — create a new PRD")
-			fmt.Fprintln(cmd.OutOrStdout(), "  pb status        — view plan dashboard")
+			fmt.Fprintln(cmd.OutOrStdout(), "  Open Claude and ask it to write a PRD or check your plan status.")
+			fmt.Fprintln(cmd.OutOrStdout(), "  The installed skills will guide Claude to use pb on your behalf.")
 
 			return nil
 		},
