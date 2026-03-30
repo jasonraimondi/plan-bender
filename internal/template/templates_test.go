@@ -25,6 +25,7 @@ func fixtureContext() map[string]any {
 		},
 		"custom_fields":     []map[string]any{},
 		"track_descriptions": []map[string]string{},
+		"agent":              "claude-code",
 	}
 }
 
@@ -60,6 +61,54 @@ func TestAllTemplatesRender(t *testing.T) {
 			assert.NotEmpty(t, out)
 		})
 	}
+}
+
+func TestInterviewTemplate_AgentConditional(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	tmplContent := tmpls["bender-interview-me.skill.tmpl"]
+
+	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "claude-code"
+		out, err := Render("interview", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.Contains(t, out, "AskUserQuestionTool")
+	})
+
+	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "openclaw"
+		out, err := Render("interview", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, out, "AskUserQuestionTool")
+		assert.Contains(t, out, "Ask the user directly in conversation")
+	})
+}
+
+func TestReviewPrdTemplate_AgentConditional(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	tmplContent := tmpls["bender-review-prd.skill.tmpl"]
+
+	t.Run("claude-code uses AskUserQuestion", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "claude-code"
+		out, err := Render("review-prd", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.Contains(t, out, "AskUserQuestion")
+	})
+
+	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "openclaw"
+		out, err := Render("review-prd", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, out, "AskUserQuestion")
+		assert.Contains(t, out, "Ask the user directly in conversation")
+	})
 }
 
 func TestOrchestratorTemplate_ContainsPipelinePhases(t *testing.T) {

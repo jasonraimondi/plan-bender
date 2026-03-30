@@ -14,7 +14,7 @@ Review a PRD and its issues as a principal software engineer. Auto-fix mechanica
 3. **Run auto-fix pass** — apply mechanical fixes directly (see auto-fix rules below). Report what changed.
 4. **Run review pass** — evaluate each dimension in the rubric. Collect findings as `fix` (actionable, concrete) or `question` (needs user input).
 5. **Apply fixes** — write corrected issue and PRD files.
-6. **Ask questions** — use `AskUserQuestion` to surface non-obvious concerns. Group related questions. 2-4 questions per round, continue until resolved.
+6. **Ask questions** — {{if eq .agent "claude-code"}}use `AskUserQuestion` to surface non-obvious concerns.{{else}}Ask the user directly in conversation to surface non-obvious concerns.{{end}} Group related questions. 2-4 questions per round, continue until resolved.
 7. **Final summary** — list all changes made and any remaining open items.
 
 ## Auto-fix rules (apply without asking)

@@ -9,6 +9,7 @@ func Defaults() Config {
 		StepPattern:    "Target — behavior",
 		PlansDir:       "./.plan-bender/plans/",
 		MaxPoints:      3,
+		Agents:         []string{"claude-code"},
 		Pipeline:       PipelineConfig{Skip: []string{}},
 		IssueSchema:    IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:         LinearConfig{},

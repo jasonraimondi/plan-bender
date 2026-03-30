@@ -27,8 +27,8 @@ var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue"},
 }
 
-// BuildContext produces the template rendering context from config.
-func BuildContext(cfg config.Config) map[string]any {
+// BuildContext produces the template rendering context from config for a specific agent.
+func BuildContext(cfg config.Config, agent string) map[string]any {
 	// Track descriptions
 	tds := make([]map[string]string, len(cfg.Tracks))
 	for i, t := range cfg.Tracks {
@@ -77,5 +77,6 @@ func BuildContext(cfg config.Config) map[string]any {
 		"custom_fields":      cfs,
 		"track_descriptions": tds,
 		"pipeline_phases":    phases,
+		"agent":              agent,
 	}
 }

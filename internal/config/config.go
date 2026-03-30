@@ -42,6 +42,7 @@ type Config struct {
 	StepPattern    string            `yaml:"step_pattern"`
 	PlansDir       string            `yaml:"plans_dir"`
 	MaxPoints      int               `yaml:"max_points"`
+	Agents         []string          `yaml:"agents"`
 	Pipeline       PipelineConfig    `yaml:"pipeline"`
 	IssueSchema    IssueSchemaConfig `yaml:"issue_schema"`
 	Linear         LinearConfig      `yaml:"linear"`
@@ -57,6 +58,7 @@ type PartialConfig struct {
 	StepPattern    *string            `yaml:"step_pattern,omitempty"`
 	PlansDir       *string            `yaml:"plans_dir,omitempty"`
 	MaxPoints      *int               `yaml:"max_points,omitempty"`
+	Agents         []string           `yaml:"agents,omitempty"`
 	Pipeline       *PipelineConfig    `yaml:"pipeline,omitempty"`
 	IssueSchema    *IssueSchemaConfig `yaml:"issue_schema,omitempty"`
 	Linear         *LinearConfig      `yaml:"linear,omitempty"`

@@ -27,8 +27,6 @@ func NewInstallCmd() *cobra.Command {
 				return err
 			}
 
-			sourceDir := filepath.Join(root, ".plan-bender", "skills")
-
 			targetDir, err := resolveTargetDir(root)
 			if err != nil {
 				return err
@@ -38,33 +36,36 @@ func NewInstallCmd() *cobra.Command {
 				return fmt.Errorf("creating target dir: %w", err)
 			}
 
-			entries, err := os.ReadDir(sourceDir)
-			if err != nil {
-				return fmt.Errorf("reading skills dir: %w", err)
-			}
-
 			count := 0
-			for _, e := range entries {
-				if !e.IsDir() {
-					continue
+			for _, agent := range cfg.Agents {
+				sourceDir := filepath.Join(root, ".plan-bender", "skills", agent)
+				entries, err := os.ReadDir(sourceDir)
+				if err != nil {
+					return fmt.Errorf("reading skills dir for agent %s: %w", agent, err)
 				}
-				src := filepath.Join(sourceDir, e.Name())
-				dst := filepath.Join(targetDir, e.Name())
 
-				info, err := os.Lstat(dst)
-				if err == nil {
-					if info.Mode()&os.ModeSymlink != 0 {
-						os.Remove(dst)
-					} else {
-						fmt.Fprintf(cmd.ErrOrStderr(), "skipping %s: not a symlink\n", dst)
+				for _, e := range entries {
+					if !e.IsDir() {
 						continue
 					}
-				}
+					src := filepath.Join(sourceDir, e.Name())
+					dst := filepath.Join(targetDir, e.Name())
 
-				if err := os.Symlink(src, dst); err != nil {
-					return fmt.Errorf("symlinking %s: %w", e.Name(), err)
+					info, err := os.Lstat(dst)
+					if err == nil {
+						if info.Mode()&os.ModeSymlink != 0 {
+							os.Remove(dst)
+						} else {
+							fmt.Fprintf(cmd.ErrOrStderr(), "skipping %s: not a symlink\n", dst)
+							continue
+						}
+					}
+
+					if err := os.Symlink(src, dst); err != nil {
+						return fmt.Errorf("symlinking %s: %w", e.Name(), err)
+					}
+					count++
 				}
-				count++
 			}
 
 			ensureGitignore(root)

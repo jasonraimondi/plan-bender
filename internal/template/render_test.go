@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,6 +70,20 @@ func TestLoadTemplates_Embedded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, tmpls, 8)
 	assert.Contains(t, tmpls, "bender-orchestrator.skill.tmpl")
+}
+
+func TestBuildContext_IncludesAgent(t *testing.T) {
+	cfg := config.Defaults()
+	ctx := BuildContext(cfg, "claude-code")
+	assert.Equal(t, "claude-code", ctx["agent"])
+}
+
+func TestBuildContext_DifferentAgents(t *testing.T) {
+	cfg := config.Defaults()
+	ctx1 := BuildContext(cfg, "claude-code")
+	ctx2 := BuildContext(cfg, "openclaw")
+	assert.Equal(t, "claude-code", ctx1["agent"])
+	assert.Equal(t, "openclaw", ctx2["agent"])
 }
 
 func TestLoadTemplates_LocalOverride(t *testing.T) {
