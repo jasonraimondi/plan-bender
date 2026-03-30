@@ -4,7 +4,11 @@ set -euo pipefail
 REPO="jasonraimondi/plan-bender"
 BINARY="plan-bender"
 AGENT_BINARY="plan-bender-agent"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${INSTALL_DIR:-~/.local/bin}"
+
+for cmd in curl tar; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "Required command not found: $cmd" >&2; exit 1; }
+done
 
 # Detect OS
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -17,16 +21,23 @@ esac
 # Detect arch
 ARCH="$(uname -m)"
 case "$ARCH" in
-  x86_64)       ARCH="amd64" ;;
+  x86_64)        ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
   *)             echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
 
-# Get latest version
-VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')"
-if [ -z "$VERSION" ]; then
-  echo "Failed to fetch latest version" >&2
-  exit 1
+# Get version (override with VERSION env var)
+if [ -z "${VERSION:-}" ]; then
+  API_RESPONSE="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")"
+  if command -v jq >/dev/null 2>&1; then
+    VERSION="$(echo "$API_RESPONSE" | jq -r '.tag_name' | sed 's/^v//')"
+  else
+    VERSION="$(echo "$API_RESPONSE" | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')"
+  fi
+  if [ -z "$VERSION" ]; then
+    echo "Failed to fetch latest version" >&2
+    exit 1
+  fi
 fi
 echo "Installing ${BINARY} v${VERSION} (${OS}/${ARCH})"
 
@@ -41,18 +52,14 @@ curl -fsSL "$URL" -o "${TMP}/${ASSET}"
 tar xzf "${TMP}/${ASSET}" -C "$TMP" "$BINARY" "$AGENT_BINARY"
 chmod +x "${TMP}/${BINARY}" "${TMP}/${AGENT_BINARY}"
 
-# Install
-if [ -w "$INSTALL_DIR" ]; then
-  mv "${TMP}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
-  mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
-  ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
-  ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
-else
-  sudo mv "${TMP}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
-  sudo mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
-  sudo ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
-  sudo ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
-fi
+# Install (use sudo only if install dir is not writable)
+SUDO=""
+[ -w "$INSTALL_DIR" ] || SUDO="sudo"
+
+$SUDO mv "${TMP}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+$SUDO mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
+$SUDO ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
+$SUDO ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
 
 echo "Installed ${BINARY} v${VERSION} to ${INSTALL_DIR}/${BINARY}"
 echo "Installed ${AGENT_BINARY} v${VERSION} to ${INSTALL_DIR}/${AGENT_BINARY}"

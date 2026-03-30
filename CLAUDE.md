@@ -10,8 +10,8 @@
 
 # Git
 - Do NOT batch multiple unrelated changes into one commit. Prefer small, frequent commits.
-- Always use `--no-verify` when committing.
-- When working in parallel with other sessions, use a git worktree to avoid conflicts.
+- When working in parallel
+- with other sessions, use a git worktree to avoid conflicts.
 - When git committing or creating a PR, never add Co-Authored-By or generated with
 
 # Info
