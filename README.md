@@ -1,8 +1,13 @@
 # plan-bender
 
-> Structured planning pipeline for Claude Code — interview, PRD, issues, review, implement, archive
+> Structured planning pipeline for AI coding agents — interview, PRD, issues, review, implement, archive
 
-Skills (`/bender-*`) are the primary interface. The `pb` CLI is plumbing: validation, atomic writes, sync, and `--json` output for scripts.
+Two binaries from one module:
+
+- **`plan-bender`** (`pb`) — human CLI for setup and updates
+- **`plan-bender-agent`** — agent CLI, JSON-only, for AI coding agents
+
+Skills (`/bender-*`) are the primary interface. The agent CLI is plumbing: validation, atomic writes, context dumps, sync, and structured JSON output.
 
 ## Install
 
@@ -13,8 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/inst
 ## Usage
 
 ```sh
-pb init
-pb install
+pb setup
 ```
 
 Then in Claude Code:
@@ -31,7 +35,7 @@ That's it. The orchestrator reads your plan state and suggests the next action.
 Interview → Write PRD → Break into Issues → Review → Implement → Archive
 ```
 
-Each stage is a Claude Code skill. Enter at any point. Skip what you don't need.
+Each stage is an agent skill. Enter at any point. Skip what you don't need.
 
 ## Skills
 
@@ -48,24 +52,30 @@ Each stage is a Claude Code skill. Enter at any point. Skip what you don't need.
 
 Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 
-## CLI
+## Human CLI (`pb`)
 
 | Command | Purpose |
 |---|---|
-| `pb init` | Interactive setup |
-| `pb install` | Generate skills + symlink into Claude Code |
-| `pb status [slug]` | Dashboard — all plans or single plan detail |
-| `pb validate <slug>` | Schema checks, cross-refs, cycle detection |
-| `pb graph <slug>` | Mermaid dependency graph |
-| `pb write-prd <slug> [file]` | Validate + atomically write a PRD |
-| `pb write-issue <slug> [file]` | Validate + atomically write an issue |
-| `pb sync push <slug>` | Push local issues to Linear |
-| `pb sync pull <slug>` | Pull remote state to local |
-| `pb archive <slug>` | Move completed plan to `.archive/` |
-| `pb completion <shell>` | Shell completion (bash/zsh/fish) |
+| `pb setup` | Interactive setup + skill generation + symlink install |
 | `pb self-update [--force]` | Update to latest release |
+| `pb completion <shell>` | Shell completion (bash/zsh/fish) |
 
-`status`, `validate`, and `graph` accept `--json`.
+`pb setup` is idempotent — first run shows an interactive form, subsequent runs regenerate and re-symlink skills for all configured agents.
+
+## Agent CLI (`plan-bender-agent`)
+
+All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero exit codes.
+
+| Command | Purpose |
+|---|---|
+| `plan-bender-agent context` | Summary of all plans |
+| `plan-bender-agent context <slug>` | Full dump: PRD, issues, dependency graph, stats |
+| `plan-bender-agent validate <slug>` | Structured errors with severity, file, field, message |
+| `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write a PRD |
+| `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write an issue |
+| `plan-bender-agent sync push <slug>` | Push local issues to Linear |
+| `plan-bender-agent sync pull <slug>` | Pull remote state to local |
+| `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |
 
 `write-prd` and `write-issue` read from stdin when no file is given.
 
@@ -81,7 +91,9 @@ Three layers, deep-merged (later wins):
 
 ```yaml
 backend: yaml-fs               # yaml-fs | linear
-install_target: project        # project (.claude/skills/) | user (~/.claude/skills/)
+agents:                        # which agents to install skills for
+  - claude-code                # .claude/skills/ (project or user scope)
+  - openclaw                   # ~/.openclaw/skills/ (user scope)
 plans_dir: ./.plan-bender/plans/
 max_points: 3                  # cap per issue — forces thin slices
 step_pattern: "Target — behavior"
@@ -124,6 +136,26 @@ linear:
 
 Tracks and workflow states are fully customizable.
 
+### Supported agents
+
+| Agent | Skill directory | Scope |
+|---|---|---|
+| `claude-code` | `.claude/skills/` | Project or user |
+| `openclaw` | `~/.openclaw/skills/` | User only |
+
+### Migrating from `install_target`
+
+If your config uses `install_target`, replace it:
+
+```yaml
+# Before
+install_target: project
+
+# After
+agents:
+  - claude-code
+```
+
 ## Plan structure
 
 ```
@@ -142,7 +174,7 @@ plans/
 ```yaml
 name: "Auth System"
 slug: auth-system
-status: draft                  # draft | active | in-review | approved | complete | archived
+status: draft                  # draft | active | complete | archived
 created: 2025-03-15
 updated: 2025-03-15
 
@@ -215,19 +247,18 @@ use_cases: [UC-1]
 - **`tdd`** — agent writes tests first, then makes them pass.
 - **`headed`** — agent verifies visual outcomes in a browser.
 - **`AFK` / `HITL`** — autonomous vs. needs human input.
-- **`blocked_by` / `blocking`** — dependency graph for `pb graph` and implementation ordering.
+- **`blocked_by` / `blocking`** — dependency graph for implementation ordering.
 - **`steps`** — ordered build actions. Steps tell the agent *how*; acceptance criteria tell reviewers *what*.
 
 ## Customizing templates
 
-Copy a bundled `.skill.tmpl` to `.plan-bender/templates/` and edit. Run `pb install` to re-render.
+Copy a bundled `.skill.tmpl` to `.plan-bender/templates/` and edit. Run `pb setup` to re-render.
 
 ## Tips
 
 - Start with `/bender-orchestrator`. It reads plan state and suggests next actions.
 - Run `/bender-review-prd` before decomposing. Catches scope gaps early.
 - Keep issues small. `max_points` forces thin slices.
-- Run `pb validate` early. Catches schema errors, missing cross-refs, and cycles.
 - Use `.plan-bender.local.yaml` for secrets and experiments.
 
 ## License
