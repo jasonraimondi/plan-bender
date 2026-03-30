@@ -52,10 +52,25 @@ func readPartial(path string) (PartialConfig, error) {
 		return PartialConfig{}, err
 	}
 
+	if err := checkDeprecatedKeys(data); err != nil {
+		return PartialConfig{}, err
+	}
+
 	var partial PartialConfig
 	if err := yaml.Unmarshal(data, &partial); err != nil {
 		return PartialConfig{}, fmt.Errorf("parsing YAML: %w", err)
 	}
 
 	return partial, nil
+}
+
+func checkDeprecatedKeys(data []byte) error {
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil // let the caller handle parse errors
+	}
+	if _, ok := raw["install_target"]; ok {
+		return fmt.Errorf("install_target is removed — replace with agents: [claude-code] in your .plan-bender.yaml")
+	}
+	return nil
 }

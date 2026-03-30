@@ -87,6 +87,45 @@ func TestLoad_MultipleAgentsFromYAML(t *testing.T) {
 	assert.Equal(t, []string{"claude-code", "openclaw"}, cfg.Agents)
 }
 
+func TestLoad_InstallTargetReturnsMigrationError(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "install_target: project\n")
+
+	_, err := Load(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "install_target")
+	assert.Contains(t, err.Error(), "agents: [claude-code]")
+}
+
+func TestLoad_InstallTargetInLocalLayerReturnsMigrationError(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "max_points: 5\n")
+	writeYAML(t, filepath.Join(dir, ".plan-bender.local.yaml"), "install_target: user\n")
+
+	_, err := Load(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "install_target")
+}
+
+func TestLoad_InstallTargetWithAgentsStillFails(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "install_target: project\nagents:\n  - claude-code\n")
+
+	_, err := Load(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "install_target")
+	assert.Contains(t, err.Error(), "agents: [claude-code]")
+}
+
+func TestLoad_CleanConfigWithoutInstallTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "max_points: 5\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, 5, cfg.MaxPoints)
+}
+
 func writeYAML(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
