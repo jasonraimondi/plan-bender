@@ -20,6 +20,8 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		},
 	}
 
+	root.AddCommand(NewAgentValidateCmd())
+
 	return root
 }
 
