@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO="jasonraimondi/plan-bender"
 BINARY="plan-bender"
+AGENT_BINARY="plan-bender-agent"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect OS
@@ -37,17 +38,23 @@ ASSET="${BINARY}_${VERSION}_${OS}_${ARCH}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ASSET}"
 
 curl -fsSL "$URL" -o "${TMP}/${ASSET}"
-tar xzf "${TMP}/${ASSET}" -C "$TMP" "$BINARY"
-chmod +x "${TMP}/${BINARY}"
+tar xzf "${TMP}/${ASSET}" -C "$TMP" "$BINARY" "$AGENT_BINARY"
+chmod +x "${TMP}/${BINARY}" "${TMP}/${AGENT_BINARY}"
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
   mv "${TMP}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
   ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
+  ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
 else
   sudo mv "${TMP}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  sudo mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
   sudo ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
+  sudo ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
 fi
 
 echo "Installed ${BINARY} v${VERSION} to ${INSTALL_DIR}/${BINARY}"
+echo "Installed ${AGENT_BINARY} v${VERSION} to ${INSTALL_DIR}/${AGENT_BINARY}"
 echo "Symlinked ${INSTALL_DIR}/pb -> ${INSTALL_DIR}/${BINARY}"
+echo "Symlinked ${INSTALL_DIR}/pba -> ${INSTALL_DIR}/${AGENT_BINARY}"
