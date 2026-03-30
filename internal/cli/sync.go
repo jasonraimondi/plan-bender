@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,6 +130,13 @@ func syncPush(cmd *cobra.Command, slug string) error {
 		}
 	}
 
+	if isAgentMode(cmd) {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+			"status":  "ok",
+			"created": created,
+			"updated": updated,
+		})
+	}
 	fmt.Fprintf(cmd.OutOrStdout(), "push complete: %d created, %d updated\n", created, updated)
 	return nil
 }
@@ -220,6 +228,12 @@ func syncPull(cmd *cobra.Command, slug string) error {
 		}
 	}
 
+	if isAgentMode(cmd) {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+			"status":  "ok",
+			"updated": changed,
+		})
+	}
 	fmt.Fprintf(cmd.OutOrStdout(), "pull complete: %d issues updated\n", changed)
 	return nil
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -60,6 +61,12 @@ func NewWritePrdCmd() *cobra.Command {
 				return err
 			}
 
+			if isAgentMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
+					"status": "ok",
+					"file":   outPath,
+				})
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", outPath)
 			return nil
 		},

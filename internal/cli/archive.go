@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +67,12 @@ func NewArchiveCmd() *cobra.Command {
 				return fmt.Errorf("moving to archive: %w", err)
 			}
 
+			if isAgentMode(cmd) {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
+					"status": "ok",
+					"file":   dst,
+				})
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "archived %s to %s\n", slug, dst)
 			return nil
 		},

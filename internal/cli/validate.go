@@ -29,7 +29,7 @@ func NewValidateCmd() *cobra.Command {
 			fsys := os.DirFS(cfg.PlansDir)
 			result := schema.ValidatePlan(slug, cfg, fsys)
 
-			if jsonOutput {
+			if jsonOutput || isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 			}
 
