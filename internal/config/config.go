@@ -46,7 +46,6 @@ type Config struct {
 	Pipeline       PipelineConfig    `yaml:"pipeline"`
 	IssueSchema    IssueSchemaConfig `yaml:"issue_schema"`
 	Linear         LinearConfig      `yaml:"linear"`
-	Agents         []string          `yaml:"agents"`
 	UpdateCheck    bool              `yaml:"update_check"`
 }
 
@@ -62,6 +61,5 @@ type PartialConfig struct {
 	Pipeline       *PipelineConfig    `yaml:"pipeline,omitempty"`
 	IssueSchema    *IssueSchemaConfig `yaml:"issue_schema,omitempty"`
 	Linear         *LinearConfig      `yaml:"linear,omitempty"`
-	Agents         []string           `yaml:"agents,omitempty"`
 	UpdateCheck    *bool              `yaml:"update_check,omitempty"`
 }

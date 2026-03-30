@@ -106,8 +106,7 @@ func rootCmd() *cobra.Command {
 	}
 
 	root.AddCommand(
-		cli.NewInitCmd(),
-		cli.NewInstallCmd(),
+		cli.NewSetupCmd(),
 		validateCmd,
 		writePrdCmd,
 		cli.NewWriteIssueCmd(),
