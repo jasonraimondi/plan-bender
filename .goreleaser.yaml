@@ -1,7 +1,8 @@
 version: 2
 
 builds:
-  - main: ./cmd/plan-bender
+  - id: plan-bender
+    main: ./cmd/plan-bender
     binary: plan-bender
     env:
       - CGO_ENABLED=0
@@ -20,6 +21,28 @@ builds:
     hooks:
       post:
         - cmd: cp {{ .Path }} {{ dir .Path }}/pb{{ if eq .Os "windows" }}.exe{{ end }}
+          output: true
+
+  - id: plan-bender-agent
+    main: ./cmd/plan-bender-agent
+    binary: plan-bender-agent
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    hooks:
+      post:
+        - cmd: cp {{ .Path }} {{ dir .Path }}/pba{{ if eq .Os "windows" }}.exe{{ end }}
           output: true
 
 archives:
