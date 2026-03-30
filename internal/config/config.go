@@ -8,14 +8,6 @@ const (
 	BackendLinear Backend = "linear"
 )
 
-// InstallTarget controls where skill symlinks are created.
-type InstallTarget string
-
-const (
-	InstallTargetProject InstallTarget = "project"
-	InstallTargetUser    InstallTarget = "user"
-)
-
 // CustomFieldDef defines a custom field on issue YAML.
 type CustomFieldDef struct {
 	Name       string   `yaml:"name"`
@@ -53,7 +45,7 @@ type Config struct {
 	Pipeline       PipelineConfig    `yaml:"pipeline"`
 	IssueSchema    IssueSchemaConfig `yaml:"issue_schema"`
 	Linear         LinearConfig      `yaml:"linear"`
-	InstallTarget  InstallTarget     `yaml:"install_target"`
+	Agents         []string          `yaml:"agents"`
 	UpdateCheck    bool              `yaml:"update_check"`
 }
 
@@ -68,6 +60,6 @@ type PartialConfig struct {
 	Pipeline       *PipelineConfig    `yaml:"pipeline,omitempty"`
 	IssueSchema    *IssueSchemaConfig `yaml:"issue_schema,omitempty"`
 	Linear         *LinearConfig      `yaml:"linear,omitempty"`
-	InstallTarget  *InstallTarget     `yaml:"install_target,omitempty"`
+	Agents         []string           `yaml:"agents,omitempty"`
 	UpdateCheck    *bool              `yaml:"update_check,omitempty"`
 }

@@ -1,8 +1,12 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
 
-func validate(cfg Config) error {
+	"github.com/jasonraimondi/plan-bender/internal/agents"
+)
+
+func validate(cfg *Config) error {
 	var errs []FieldError
 
 	if cfg.Backend != BackendYAMLFS && cfg.Backend != BackendLinear {
@@ -15,6 +19,29 @@ func validate(cfg Config) error {
 
 	if cfg.MaxPoints < 1 {
 		errs = append(errs, FieldError{Field: "max_points", Message: "must be at least 1"})
+	}
+
+	// Deduplicate agents
+	seen := make(map[string]bool, len(cfg.Agents))
+	deduped := make([]string, 0, len(cfg.Agents))
+	for _, a := range cfg.Agents {
+		if !seen[a] {
+			seen[a] = true
+			deduped = append(deduped, a)
+		}
+	}
+	cfg.Agents = deduped
+
+	if len(cfg.Agents) == 0 {
+		errs = append(errs, FieldError{Field: "agents", Message: "must not be empty"})
+	}
+	for i, name := range cfg.Agents {
+		if _, err := agents.Get(name); err != nil {
+			errs = append(errs, FieldError{
+				Field:   fmt.Sprintf("agents[%d]", i),
+				Message: fmt.Sprintf("unknown agent %q", name),
+			})
+		}
 	}
 
 	if cfg.Backend == BackendLinear {

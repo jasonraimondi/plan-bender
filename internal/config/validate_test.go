@@ -8,14 +8,15 @@ import (
 )
 
 func TestValidate_DefaultsPasses(t *testing.T) {
-	err := validate(Defaults())
+	cfg := Defaults()
+	err := validate(&cfg)
 	assert.NoError(t, err)
 }
 
 func TestValidate_InvalidBackend(t *testing.T) {
 	cfg := Defaults()
 	cfg.Backend = "nope"
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "backend")
 }
@@ -23,7 +24,7 @@ func TestValidate_InvalidBackend(t *testing.T) {
 func TestValidate_EmptyTracks(t *testing.T) {
 	cfg := Defaults()
 	cfg.Tracks = []string{}
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "tracks")
 }
@@ -31,7 +32,7 @@ func TestValidate_EmptyTracks(t *testing.T) {
 func TestValidate_ZeroMaxPoints(t *testing.T) {
 	cfg := Defaults()
 	cfg.MaxPoints = 0
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "max_points")
 }
@@ -39,7 +40,7 @@ func TestValidate_ZeroMaxPoints(t *testing.T) {
 func TestValidate_LinearRequiresAPIKeyAndTeam(t *testing.T) {
 	cfg := Defaults()
 	cfg.Backend = BackendLinear
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 
 	ce := err.(*ConfigError)
@@ -53,14 +54,14 @@ func TestValidate_LinearWithCredsPasses(t *testing.T) {
 	cfg.Backend = BackendLinear
 	cfg.Linear.APIKey = "lin_api_key"
 	cfg.Linear.Team = "my-team"
-	err := validate(cfg)
+	err := validate(&cfg)
 	assert.NoError(t, err)
 }
 
 func TestValidate_CustomFieldEmptyName(t *testing.T) {
 	cfg := Defaults()
 	cfg.IssueSchema.CustomFields = []CustomFieldDef{{Name: "", Type: "string"}}
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "issue_schema.custom_fields[0].name")
 }
@@ -68,16 +69,40 @@ func TestValidate_CustomFieldEmptyName(t *testing.T) {
 func TestValidate_EnumRequiresValues(t *testing.T) {
 	cfg := Defaults()
 	cfg.IssueSchema.CustomFields = []CustomFieldDef{{Name: "priority", Type: "enum"}}
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "issue_schema.custom_fields[0].enum_values")
+}
+
+func TestValidate_EmptyAgents(t *testing.T) {
+	cfg := Defaults()
+	cfg.Agents = []string{}
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "agents")
+}
+
+func TestValidate_UnknownAgent(t *testing.T) {
+	cfg := Defaults()
+	cfg.Agents = []string{"claude-code", "unknown-agent"}
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "agents[1]")
+}
+
+func TestValidate_DuplicateAgentsDeduplicated(t *testing.T) {
+	cfg := Defaults()
+	cfg.Agents = []string{"claude-code", "claude-code"}
+	err := validate(&cfg)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude-code"}, cfg.Agents)
 }
 
 func TestValidate_MultipleErrors(t *testing.T) {
 	cfg := Defaults()
 	cfg.Tracks = []string{}
 	cfg.MaxPoints = 0
-	err := validate(cfg)
+	err := validate(&cfg)
 	require.Error(t, err)
 
 	ce := err.(*ConfigError)

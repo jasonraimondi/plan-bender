@@ -71,6 +71,22 @@ func TestLoad_ArraysReplaceBetweenLayers(t *testing.T) {
 	assert.Equal(t, []string{"alpha", "beta"}, cfg.Tracks)
 }
 
+func TestLoad_DefaultAgents(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude-code"}, cfg.Agents)
+}
+
+func TestLoad_MultipleAgentsFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "agents:\n  - claude-code\n  - openclaw\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude-code", "openclaw"}, cfg.Agents)
+}
+
 func writeYAML(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

@@ -12,7 +12,7 @@ func Defaults() Config {
 		Pipeline:       PipelineConfig{Skip: []string{}},
 		IssueSchema:    IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:         LinearConfig{},
-		InstallTarget:  InstallTargetProject,
+		Agents:         []string{"claude-code"},
 		UpdateCheck:    true,
 	}
 }

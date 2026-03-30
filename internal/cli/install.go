@@ -29,7 +29,7 @@ func NewInstallCmd() *cobra.Command {
 
 			sourceDir := filepath.Join(root, ".plan-bender", "skills")
 
-			targetDir, err := resolveTargetDir(root, cfg.InstallTarget)
+			targetDir, err := resolveTargetDir(root)
 			if err != nil {
 				return err
 			}
@@ -67,9 +67,7 @@ func NewInstallCmd() *cobra.Command {
 				count++
 			}
 
-			if cfg.InstallTarget == config.InstallTargetProject {
-				ensureGitignore(root)
-			}
+			ensureGitignore(root)
 
 			fmt.Fprintf(cmd.OutOrStdout(), "%d skills installed\n", count)
 			return nil
@@ -77,15 +75,8 @@ func NewInstallCmd() *cobra.Command {
 	}
 }
 
-func resolveTargetDir(root string, target config.InstallTarget) (string, error) {
-	if target == config.InstallTargetProject {
-		return filepath.Join(root, ".claude", "skills"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolving home dir: %w", err)
-	}
-	return filepath.Join(home, ".claude", "skills"), nil
+func resolveTargetDir(root string) (string, error) {
+	return filepath.Join(root, ".claude", "skills"), nil
 }
 
 func ensureGitignore(root string) {

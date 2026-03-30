@@ -106,6 +106,20 @@ func TestMerge_UpdateCheckOverrideToFalse(t *testing.T) {
 	assert.False(t, result.UpdateCheck)
 }
 
+func TestMerge_AgentsReplacement(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{
+		Agents: []string{"claude-code", "openclaw"},
+	})
+	assert.Equal(t, []string{"claude-code", "openclaw"}, result.Agents)
+}
+
+func TestMerge_AgentsNilPreservesDefault(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.Equal(t, []string{"claude-code"}, result.Agents)
+}
+
 func TestMerge_DefaultsImmutable(t *testing.T) {
 	before := Defaults()
 	base := Defaults()

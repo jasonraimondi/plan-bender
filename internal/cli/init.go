@@ -43,7 +43,6 @@ func NewInitCmd() *cobra.Command {
 			var backend string
 			var plansDir string
 			var maxPointsStr string
-			var installTarget string
 			var linearAPIKey string
 			var linearTeam string
 
@@ -64,13 +63,6 @@ func NewInitCmd() *cobra.Command {
 						Title("Max points per issue").
 						Placeholder(strconv.Itoa(defaults.MaxPoints)).
 						Value(&maxPointsStr),
-					huh.NewSelect[string]().
-						Title("Install target").
-						Options(
-							huh.NewOption("Project (.claude/skills/)", "project"),
-							huh.NewOption("User (~/.claude/skills/)", "user"),
-						).
-						Value(&installTarget),
 				),
 				huh.NewGroup(
 					huh.NewInput().
@@ -101,9 +93,6 @@ func NewInitCmd() *cobra.Command {
 				if err == nil && mp != defaults.MaxPoints {
 					partial["max_points"] = mp
 				}
-			}
-			if installTarget != "" && installTarget != string(defaults.InstallTarget) {
-				partial["install_target"] = installTarget
 			}
 			if backend == "linear" {
 				linear := make(map[string]string)

@@ -23,8 +23,8 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.MaxPoints != nil {
 		out.MaxPoints = *layer.MaxPoints
 	}
-	if layer.InstallTarget != nil {
-		out.InstallTarget = *layer.InstallTarget
+	if layer.Agents != nil {
+		out.Agents = layer.Agents
 	}
 	if layer.UpdateCheck != nil {
 		out.UpdateCheck = *layer.UpdateCheck
