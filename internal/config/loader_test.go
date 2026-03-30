@@ -126,6 +126,20 @@ func TestLoad_CleanConfigWithoutInstallTarget(t *testing.T) {
 	assert.Equal(t, 5, cfg.MaxPoints)
 }
 
+func TestLoad_ExpandsEnvVarsInLinearConfig(t *testing.T) {
+	t.Setenv("PB_TEST_LINEAR_KEY", "lin_api_fromenv")
+	t.Setenv("PB_TEST_LINEAR_TEAM", "ENG")
+
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
+		"backend: linear\nlinear:\n  api_key: $PB_TEST_LINEAR_KEY\n  team: $PB_TEST_LINEAR_TEAM\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "lin_api_fromenv", cfg.Linear.APIKey)
+	assert.Equal(t, "ENG", cfg.Linear.Team)
+}
+
 func writeYAML(t *testing.T, path, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

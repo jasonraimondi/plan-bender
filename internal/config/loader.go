@@ -39,6 +39,8 @@ func loadWithHome(root, home string) (Config, error) {
 		base = merge(base, layer)
 	}
 
+	expandEnv(&base)
+
 	if err := validate(&base); err != nil {
 		return Config{}, err
 	}
