@@ -165,17 +165,17 @@ func agentOptions() []huh.Option[string] {
 
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.
 func symlinkSkills(root string, cfg config.Config) (int, error) {
-	sourceDir := filepath.Join(root, ".plan-bender", "skills")
-	entries, err := os.ReadDir(sourceDir)
-	if err != nil {
-		return 0, fmt.Errorf("reading skills dir: %w", err)
-	}
-
 	count := 0
 	for _, agentName := range cfg.Agents {
-		ac, ok := agents.Get(agentName)
-		if !ok {
+		ac, err := agents.Get(agentName)
+		if err != nil {
 			return 0, fmt.Errorf("unknown agent %q", agentName)
+		}
+
+		sourceDir := filepath.Join(root, ".plan-bender", "skills", agentName)
+		entries, err := os.ReadDir(sourceDir)
+		if err != nil {
+			return 0, fmt.Errorf("reading skills dir for agent %s: %w", agentName, err)
 		}
 
 		targetDir, err := resolveAgentDir(root, ac)
@@ -239,8 +239,8 @@ func ensureGitignoreForAgents(root string, agentNames []string) {
 	entries := []string{".plan-bender/", ".plan-bender.local.yaml"}
 
 	for _, name := range agentNames {
-		ac, ok := agents.Get(name)
-		if !ok {
+		ac, err := agents.Get(name)
+		if err != nil {
 			continue
 		}
 		if ac.Scope == agents.UserOnly {
