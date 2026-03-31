@@ -136,7 +136,7 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 
 	fmt.Fprintf(out, "\nReady! Next:\n")
 	fmt.Fprintf(out, "  /bender-orchestrator    — see your planning dashboard\n")
-	fmt.Fprintf(out, "  /bender-write-a-prd     — start a new plan\n")
+	fmt.Fprintf(out, "  /bender-write-prd       — start a new plan\n")
 
 	return nil
 }

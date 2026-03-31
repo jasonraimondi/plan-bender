@@ -19,9 +19,9 @@ type PipelinePhase struct {
 
 var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Interview", Description: "Stress-test your plan", Skill: "bender-interview-me"},
-	{Name: "Write a PRD", Description: "Create a PRD", Skill: "bender-write-a-prd"},
+	{Name: "Write PRD", Description: "Create a PRD", Skill: "bender-write-prd"},
 	{Name: "PRD to Issues", Description: "Break PRD into issues", Skill: "bender-prd-to-issues"},
-	{Name: "Write an Issue", Description: "Create a single issue", Skill: "bender-write-an-issue"},
+	{Name: "Write Issue", Description: "Create a single issue", Skill: "bender-write-issue"},
 	{Name: "Review PRD", Description: "Review plan quality", Skill: "bender-review-prd"},
 	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd"},
 	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue"},

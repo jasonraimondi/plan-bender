@@ -21,7 +21,7 @@ func fixtureContext() map[string]any {
 		"has_backend_sync": false,
 		"pipeline_phases": []map[string]string{
 			{"name": "Interview", "description": "Stress-test your plan", "skill": "bender-interview-me"},
-			{"name": "Write PRD", "description": "Create a PRD", "skill": "bender-write-a-prd"},
+			{"name": "Write PRD", "description": "Create a PRD", "skill": "bender-write-prd"},
 		},
 		"custom_fields":     []map[string]any{},
 		"track_descriptions": []map[string]string{},
@@ -35,8 +35,8 @@ func TestAllTemplatesLoad(t *testing.T) {
 
 	expected := []string{
 		"bender-orchestrator.skill.tmpl",
-		"bender-write-a-prd.skill.tmpl",
-		"bender-write-an-issue.skill.tmpl",
+		"bender-write-prd.skill.tmpl",
+		"bender-write-issue.skill.tmpl",
 		"bender-prd-to-issues.skill.tmpl",
 		"bender-review-prd.skill.tmpl",
 		"bender-implement-prd.skill.tmpl",
@@ -150,7 +150,7 @@ func TestWritePrdTemplate_UsesCLIWriteThrough(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("write-a-prd", tmpls["bender-write-a-prd.skill.tmpl"], ctx)
+	out, err := Render("write-prd", tmpls["bender-write-prd.skill.tmpl"], ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender write-prd")
 }
@@ -165,12 +165,12 @@ func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
 	assert.Contains(t, out, "plan-bender write-issue")
 }
 
-func TestWriteAnIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
+func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("write-an-issue", tmpls["bender-write-an-issue.skill.tmpl"], ctx)
+	out, err := Render("write-issue", tmpls["bender-write-issue.skill.tmpl"], ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender write-issue")
 }
