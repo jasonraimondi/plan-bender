@@ -1,166 +1,212 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/linear"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
+// linearValidator validates Linear credentials.
+type linearValidator interface {
+	ListWorkflowStates(ctx context.Context, teamID string) (map[string]string, error)
+}
+
+type setupDeps struct {
+	newValidator func(apiKey string) linearValidator
+}
+
 // NewSetupCmd creates the setup command.
-// Idempotent: if config exists, skips the interactive form and just regenerates + re-symlinks skills.
 func NewSetupCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "setup",
-		Short: "Set up or refresh a pb project",
+	return newSetupCmd(setupDeps{})
+}
+
+func newSetupCmd(deps setupDeps) *cobra.Command {
+	var yes, useLinear bool
+
+	if deps.newValidator == nil {
+		deps.newValidator = func(apiKey string) linearValidator {
+			return linear.NewClient(apiKey)
+		}
+	}
+
+	cmd := &cobra.Command{
+		Use:     "setup",
+		Aliases: []string{"init"},
+		Short:   "Set up or refresh a pb project",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			root, _ := os.Getwd()
-			cfgPath := filepath.Join(root, ".plan-bender.yaml")
-
-			var cfg config.Config
-
-			if _, err := os.Stat(cfgPath); err != nil {
-				// No config — run interactive form
-				partial, err := runSetupForm()
-				if err != nil {
-					return err
-				}
-
-				data, err := yaml.Marshal(partial)
-				if err != nil {
-					return err
-				}
-				if err := atomicWriteFile(cfgPath, data, 0o644); err != nil {
-					return err
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", cfgPath)
-			}
-
-			cfg, err := config.Load(root)
-			if err != nil {
-				return err
-			}
-
-			if _, err := GenerateSkills(root, cfg, cmd.OutOrStdout()); err != nil {
-				return err
-			}
-
-			count, err := symlinkSkills(root, cfg)
-			if err != nil {
-				return err
-			}
-
-			ensureGitignoreForAgents(root, cfg.Agents)
-
-			fmt.Fprintf(cmd.OutOrStdout(), "%d skills installed\n", count)
-
-			fmt.Fprintln(cmd.OutOrStdout(), "\nNext steps:")
-			fmt.Fprintln(cmd.OutOrStdout(), "  Open Claude and ask it to write a PRD or check your plan status.")
-			fmt.Fprintln(cmd.OutOrStdout(), "  The installed skills will guide Claude to use pb on your behalf.")
-
-			return nil
+			return runSetup(cmd, deps, yes, useLinear)
 		},
 	}
+	cmd.Flags().BoolVar(&yes, "yes", false, "Non-interactive mode")
+	cmd.Flags().BoolVar(&useLinear, "linear", false, "Configure Linear integration")
+	return cmd
 }
 
-func runSetupForm() (map[string]any, error) {
-	defaults := config.Defaults()
+func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
+	root, _ := os.Getwd()
+	out := cmd.OutOrStdout()
+	cfgPath := filepath.Join(root, ".plan-bender.yaml")
 
-	var backend string
-	var plansDir string
-	var maxPointsStr string
-	var selectedAgents []string
-	var linearAPIKey string
-	var linearTeam string
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Backend").
-				Options(
-					huh.NewOption("YAML files (local)", "yaml-fs"),
-					huh.NewOption("Linear", "linear"),
-				).
-				Value(&backend),
-			huh.NewInput().
-				Title("Plans directory").
-				Placeholder(defaults.PlansDir).
-				Value(&plansDir),
-			huh.NewInput().
-				Title("Max points per issue").
-				Placeholder(strconv.Itoa(defaults.MaxPoints)).
-				Value(&maxPointsStr),
-			huh.NewMultiSelect[string]().
-				Title("Agents").
-				Options(agentOptions()...).
-				Value(&selectedAgents),
-		),
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Linear API key").
-				Value(&linearAPIKey),
-			huh.NewInput().
-				Title("Linear team key").
-				Value(&linearTeam),
-		).WithHideFunc(func() bool {
-			return backend != "linear"
-		}),
-	)
-
-	if err := form.Run(); err != nil {
-		return nil, err
-	}
-
-	partial := make(map[string]any)
-	if backend != "" && backend != "yaml-fs" {
-		partial["backend"] = backend
-	}
-	if plansDir != "" && plansDir != defaults.PlansDir {
-		partial["plans_dir"] = plansDir
-	}
-	if maxPointsStr != "" {
-		mp, err := strconv.Atoi(maxPointsStr)
-		if err == nil && mp != defaults.MaxPoints {
-			partial["max_points"] = mp
+	// 1. Write defaults if no config exists
+	created := false
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		defaults := config.Defaults()
+		data, err := yaml.Marshal(defaults)
+		if err != nil {
+			return err
 		}
-	}
-	if len(selectedAgents) > 0 {
-		partial["agents"] = selectedAgents
-	}
-	if backend == "linear" {
-		linear := make(map[string]string)
-		if linearAPIKey != "" {
-			linear["api_key"] = linearAPIKey
+		if err := atomicWriteFile(cfgPath, data, 0o644); err != nil {
+			return err
 		}
-		if linearTeam != "" {
-			linear["team"] = linearTeam
-		}
-		if len(linear) > 0 {
-			partial["linear"] = linear
+		created = true
+	}
+
+	// 2. Handle --linear
+	if useLinear {
+		if err := setupLinear(root, deps, yes); err != nil {
+			return err
 		}
 	}
 
-	return partial, nil
+	// 3. Load merged config
+	cfg, err := config.Load(root)
+	if err != nil {
+		return err
+	}
+
+	// 4. Generate + symlink skills
+	if _, err := GenerateSkills(root, cfg, out); err != nil {
+		return err
+	}
+
+	count, err := symlinkSkills(root, cfg)
+	if err != nil {
+		return err
+	}
+
+	ensureGitignoreForAgents(root, cfg.Agents)
+
+	// 5. Output summary
+	if created {
+		fmt.Fprintf(out, "Config:  .plan-bender.yaml (created)\n")
+	} else {
+		fmt.Fprintf(out, "Config:  .plan-bender.yaml (exists)\n")
+	}
+
+	if cfg.Linear.Enabled {
+		fmt.Fprintf(out, "Linear:  enabled — team %s\n", cfg.Linear.Team)
+	} else {
+		fmt.Fprintf(out, "Linear:  disabled\n")
+	}
+
+	fmt.Fprintf(out, "Skills:  %d installed\n", count)
+	fmt.Fprintf(out, "Plans:   %s\n", cfg.PlansDir)
+	fmt.Fprintf(out, "\nReady! Next:\n")
+	fmt.Fprintf(out, "  /bender-orchestrator    — see your planning dashboard\n")
+	fmt.Fprintf(out, "  /bender-write-a-prd     — start a new plan\n")
+
+	return nil
 }
 
-func agentOptions() []huh.Option[string] {
-	names := agents.Names()
-	opts := make([]huh.Option[string], len(names))
-	for i, name := range names {
-		opt := huh.NewOption(name, name)
-		if name == "claude-code" {
-			opt = opt.Selected(true)
+func setupLinear(root string, deps setupDeps, yes bool) error {
+	cfgPath := filepath.Join(root, ".plan-bender.yaml")
+	localPath := filepath.Join(root, ".plan-bender.local.yaml")
+
+	// Get credentials from env vars or prompts
+	apiKey := os.Getenv("LINEAR_API_KEY")
+	team := os.Getenv("LINEAR_TEAM")
+
+	if apiKey == "" || team == "" {
+		if yes {
+			return fmt.Errorf("--linear requires $LINEAR_API_KEY and $LINEAR_TEAM in non-interactive mode")
 		}
-		opts[i] = opt
+
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("Linear API key").
+					EchoMode(huh.EchoModePassword).
+					Value(&apiKey),
+				huh.NewInput().
+					Title("Linear team key").
+					Value(&team),
+			),
+		)
+		if err := form.Run(); err != nil {
+			return fmt.Errorf("linear setup: %w", err)
+		}
 	}
-	return opts
+
+	if apiKey == "" || team == "" {
+		return fmt.Errorf("linear API key and team are required")
+	}
+
+	// Validate credentials
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	validator := deps.newValidator(apiKey)
+	if _, err := validator.ListWorkflowStates(ctx, team); err != nil {
+		return fmt.Errorf("linear credential validation failed: %w", err)
+	}
+
+	// Write linear.enabled: true to project config
+	if err := mergeYAMLFile(cfgPath, map[string]any{
+		"linear": map[string]any{"enabled": true},
+	}); err != nil {
+		return fmt.Errorf("updating config: %w", err)
+	}
+
+	// Write credentials to local config (gitignored)
+	if err := mergeYAMLFile(localPath, map[string]any{
+		"linear": map[string]any{"api_key": apiKey, "team": team},
+	}); err != nil {
+		return fmt.Errorf("updating local config: %w", err)
+	}
+
+	return nil
+}
+
+// mergeYAMLFile reads an existing YAML file (or starts empty), deep-merges the updates, and writes back.
+func mergeYAMLFile(path string, updates map[string]any) error {
+	raw := make(map[string]any)
+	data, err := os.ReadFile(path)
+	if err == nil {
+		_ = yaml.Unmarshal(data, &raw)
+	}
+
+	for k, v := range updates {
+		existing, _ := raw[k].(map[string]any)
+		incoming, ok := v.(map[string]any)
+		if ok && existing != nil {
+			for ik, iv := range incoming {
+				existing[ik] = iv
+			}
+			raw[k] = existing
+		} else {
+			raw[k] = v
+		}
+	}
+
+	out, err := yaml.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return atomicWriteFile(path, out, 0o644)
 }
 
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.
