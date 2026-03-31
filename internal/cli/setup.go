@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,6 +83,11 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	// 3. Load merged config
 	cfg, err := config.Load(root)
 	if err != nil {
+		var cfgErr *config.ConfigError
+		if errors.As(err, &cfgErr) {
+			fmt.Fprint(cmd.ErrOrStderr(), cfgErr.FormatHuman())
+			return fmt.Errorf("config validation failed")
+		}
 		return err
 	}
 

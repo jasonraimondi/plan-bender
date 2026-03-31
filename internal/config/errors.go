@@ -24,5 +24,15 @@ func (e *ConfigError) Error() string {
 	return "config validation failed: " + strings.Join(msgs, "; ")
 }
 
+// FormatHuman returns a bulleted list suitable for human CLI output.
+func (e *ConfigError) FormatHuman() string {
+	var b strings.Builder
+	b.WriteString("Config errors:\n")
+	for _, fe := range e.Errors {
+		fmt.Fprintf(&b, "  \u2022 %s: %s\n", fe.Field, fe.Message)
+	}
+	return b.String()
+}
+
 // ErrInvalidConfig is the sentinel for configuration errors.
 var ErrInvalidConfig = fmt.Errorf("invalid config")

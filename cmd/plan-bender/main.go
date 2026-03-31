@@ -39,6 +39,7 @@ func rootCmd() *cobra.Command {
 		Use:     "plan-bender",
 		Aliases: []string{"pb"},
 		Short:   "pb — plan management tool",
+		Long:    "Plan-bender CLI for humans.\n\nFor agent commands (context, validate, write), use plan-bender-agent (pba).",
 		Version: version,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			level := slog.LevelInfo

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -56,10 +57,15 @@ func NewDoctorCmd(version string) *cobra.Command {
 
 			// Override the config check result if loading actually failed
 			if loadErr != nil {
+				msg := loadErr.Error()
+				var cfgErr *config.ConfigError
+				if errors.As(loadErr, &cfgErr) {
+					msg = cfgErr.FormatHuman()
+				}
 				results[0] = CheckResult{
 					Name:    "config",
 					Pass:    false,
-					Message: loadErr.Error(),
+					Message: msg,
 				}
 			}
 
