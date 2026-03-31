@@ -56,11 +56,13 @@ Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 
 | Command | Purpose |
 |---|---|
-| `pb setup` | Interactive setup + skill generation + symlink install |
+| `pb setup` | Write defaults + generate skills + symlink install |
+| `pb setup --linear` | Configure Linear integration (validates credentials) |
+| `pb setup --yes` | Non-interactive mode (for CI) |
 | `pb self-update [--force]` | Update to latest release |
 | `pb completion <shell>` | Shell completion (bash/zsh/fish) |
 
-`pb setup` is idempotent — first run shows an interactive form, subsequent runs regenerate and re-symlink skills for all configured agents.
+`pb setup` (aliased as `pb init`) is idempotent — first run writes default config, subsequent runs regenerate and re-symlink skills. Use `--linear` to enable Linear sync; credentials are read from `$LINEAR_API_KEY`/`$LINEAR_TEAM` env vars or prompted interactively.
 
 ## Agent CLI (`plan-bender-agent`)
 
