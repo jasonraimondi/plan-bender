@@ -9,10 +9,6 @@ import (
 func validate(cfg *Config) error {
 	var errs []FieldError
 
-	if cfg.Backend != BackendYAMLFS && cfg.Backend != BackendLinear {
-		errs = append(errs, FieldError{Field: "backend", Message: fmt.Sprintf("invalid backend %q", cfg.Backend)})
-	}
-
 	if len(cfg.Tracks) == 0 {
 		errs = append(errs, FieldError{Field: "tracks", Message: "must not be empty"})
 	}
@@ -44,12 +40,12 @@ func validate(cfg *Config) error {
 		}
 	}
 
-	if cfg.Backend == BackendLinear {
+	if cfg.Linear.Enabled {
 		if cfg.Linear.APIKey == "" {
-			errs = append(errs, FieldError{Field: "linear.api_key", Message: "required when backend is linear"})
+			errs = append(errs, FieldError{Field: "linear.api_key", Message: "required when linear is enabled"})
 		}
 		if cfg.Linear.Team == "" {
-			errs = append(errs, FieldError{Field: "linear.team", Message: "required when backend is linear"})
+			errs = append(errs, FieldError{Field: "linear.team", Message: "required when linear is enabled"})
 		}
 	}
 

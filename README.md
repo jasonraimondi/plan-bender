@@ -90,7 +90,6 @@ Three layers, deep-merged (later wins):
 | `.plan-bender.local.yaml` | Gitignored — secrets, personal overrides |
 
 ```yaml
-backend: yaml-fs               # yaml-fs | linear
 agents:                        # which agents to install skills for
   - claude-code                # .claude/skills/ (project or user scope)
   - openclaw                   # ~/.openclaw/skills/ (user scope)
@@ -125,8 +124,9 @@ issue_schema:
       required: true
       enum_values: [frontend, backend, platform]
 
-# Put api_key in .plan-bender.local.yaml
+# Put credentials in .plan-bender.local.yaml
 linear:
+  enabled: true
   api_key: "lin_api_..."
   team: "TEAM-ID"
   status_map:

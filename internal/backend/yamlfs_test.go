@@ -63,14 +63,6 @@ func TestFactory_YAMLFS(t *testing.T) {
 	assert.NotNil(t, b)
 }
 
-func TestFactory_UnknownBackend(t *testing.T) {
-	cfg := config.Defaults()
-	cfg.Backend = "nope"
-	_, err := New(context.Background(), cfg)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown backend")
-}
-
 func TestCreateProject(t *testing.T) {
 	b, dir := testBackend(t)
 	ctx := context.Background()

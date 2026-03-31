@@ -13,14 +13,6 @@ func TestValidate_DefaultsPasses(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestValidate_InvalidBackend(t *testing.T) {
-	cfg := Defaults()
-	cfg.Backend = "nope"
-	err := validate(&cfg)
-	require.Error(t, err)
-	assertFieldError(t, err, "backend")
-}
-
 func TestValidate_EmptyTracks(t *testing.T) {
 	cfg := Defaults()
 	cfg.Tracks = []string{}
@@ -37,9 +29,9 @@ func TestValidate_ZeroMaxPoints(t *testing.T) {
 	assertFieldError(t, err, "max_points")
 }
 
-func TestValidate_LinearRequiresAPIKeyAndTeam(t *testing.T) {
+func TestValidate_LinearEnabledRequiresAPIKeyAndTeam(t *testing.T) {
 	cfg := Defaults()
-	cfg.Backend = BackendLinear
+	cfg.Linear.Enabled = true
 	err := validate(&cfg)
 	require.Error(t, err)
 
@@ -49,11 +41,18 @@ func TestValidate_LinearRequiresAPIKeyAndTeam(t *testing.T) {
 	assertFieldError(t, err, "linear.team")
 }
 
-func TestValidate_LinearWithCredsPasses(t *testing.T) {
+func TestValidate_LinearEnabledWithCredsPasses(t *testing.T) {
 	cfg := Defaults()
-	cfg.Backend = BackendLinear
+	cfg.Linear.Enabled = true
 	cfg.Linear.APIKey = "lin_api_key"
 	cfg.Linear.Team = "my-team"
+	err := validate(&cfg)
+	assert.NoError(t, err)
+}
+
+func TestValidate_LinearDisabledSkipsCredCheck(t *testing.T) {
+	cfg := Defaults()
+	cfg.Linear.Enabled = false
 	err := validate(&cfg)
 	assert.NoError(t, err)
 }

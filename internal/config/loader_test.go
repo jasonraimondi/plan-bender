@@ -24,7 +24,6 @@ func TestLoad_ProjectYAMLMergesOverDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5, cfg.MaxPoints)
 	assert.Equal(t, "./custom/", cfg.PlansDir)
-	assert.Equal(t, BackendYAMLFS, cfg.Backend) // default preserved
 }
 
 func TestLoad_LocalOverridesProject(t *testing.T) {
@@ -132,12 +131,56 @@ func TestLoad_ExpandsEnvVarsInLinearConfig(t *testing.T) {
 
 	dir := t.TempDir()
 	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
-		"backend: linear\nlinear:\n  api_key: $PB_TEST_LINEAR_KEY\n  team: $PB_TEST_LINEAR_TEAM\n")
+		"linear:\n  enabled: true\n  api_key: $PB_TEST_LINEAR_KEY\n  team: $PB_TEST_LINEAR_TEAM\n")
 
 	cfg, err := Load(dir)
 	require.NoError(t, err)
 	assert.Equal(t, "lin_api_fromenv", cfg.Linear.APIKey)
 	assert.Equal(t, "ENG", cfg.Linear.Team)
+}
+
+func TestLoad_BackendLinearMigratesToLinearEnabled(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
+		"backend: linear\nlinear:\n  api_key: sk-test\n  team: ENG\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.True(t, cfg.Linear.Enabled)
+	assert.Equal(t, "sk-test", cfg.Linear.APIKey)
+	assert.Equal(t, "ENG", cfg.Linear.Team)
+}
+
+func TestLoad_BackendYAMLFSSilentlyDropped(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
+		"backend: yaml-fs\nmax_points: 5\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.False(t, cfg.Linear.Enabled)
+	assert.Equal(t, 5, cfg.MaxPoints)
+}
+
+func TestLoad_BackendLinearWithExistingEnabledPreserved(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
+		"backend: linear\nlinear:\n  enabled: true\n  api_key: sk-test\n  team: ENG\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.True(t, cfg.Linear.Enabled)
+}
+
+func TestLoad_NoBackendKeyLoadsNormally(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"),
+		"max_points: 7\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.False(t, cfg.Linear.Enabled)
+	assert.Equal(t, 7, cfg.MaxPoints)
 }
 
 func writeYAML(t *testing.T, path, content string) {

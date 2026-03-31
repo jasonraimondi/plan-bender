@@ -54,7 +54,8 @@ func readPartial(path string) (PartialConfig, error) {
 		return PartialConfig{}, err
 	}
 
-	if err := checkDeprecatedKeys(data); err != nil {
+	data, err = migrateDeprecatedKeys(data)
+	if err != nil {
 		return PartialConfig{}, err
 	}
 
@@ -66,13 +67,39 @@ func readPartial(path string) (PartialConfig, error) {
 	return partial, nil
 }
 
-func checkDeprecatedKeys(data []byte) error {
+// migrateDeprecatedKeys rewrites removed config keys in raw YAML before typed unmarshal.
+// install_target → hard error (user must fix manually).
+// backend: linear → linear.enabled: true (silent migration).
+// backend: yaml-fs → dropped (default behavior).
+func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil // let the caller handle parse errors
+		return data, nil // let the caller handle parse errors
 	}
 	if _, ok := raw["install_target"]; ok {
-		return fmt.Errorf("install_target is removed — replace with agents: [claude-code] in your .plan-bender.yaml")
+		return nil, fmt.Errorf("install_target is removed — replace with agents: [claude-code] in your .plan-bender.yaml")
 	}
-	return nil
+
+	backend, hasBackend := raw["backend"]
+	if !hasBackend {
+		return data, nil
+	}
+
+	if backend == "linear" {
+		linear, _ := raw["linear"].(map[string]any)
+		if linear == nil {
+			linear = make(map[string]any)
+		}
+		if _, exists := linear["enabled"]; !exists {
+			linear["enabled"] = true
+			raw["linear"] = linear
+		}
+	}
+	delete(raw, "backend")
+
+	modified, err := yaml.Marshal(raw)
+	if err != nil {
+		return data, nil
+	}
+	return modified, nil
 }

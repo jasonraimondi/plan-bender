@@ -1,13 +1,5 @@
 package config
 
-// Backend is the tracking backend type.
-type Backend string
-
-const (
-	BackendYAMLFS Backend = "yaml-fs"
-	BackendLinear Backend = "linear"
-)
-
 // CustomFieldDef defines a custom field on issue YAML.
 type CustomFieldDef struct {
 	Name       string   `yaml:"name"`
@@ -18,6 +10,7 @@ type CustomFieldDef struct {
 
 // LinearConfig holds Linear integration settings.
 type LinearConfig struct {
+	Enabled   bool              `yaml:"enabled,omitempty"`
 	APIKey    string            `yaml:"api_key,omitempty"`
 	Team      string            `yaml:"team,omitempty"`
 	ProjectID string            `yaml:"project_id,omitempty"`
@@ -36,7 +29,6 @@ type IssueSchemaConfig struct {
 
 // Config is the fully resolved configuration.
 type Config struct {
-	Backend        Backend           `yaml:"backend"`
 	Tracks         []string          `yaml:"tracks"`
 	WorkflowStates []string          `yaml:"workflow_states"`
 	StepPattern    string            `yaml:"step_pattern"`
@@ -51,7 +43,6 @@ type Config struct {
 
 // PartialConfig is used for YAML layer loading — all fields optional.
 type PartialConfig struct {
-	Backend        *Backend           `yaml:"backend,omitempty"`
 	Tracks         []string           `yaml:"tracks,omitempty"`
 	WorkflowStates []string           `yaml:"workflow_states,omitempty"`
 	StepPattern    *string            `yaml:"step_pattern,omitempty"`

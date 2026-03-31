@@ -119,7 +119,7 @@ func runSetupForm() (map[string]any, error) {
 	}
 
 	partial := make(map[string]any)
-	if backend != "" && backend != string(defaults.Backend) {
+	if backend != "" && backend != "yaml-fs" {
 		partial["backend"] = backend
 	}
 	if plansDir != "" && plansDir != defaults.PlansDir {

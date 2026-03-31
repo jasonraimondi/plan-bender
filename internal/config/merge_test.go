@@ -23,8 +23,6 @@ func TestMerge_ScalarOverwrite(t *testing.T) {
 	})
 	assert.Equal(t, 5, result.MaxPoints)
 	assert.Equal(t, "./custom/", result.PlansDir)
-	// other fields untouched
-	assert.Equal(t, BackendYAMLFS, result.Backend)
 }
 
 func TestMerge_ArrayReplacement(t *testing.T) {
@@ -48,11 +46,22 @@ func TestMerge_NestedObjectMerge(t *testing.T) {
 	assert.Equal(t, "", result.Linear.Team)
 }
 
-func TestMerge_BackendEnum(t *testing.T) {
+func TestMerge_LinearEnabled(t *testing.T) {
 	base := Defaults()
-	linear := BackendLinear
-	result := merge(base, PartialConfig{Backend: &linear})
-	assert.Equal(t, BackendLinear, result.Backend)
+	result := merge(base, PartialConfig{
+		Linear: &LinearConfig{Enabled: true},
+	})
+	assert.True(t, result.Linear.Enabled)
+}
+
+func TestMerge_LinearEnabledPreserved(t *testing.T) {
+	base := Defaults()
+	base.Linear.Enabled = true
+	result := merge(base, PartialConfig{
+		Linear: &LinearConfig{APIKey: "sk-test"},
+	})
+	assert.True(t, result.Linear.Enabled)
+	assert.Equal(t, "sk-test", result.Linear.APIKey)
 }
 
 func TestMerge_PipelineSkipReplaces(t *testing.T) {

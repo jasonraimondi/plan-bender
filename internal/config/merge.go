@@ -5,9 +5,6 @@ package config
 func merge(base Config, layer PartialConfig) Config {
 	out := base
 
-	if layer.Backend != nil {
-		out.Backend = *layer.Backend
-	}
 	if layer.Tracks != nil {
 		out.Tracks = layer.Tracks
 	}
@@ -43,6 +40,9 @@ func merge(base Config, layer PartialConfig) Config {
 }
 
 func mergeLinear(base *LinearConfig, layer *LinearConfig) {
+	if layer.Enabled {
+		base.Enabled = true
+	}
 	if layer.APIKey != "" {
 		base.APIKey = layer.APIKey
 	}
