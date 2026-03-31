@@ -175,7 +175,7 @@ func TestDoctorCmd_HealthySetup(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("{}"), 0o644))
 
 	// Run setup to generate and symlink skills
-	setupCmd := NewSetupCmd()
+	setupCmd := NewSetupCmd("test")
 	setupCmd.SetOut(&strings.Builder{})
 	require.NoError(t, setupCmd.Execute())
 

@@ -22,12 +22,13 @@ type linearValidator interface {
 }
 
 type setupDeps struct {
+	version      string
 	newValidator func(apiKey string) linearValidator
 }
 
 // NewSetupCmd creates the setup command.
-func NewSetupCmd() *cobra.Command {
-	return newSetupCmd(setupDeps{})
+func NewSetupCmd(version string) *cobra.Command {
+	return newSetupCmd(setupDeps{version: version})
 }
 
 func newSetupCmd(deps setupDeps) *cobra.Command {
@@ -111,6 +112,22 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 
 	fmt.Fprintf(out, "Skills:  %d installed\n", count)
 	fmt.Fprintf(out, "Plans:   %s\n", cfg.PlansDir)
+
+	// 6. Inline doctor checks (warnings only, don't block)
+	fmt.Fprintf(out, "\nHealth:\n")
+	results := RunChecks(root, cfg, deps.version)
+	for _, r := range results {
+		if r.Pass {
+			line := fmt.Sprintf("  \u2713 %s", r.Name)
+			if r.Message != "" {
+				line += " \u2014 " + r.Message
+			}
+			fmt.Fprintln(out, line)
+		} else {
+			fmt.Fprintf(out, "  \u2717 %s \u2014 %s\n", r.Name, r.Message)
+		}
+	}
+
 	fmt.Fprintf(out, "\nReady! Next:\n")
 	fmt.Fprintf(out, "  /bender-orchestrator    — see your planning dashboard\n")
 	fmt.Fprintf(out, "  /bender-write-a-prd     — start a new plan\n")

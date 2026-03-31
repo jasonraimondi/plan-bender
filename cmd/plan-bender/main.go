@@ -84,7 +84,7 @@ func rootCmd() *cobra.Command {
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
 	root.AddCommand(
-		cli.NewSetupCmd(),
+		cli.NewSetupCmd(version),
 		cli.NewDoctorCmd(version),
 		cli.NewSelfUpdateCmd(version),
 		cli.NewCompletionCmd(),

@@ -65,6 +65,19 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	assert.Contains(t, output, "Ready!")
 }
 
+func TestSetup_FirstRunIncludesDoctorChecks(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	h := testSetupCmd(setupDeps{version: "test"})
+	require.NoError(t, h.execute())
+
+	output := h.output()
+	assert.Contains(t, output, "Health:")
+	assert.Contains(t, output, "✓ config")
+	assert.Contains(t, output, "✓ skills")
+}
+
 func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
@@ -162,7 +175,7 @@ func TestSetup_LinearYesWithoutEnvVarsErrors(t *testing.T) {
 }
 
 func TestSetup_InitAlias(t *testing.T) {
-	cmd := NewSetupCmd()
+	cmd := NewSetupCmd("test")
 	assert.Contains(t, cmd.Aliases, "init")
 }
 
