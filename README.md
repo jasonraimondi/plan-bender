@@ -59,6 +59,7 @@ Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 | `pb setup` | Write defaults + generate skills + symlink install |
 | `pb setup --linear` | Configure Linear integration (validates credentials) |
 | `pb setup --yes` | Non-interactive mode (for CI) |
+| `pb doctor` | Verify installation health (exit 1 on failure) |
 | `pb self-update [--force]` | Update to latest release |
 | `pb completion <shell>` | Shell completion (bash/zsh/fish) |
 
