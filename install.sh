@@ -61,7 +61,13 @@ $SUDO mv "${TMP}/${AGENT_BINARY}" "${INSTALL_DIR}/${AGENT_BINARY}"
 $SUDO ln -sf "${INSTALL_DIR}/${BINARY}" "${INSTALL_DIR}/pb"
 $SUDO ln -sf "${INSTALL_DIR}/${AGENT_BINARY}" "${INSTALL_DIR}/pba"
 
-echo "Installed ${BINARY} v${VERSION} to ${INSTALL_DIR}/${BINARY}"
-echo "Installed ${AGENT_BINARY} v${VERSION} to ${INSTALL_DIR}/${AGENT_BINARY}"
-echo "Symlinked ${INSTALL_DIR}/pb -> ${INSTALL_DIR}/${BINARY}"
-echo "Symlinked ${INSTALL_DIR}/pba -> ${INSTALL_DIR}/${AGENT_BINARY}"
+echo "Installed pb v${VERSION} to ${INSTALL_DIR}"
+
+case ":$PATH:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *) echo "Warning: ${INSTALL_DIR} is not on your PATH. Add it with:"
+     echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+     ;;
+esac
+
+echo "Next: cd into your project and run pb setup"
