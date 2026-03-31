@@ -4,7 +4,7 @@ set -euo pipefail
 REPO="jasonraimondi/plan-bender"
 BINARY="plan-bender"
 AGENT_BINARY="plan-bender-agent"
-INSTALL_DIR="${INSTALL_DIR:-~/.local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 
 for cmd in curl tar; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "Required command not found: $cmd" >&2; exit 1; }
