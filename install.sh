@@ -52,7 +52,10 @@ curl -fsSL "$URL" -o "${TMP}/${ASSET}"
 tar xzf "${TMP}/${ASSET}" -C "$TMP" "$BINARY" "$AGENT_BINARY"
 chmod +x "${TMP}/${BINARY}" "${TMP}/${AGENT_BINARY}"
 
-# Install (use sudo only if install dir is not writable)
+# Ensure install dir exists; use sudo only if needed
+if [ ! -d "$INSTALL_DIR" ]; then
+  mkdir -p "$INSTALL_DIR" 2>/dev/null || sudo mkdir -p "$INSTALL_DIR"
+fi
 SUDO=""
 [ -w "$INSTALL_DIR" ] || SUDO="sudo"
 
