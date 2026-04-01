@@ -1,0 +1,61 @@
+name: "Minimal Starter Config"
+slug: minimal-starter-config
+status: active
+created: 2026-03-31
+updated: 2026-04-01
+
+description: |
+  Generate a minimal .plan-bender.yaml on first setup — only include fields worth surfacing to the user.
+
+why: |
+  The current setup command writes all defaults to .plan-bender.yaml, including tracks,
+  workflow_states, pipeline.skip, and issue_schema.custom_fields. These are verbose, rarely
+  changed, and clutter the config file. Users should see only the fields they're likely to
+  customize; everything else should fall back to built-in defaults silently.
+
+outcome: |
+  pb setup creates a .plan-bender.yaml with only plans_dir, max_points, and agents.
+  All omitted fields resolve to their defaults at load time. The file is clean and scannable.
+
+in_scope:
+  - "Add config.StarterConfig() returning a PartialConfig with only plans_dir, max_points, agents"
+  - "Use StarterConfig() in setup.go instead of Defaults() when writing the initial config file"
+  - "Add omitempty to PipelineConfig.Skip and IssueSchemaConfig.CustomFields on the Config struct"
+  - "Update or add tests that assert the generated file does not contain tracks/workflow_states/pipeline/issue_schema"
+
+out_of_scope:
+  - "Changing how config is loaded or merged — defaults already apply for missing fields"
+  - "Exposing StarterConfig to users via any CLI flag"
+  - "Updating existing .plan-bender.yaml files in place"
+
+use_cases:
+  - id: UC-1
+    description: "User runs pb setup in a new project — .plan-bender.yaml is created with only plans_dir, max_points, and agents"
+  - id: UC-2
+    description: "User with a minimal config file gets full default behavior — tracks, workflow_states, pipeline, and issue_schema all resolve to defaults at load time"
+  - id: UC-3
+    description: "User who has manually added tracks or workflow_states to their config is unaffected — merge logic unchanged"
+
+decisions:
+  - "StarterConfig() lives in config/defaults.go alongside Defaults()"
+  - "StarterConfig() returns PartialConfig — marshals cleanly with omitempty, no nil pointer boilerplate at call site"
+  - "update_check is not included in the starter — it's a low-signal option users never touch"
+  - "omitempty added to Config.Pipeline.Skip and Config.IssueSchema.CustomFields for defensive correctness"
+
+open_questions: []
+
+risks:
+  - "Any test that asserts the generated file contains tracks or workflow_states will break — intentional, update those tests"
+
+validation:
+  - "pb setup on a clean directory produces a .plan-bender.yaml containing only plans_dir, max_points, agents"
+  - "pb setup followed by pb validate (or any command) works correctly — defaults applied at load time"
+  - "All existing config loader tests still pass"
+
+notes: |
+  PartialConfig already has omitempty on all fields. Marshaling a StarterConfig() value naturally
+  omits nil pointers and nil slices — no custom serialization needed.
+
+  The only structural change beyond the new function is adding omitempty to the two sub-struct
+  fields on Config (PipelineConfig.Skip, IssueSchemaConfig.CustomFields) so that if Config
+  is ever serialized directly in the future, empty slices don't leak into output.
