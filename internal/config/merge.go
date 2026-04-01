@@ -11,9 +11,6 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.WorkflowStates != nil {
 		out.WorkflowStates = layer.WorkflowStates
 	}
-	if layer.StepPattern != nil {
-		out.StepPattern = *layer.StepPattern
-	}
 	if layer.PlansDir != nil {
 		out.PlansDir = *layer.PlansDir
 	}

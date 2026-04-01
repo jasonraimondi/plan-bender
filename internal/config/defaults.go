@@ -5,7 +5,6 @@ func Defaults() Config {
 	return Config{
 		Tracks:         []string{"intent", "experience", "data", "rules", "resilience"},
 		WorkflowStates: []string{"backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"},
-		StepPattern:    "Target — behavior",
 		PlansDir:       "./.plan-bender/plans/",
 		MaxPoints:      3,
 		Agents:         []string{"claude-code"},

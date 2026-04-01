@@ -70,7 +70,7 @@ func BuildContext(cfg config.Config, agent string) map[string]any {
 		"plans_dir":          cfg.PlansDir,
 		"tracks":             cfg.Tracks,
 		"workflow_states":    cfg.WorkflowStates,
-		"step_pattern":       cfg.StepPattern,
+		"step_pattern":       "Target — behavior",
 		"max_points":         cfg.MaxPoints,
 		"has_backend_sync":   cfg.Linear.Enabled,
 		"custom_fields":      cfs,

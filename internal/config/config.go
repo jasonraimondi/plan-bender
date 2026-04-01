@@ -31,7 +31,6 @@ type IssueSchemaConfig struct {
 type Config struct {
 	Tracks         []string          `yaml:"tracks"`
 	WorkflowStates []string          `yaml:"workflow_states"`
-	StepPattern    string            `yaml:"step_pattern"`
 	PlansDir       string            `yaml:"plans_dir"`
 	MaxPoints      int               `yaml:"max_points"`
 	Agents         []string          `yaml:"agents"`
@@ -45,7 +44,6 @@ type Config struct {
 type PartialConfig struct {
 	Tracks         []string           `yaml:"tracks,omitempty"`
 	WorkflowStates []string           `yaml:"workflow_states,omitempty"`
-	StepPattern    *string            `yaml:"step_pattern,omitempty"`
 	PlansDir       *string            `yaml:"plans_dir,omitempty"`
 	MaxPoints      *int               `yaml:"max_points,omitempty"`
 	Agents         []string           `yaml:"agents,omitempty"`
