@@ -18,26 +18,32 @@ type selfUpdateCmd struct {
 	checkForUpdate      func(currentVersion string, force bool) (latest string, isNewer bool, err error)
 	detectInstallMethod func() (update.InstallMethod, error)
 	downloadAndReplace  func(version string) error
+	fetchReleaseNotes   func(version string) (string, error)
 }
 
 // NewSelfUpdateCmd creates the self-update command.
 func NewSelfUpdateCmd(version string) *cobra.Command {
+	client := &http.Client{}
 	sc := &selfUpdateCmd{
 		version: version,
 		checkForUpdate: func(currentVersion string, force bool) (string, bool, error) {
-			return update.CheckForUpdate(currentVersion, &http.Client{}, force)
+			return update.CheckForUpdate(currentVersion, client, force)
 		},
 		detectInstallMethod: func() (update.InstallMethod, error) {
 			return update.DetectCurrentInstallMethod()
 		},
 		downloadAndReplace: defaultDownloadAndReplace,
+		fetchReleaseNotes: func(version string) (string, error) {
+			return update.FetchReleaseNotes(client, "https://api.github.com", version)
+		},
 	}
 
 	cmd := &cobra.Command{
-		Use:   "self-update",
-		Short: "Update pb to the latest version",
-		Args:  cobra.NoArgs,
-		RunE:  sc.run,
+		Use:     "self-update",
+		Aliases: []string{"update"},
+		Short:   "Update pb to the latest version",
+		Args:    cobra.NoArgs,
+		RunE:    sc.run,
 	}
 
 	cmd.Flags().BoolVar(&sc.force, "force", false, "bypass version cache and check GitHub directly")
@@ -90,6 +96,9 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		fmt.Fprintf(out, "Updated pb: v%s → v%s\n", sc.version, latest)
+		if notes, err := sc.fetchReleaseNotes(latest); err == nil && notes != "" {
+			fmt.Fprintf(out, "\nChangelog (v%s):\n%s\n", latest, notes)
+		}
 	}
 
 	return nil

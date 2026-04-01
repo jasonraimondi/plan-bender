@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	cacheTTL    = 24 * time.Hour
-	httpTimeout = 3 * time.Second
-	cacheFile   = "latest-version.json"
-	githubAPI   = "https://api.github.com"
-	repoPath    = "/repos/jasonraimondi/plan-bender/releases/latest"
+	cacheTTL       = 24 * time.Hour
+	httpTimeout    = 3 * time.Second
+	cacheFile      = "latest-version.json"
+	githubAPI      = "https://api.github.com"
+	repoPath       = "/repos/jasonraimondi/plan-bender/releases/latest"
+	repoTagsPath   = "/repos/jasonraimondi/plan-bender/releases/tags/"
 )
 
 type VersionInfo struct {
@@ -26,6 +27,7 @@ type VersionInfo struct {
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`
+	Body    string `json:"body"`
 }
 
 func CheckForUpdate(currentVersion string, client *http.Client, force bool) (latest string, isNewer bool, err error) {
@@ -102,6 +104,28 @@ func FetchLatest(client *http.Client, baseURL string) (string, error) {
 	}
 
 	return strings.TrimPrefix(release.TagName, "v"), nil
+}
+
+// FetchReleaseNotes returns the body/changelog of the GitHub release for the given version.
+func FetchReleaseNotes(client *http.Client, baseURL, version string) (string, error) {
+	url := baseURL + repoTagsPath + "v" + version
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("fetching release notes: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fetching release notes: status %d", resp.StatusCode)
+	}
+
+	var release githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("decoding release notes: %w", err)
+	}
+
+	return release.Body, nil
 }
 
 func readCache(path string) (VersionInfo, error) {

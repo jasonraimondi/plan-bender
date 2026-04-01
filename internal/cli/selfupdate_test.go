@@ -11,6 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSelfUpdate_HasUpdateAlias(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.0.0")
+	assert.Contains(t, cmd.Aliases, "update")
+}
+
 func TestSelfUpdate_DevVersion(t *testing.T) {
 	cmd := NewSelfUpdateCmd("dev")
 	var out strings.Builder
@@ -78,6 +83,50 @@ func TestSelfUpdate_DirectBinary_DownloadsAndReplaces(t *testing.T) {
 	output := out.String()
 	assert.Contains(t, output, "Updating pb to v1.2.3...")
 	assert.Contains(t, output, "Updated pb: v1.0.0 → v1.2.3")
+}
+
+func TestSelfUpdate_DirectBinary_PrintsChangelog(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.0.0")
+	sc := selfUpdateFromCmd(cmd)
+	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+		return "1.2.3", true, nil
+	}
+	sc.detectInstallMethod = func() (update.InstallMethod, error) {
+		return update.InstallMethodDirect, nil
+	}
+	sc.downloadAndReplace = func(version string) error { return nil }
+	sc.fetchReleaseNotes = func(version string) (string, error) {
+		return "- add pi and opencode support", nil
+	}
+
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+
+	output := out.String()
+	assert.Contains(t, output, "Changelog (v1.2.3):")
+	assert.Contains(t, output, "- add pi and opencode support")
+}
+
+func TestSelfUpdate_DirectBinary_SkipsChangelogOnError(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.0.0")
+	sc := selfUpdateFromCmd(cmd)
+	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+		return "1.2.3", true, nil
+	}
+	sc.detectInstallMethod = func() (update.InstallMethod, error) {
+		return update.InstallMethodDirect, nil
+	}
+	sc.downloadAndReplace = func(version string) error { return nil }
+	sc.fetchReleaseNotes = func(version string) (string, error) {
+		return "", errors.New("network error")
+	}
+
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+
+	assert.NotContains(t, out.String(), "Changelog")
 }
 
 func TestSelfUpdate_DirectBinary_PermissionDenied(t *testing.T) {
