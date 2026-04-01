@@ -144,7 +144,9 @@ Tracks and workflow states are fully customizable.
 | Agent | Skill directory | Scope |
 |---|---|---|
 | `claude-code` | `.claude/skills/` | Project or user |
+| `opencode` | `.opencode/skills/` | Project or user |
 | `openclaw` | `~/.openclaw/skills/` | User only |
+| `pi` | `.pi/skills/` | Project or user |
 
 ### Migrating from `install_target`
 

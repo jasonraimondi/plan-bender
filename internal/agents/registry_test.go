@@ -35,6 +35,24 @@ func TestGet(t *testing.T) {
 			wantScope:    agents.UserOnly,
 			hasGitignore: false,
 		},
+		{
+			name:           "opencode returns correct config",
+			agentName:      "opencode",
+			wantProjectDir: ".opencode/skills/",
+			wantUserDir:    "~/.config/opencode/skills/",
+			wantScope:      agents.ProjectOrUser,
+			wantGitignore:  ".opencode/skills/bender-*",
+			hasGitignore:   true,
+		},
+		{
+			name:           "pi returns correct config",
+			agentName:      "pi",
+			wantProjectDir: ".pi/skills/",
+			wantUserDir:    "~/.pi/agent/skills/",
+			wantScope:      agents.ProjectOrUser,
+			wantGitignore:  ".pi/skills/bender-*",
+			hasGitignore:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -67,7 +85,9 @@ func TestNames(t *testing.T) {
 
 	assert.Contains(t, names, "claude-code")
 	assert.Contains(t, names, "openclaw")
-	assert.Len(t, names, 2)
+	assert.Contains(t, names, "opencode")
+	assert.Contains(t, names, "pi")
+	assert.Len(t, names, 4)
 
 	assert.True(t, slices.IsSorted(names), "Names() should return sorted names")
 }

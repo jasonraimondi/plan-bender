@@ -36,6 +36,20 @@ var registry = map[string]AgentConfig{
 		UserDir: "~/.openclaw/skills/",
 		Scope:   UserOnly,
 	},
+	"opencode": {
+		Name:             "opencode",
+		ProjectDir:       ".opencode/skills/",
+		UserDir:          "~/.config/opencode/skills/",
+		Scope:            ProjectOrUser,
+		GitignorePattern: ".opencode/skills/bender-*",
+	},
+	"pi": {
+		Name:             "pi",
+		ProjectDir:       ".pi/skills/",
+		UserDir:          "~/.pi/agent/skills/",
+		Scope:            ProjectOrUser,
+		GitignorePattern: ".pi/skills/bender-*",
+	},
 }
 
 // Get returns the AgentConfig for the given agent name, or an error if not found.
