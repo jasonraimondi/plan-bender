@@ -19,12 +19,12 @@ type LinearConfig struct {
 
 // PipelineConfig controls which pipeline steps to skip.
 type PipelineConfig struct {
-	Skip []string `yaml:"skip"`
+	Skip []string `yaml:"skip,omitempty"`
 }
 
 // IssueSchemaConfig controls custom fields on issues.
 type IssueSchemaConfig struct {
-	CustomFields []CustomFieldDef `yaml:"custom_fields"`
+	CustomFields []CustomFieldDef `yaml:"custom_fields,omitempty"`
 }
 
 // Config is the fully resolved configuration.

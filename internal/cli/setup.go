@@ -62,8 +62,7 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	// 1. Write defaults if no config exists
 	created := false
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		defaults := config.Defaults()
-		data, err := yaml.Marshal(defaults)
+		data, err := yaml.Marshal(config.StarterConfig())
 		if err != nil {
 			return err
 		}
