@@ -53,11 +53,16 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
 
-	// Config file created
+	// Config file created with only the fields worth surfacing
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.yaml"))
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "plans_dir")
 	assert.Contains(t, string(data), "max_points: 3")
+	assert.Contains(t, string(data), "agents:")
+	assert.NotContains(t, string(data), "tracks:")
+	assert.NotContains(t, string(data), "workflow_states:")
+	assert.NotContains(t, string(data), "pipeline:")
+	assert.NotContains(t, string(data), "issue_schema:")
 
 	output := h.output()
 	assert.Contains(t, output, "Config:  .plan-bender.yaml (created)")
