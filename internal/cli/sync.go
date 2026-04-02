@@ -8,7 +8,6 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -60,76 +59,12 @@ func syncPush(cmd *cobra.Command, slug string) error {
 	}
 
 	store := backend.NewProdPlanStore(cfg.PlansDir)
-
-	// Read PRD
-	prd, err := store.ReadPrd(slug)
+	result, err := backend.SyncPush(ctx, store, be, slug)
 	if err != nil {
 		return err
 	}
 
-	// Ensure project exists
-	projectID := ""
-	if prd.Linear != nil && prd.Linear.ProjectID != "" {
-		projectID = prd.Linear.ProjectID
-	} else {
-		project, err := be.CreateProject(ctx, prd)
-		if err != nil {
-			return fmt.Errorf("creating project: %w", err)
-		}
-		projectID = project.ID
-		if prd.Linear == nil {
-			prd.Linear = &schema.LinearRef{}
-		}
-		prd.Linear.ProjectID = projectID
-		if err := store.WritePrd(slug, prd); err != nil {
-			return fmt.Errorf("writing PRD: %w", err)
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "created project %s\n", projectID)
-	}
-
-	// Push issues
-	issues, err := store.ReadIssues(slug)
-	if err != nil {
-		return err
-	}
-
-	created, updated := 0, 0
-	for i := range issues {
-		issue := &issues[i]
-		if issue.LinearID != nil && *issue.LinearID != "" {
-			// Update existing
-			_, err := be.UpdateIssue(ctx, issue)
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "error updating #%d: %v\n", issue.ID, err)
-				continue
-			}
-			updated++
-		} else {
-			// Create new
-			remote, err := be.CreateIssue(ctx, issue, projectID)
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "error creating #%d: %v\n", issue.ID, err)
-				continue
-			}
-			// Write linear_id back
-			remoteID := remote.ID
-			issue.LinearID = &remoteID
-			if err := store.WriteIssue(slug, issue); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "error writing #%d: %v\n", issue.ID, err)
-			}
-			created++
-		}
-	}
-
-	if isAgentMode(cmd) {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
-			"status":  "ok",
-			"created": created,
-			"updated": updated,
-		})
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "push complete: %d created, %d updated\n", created, updated)
-	return nil
+	return formatSyncResult(cmd, "push", result)
 }
 
 func syncPull(cmd *cobra.Command, slug string) error {
@@ -147,78 +82,39 @@ func syncPull(cmd *cobra.Command, slug string) error {
 	}
 
 	store := backend.NewProdPlanStore(cfg.PlansDir)
-
-	// Read PRD for project ID
-	prd, err := store.ReadPrd(slug)
+	result, err := backend.SyncPull(ctx, store, be, slug)
 	if err != nil {
 		return err
 	}
 
-	if prd.Linear == nil || prd.Linear.ProjectID == "" {
-		return fmt.Errorf("no linear.project_id in PRD — run push first")
-	}
+	return formatSyncResult(cmd, "pull", result)
+}
 
-	result, err := be.PullProject(ctx, prd.Linear.ProjectID)
-	if err != nil {
-		return fmt.Errorf("pulling project: %w", err)
-	}
-
-	// Read local issues and update from remote
-	issues, err := store.ReadIssues(slug)
-	if err != nil {
-		return err
-	}
-
-	// Build remote index by ID
-	remoteByID := make(map[string]backend.RemoteIssue)
-	for _, ri := range result.Issues {
-		remoteByID[ri.ID] = ri
-	}
-
-	changed := 0
-	for i := range issues {
-		issue := &issues[i]
-		if issue.LinearID == nil || *issue.LinearID == "" {
-			continue
-		}
-		remote, ok := remoteByID[*issue.LinearID]
-		if !ok {
-			continue
-		}
-
-		// Compare and update
-		dirty := false
-		if remote.Status != "" && remote.Status != issue.Status {
-			issue.Status = remote.Status
-			dirty = true
-		}
-		if remote.Priority != "" && remote.Priority != issue.Priority {
-			issue.Priority = remote.Priority
-			dirty = true
-		}
-		if remote.Assignee != "" {
-			assignee := remote.Assignee
-			if issue.Assignee == nil || *issue.Assignee != assignee {
-				issue.Assignee = &assignee
-				dirty = true
-			}
-		}
-
-		if dirty {
-			if err := store.WriteIssue(slug, issue); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "error writing #%d: %v\n", issue.ID, err)
-				continue
-			}
-			changed++
-		}
+func formatSyncResult(cmd *cobra.Command, op string, result backend.SyncResult) error {
+	for _, e := range result.Errors {
+		fmt.Fprintf(cmd.ErrOrStderr(), "error: %v\n", e)
 	}
 
 	if isAgentMode(cmd) {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+		resp := map[string]any{
 			"status":  "ok",
-			"updated": changed,
-		})
+			"created": result.Created,
+			"updated": result.Updated,
+		}
+		if len(result.Errors) > 0 {
+			resp["status"] = "partial"
+			errs := make([]map[string]any, len(result.Errors))
+			for i, e := range result.Errors {
+				errs[i] = map[string]any{"issue_id": e.IssueID, "error": e.Err.Error()}
+			}
+			resp["errors"] = errs
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(resp)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "pull complete: %d issues updated\n", changed)
+
+	fmt.Fprintf(cmd.OutOrStdout(), "%s complete: %d created, %d updated\n", op, result.Created, result.Updated)
+	if len(result.Errors) > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "%d errors\n", len(result.Errors))
+	}
 	return nil
 }

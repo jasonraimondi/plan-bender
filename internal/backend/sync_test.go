@@ -232,3 +232,98 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 	require.NotNil(t, updatedPrd.Linear)
 	assert.Equal(t, "new-proj", updatedPrd.Linear.ProjectID)
 }
+
+// --- SyncPull tests ---
+
+func TestSyncPull_StatusUpdate(t *testing.T) {
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+
+	linID := "lin-1"
+	issue := testIssue(1)
+	issue.LinearID = &linID
+	issue.Status = "backlog"
+
+	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+
+	be := &mockBackend{
+		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
+			return PullProjectResult{
+				Project: RemoteProject{ID: "proj-1"},
+				Issues: []RemoteIssue{
+					{ID: "lin-1", Status: "in-progress"},
+				},
+			}, nil
+		},
+	}
+
+	result, err := SyncPull(context.Background(), store, be, "test")
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Updated)
+	assert.Empty(t, result.Errors)
+
+	updated := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	assert.Equal(t, "in-progress", updated.Status)
+}
+
+func TestSyncPull_PriorityAndAssignee(t *testing.T) {
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+
+	linID := "lin-1"
+	issue := testIssue(1)
+	issue.LinearID = &linID
+	issue.Priority = "low"
+	issue.Assignee = nil
+
+	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+
+	be := &mockBackend{
+		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
+			return PullProjectResult{
+				Project: RemoteProject{ID: "proj-1"},
+				Issues: []RemoteIssue{
+					{ID: "lin-1", Status: "backlog", Priority: "urgent", Assignee: "alice"},
+				},
+			}, nil
+		},
+	}
+
+	result, err := SyncPull(context.Background(), store, be, "test")
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Updated)
+	assert.Empty(t, result.Errors)
+
+	updated := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	assert.Equal(t, "urgent", updated.Priority)
+	require.NotNil(t, updated.Assignee)
+	assert.Equal(t, "alice", *updated.Assignee)
+}
+
+func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+
+	issue := testIssue(1)
+	// No linear_id — should be skipped
+
+	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+
+	be := &mockBackend{
+		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
+			return PullProjectResult{
+				Project: RemoteProject{ID: "proj-1"},
+				Issues:  []RemoteIssue{{ID: "lin-1", Status: "done"}},
+			}, nil
+		},
+	}
+
+	result, err := SyncPull(context.Background(), store, be, "test")
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Updated)
+	assert.Empty(t, result.Errors)
+
+	// Issue should be unchanged
+	unchanged := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	assert.Equal(t, "backlog", unchanged.Status)
+}

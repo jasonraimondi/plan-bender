@@ -90,3 +90,72 @@ func SyncPush(ctx context.Context, store *PlanStore, be Backend, slug string) (S
 
 	return result, nil
 }
+
+// SyncPull pulls remote state and updates local issues.
+// It matches local issues to remote by linear_id, updates dirty fields,
+// and writes changed issues back via store.WriteIssue.
+func SyncPull(ctx context.Context, store *PlanStore, be Backend, slug string) (SyncResult, error) {
+	var result SyncResult
+
+	prd, err := store.ReadPrd(slug)
+	if err != nil {
+		return result, err
+	}
+
+	if prd.Linear == nil || prd.Linear.ProjectID == "" {
+		return result, fmt.Errorf("no linear.project_id in PRD — run push first")
+	}
+
+	remote, err := be.PullProject(ctx, prd.Linear.ProjectID)
+	if err != nil {
+		return result, fmt.Errorf("pulling project: %w", err)
+	}
+
+	issues, err := store.ReadIssues(slug)
+	if err != nil {
+		return result, err
+	}
+
+	// Index remote issues by ID
+	remoteByID := make(map[string]RemoteIssue, len(remote.Issues))
+	for _, ri := range remote.Issues {
+		remoteByID[ri.ID] = ri
+	}
+
+	for i := range issues {
+		issue := &issues[i]
+		if issue.LinearID == nil || *issue.LinearID == "" {
+			continue
+		}
+		ri, ok := remoteByID[*issue.LinearID]
+		if !ok {
+			continue
+		}
+
+		dirty := false
+		if ri.Status != "" && ri.Status != issue.Status {
+			issue.Status = ri.Status
+			dirty = true
+		}
+		if ri.Priority != "" && ri.Priority != issue.Priority {
+			issue.Priority = ri.Priority
+			dirty = true
+		}
+		if ri.Assignee != "" {
+			if issue.Assignee == nil || *issue.Assignee != ri.Assignee {
+				issue.Assignee = &ri.Assignee
+				dirty = true
+			}
+		}
+
+		if dirty {
+			if err := store.WriteIssue(slug, issue); err != nil {
+				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
+				continue
+			}
+			result.Updated++
+		}
+	}
+
+	return result, nil
+}
