@@ -17,8 +17,9 @@
 node_modules/
 
 # Local config
-.plan-bender.local.yaml
+CLAUDE.local.md
 .serena/serena.local.yaml
+.plan-bender.local.yaml
 .plan-bender/
 .claude/skills/bender-*
 .claude/worktrees/
