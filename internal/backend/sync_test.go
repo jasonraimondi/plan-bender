@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -326,4 +327,72 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 	// Issue should be unchanged
 	unchanged := readIssueFromDisk(t, store, "test", 1, "test-issue")
 	assert.Equal(t, "backlog", unchanged.Status)
+}
+
+// --- Marshal/write error propagation tests ---
+
+func TestSyncPush_WriteIssueError(t *testing.T) {
+	// Set up a store where WriteIssue fails (simulating marshal/write failure)
+	dir := t.TempDir()
+	realStore := NewProdPlanStore(dir)
+
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+	require.NoError(t, realStore.WritePrd("test", prd))
+
+	issue := testIssue(1)
+	require.NoError(t, realStore.WriteIssue("test", issue))
+
+	// Create a store with a failing write func (reads from real disk, writes fail)
+	failStore := NewPlanStore(dir, prodFS(dir), func(_ string, _ []byte, _ fs.FileMode) error {
+		return fmt.Errorf("write failed")
+	}, prodMkdir)
+
+	be := &mockBackend{
+		createIssue: func(_ context.Context, _ *schema.IssueYaml, _ string) (RemoteIssue, error) {
+			return RemoteIssue{ID: "lin-1"}, nil
+		},
+	}
+
+	result, err := SyncPush(context.Background(), failStore, be, "test")
+	require.NoError(t, err) // SyncPush itself succeeds (continue-on-error)
+	require.Len(t, result.Errors, 1)
+	assert.Equal(t, 1, result.Errors[0].IssueID)
+	assert.Contains(t, result.Errors[0].Err.Error(), "write failed")
+	assert.Equal(t, 0, result.Created) // not counted as created since write-back failed
+}
+
+func TestSyncPull_WriteIssueError(t *testing.T) {
+	dir := t.TempDir()
+	realStore := NewProdPlanStore(dir)
+
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+	require.NoError(t, realStore.WritePrd("test", prd))
+
+	linID := "lin-1"
+	issue := testIssue(1)
+	issue.LinearID = &linID
+	require.NoError(t, realStore.WriteIssue("test", issue))
+
+	// Store that reads from real disk but fails on write
+	failStore := NewPlanStore(dir, prodFS(dir), func(_ string, _ []byte, _ fs.FileMode) error {
+		return fmt.Errorf("disk error")
+	}, prodMkdir)
+
+	be := &mockBackend{
+		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
+			return PullProjectResult{
+				Project: RemoteProject{ID: "proj-1"},
+				Issues:  []RemoteIssue{{ID: "lin-1", Status: "done"}},
+			}, nil
+		},
+	}
+
+	result, err := SyncPull(context.Background(), failStore, be, "test")
+	require.NoError(t, err) // SyncPull itself succeeds (continue-on-error)
+	require.Len(t, result.Errors, 1)
+	assert.Equal(t, 1, result.Errors[0].IssueID)
+	assert.Contains(t, result.Errors[0].Err.Error(), "disk error")
+	assert.Equal(t, 0, result.Updated) // not counted as updated since write failed
 }
