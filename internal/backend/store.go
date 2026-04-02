@@ -30,6 +30,11 @@ func NewPlanStore(root string, fsys fs.FS, write WriteFunc, mkdir MkdirFunc) *Pl
 	return &PlanStore{root: root, fsys: fsys, write: write, mkdir: mkdir}
 }
 
+// NewProdPlanStore creates a PlanStore wired with production I/O (os filesystem, atomic writes).
+func NewProdPlanStore(plansDir string) *PlanStore {
+	return NewPlanStore(plansDir, prodFS(plansDir), AtomicWrite, prodMkdir)
+}
+
 // ReadPrd reads and parses a PRD YAML file.
 func (s *PlanStore) ReadPrd(slug string) (*schema.PrdYaml, error) {
 	path := filepath.Join(slug, "prd.yaml")

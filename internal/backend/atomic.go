@@ -11,8 +11,8 @@ func prodFS(dir string) fs.FS {
 	return os.DirFS(dir)
 }
 
-// prodWrite is the production WriteFunc using atomic temp+rename.
-func prodWrite(path string, data []byte, perm fs.FileMode) error {
+// AtomicWrite is the production WriteFunc using atomic temp+rename.
+func AtomicWrite(path string, data []byte, perm fs.FileMode) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".pb-*")
 	if err != nil {

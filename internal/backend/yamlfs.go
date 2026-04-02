@@ -16,13 +16,7 @@ type yamlFS struct {
 
 // NewYAMLFS creates a yaml-fs backend from config.
 func NewYAMLFS(cfg config.Config) Backend {
-	store := NewPlanStore(
-		cfg.PlansDir,
-		prodFS(cfg.PlansDir),
-		prodWrite,
-		prodMkdir,
-	)
-	return &yamlFS{store: store}
+	return &yamlFS{store: NewProdPlanStore(cfg.PlansDir)}
 }
 
 // newYAMLFSWithStore creates a yaml-fs backend with a custom store (for testing).

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
@@ -32,7 +33,8 @@ func NewArchiveCmd() *cobra.Command {
 			}
 
 			planDir := filepath.Join(cfg.PlansDir, slug)
-			issues, err := loadIssues(cfg.PlansDir, slug)
+			store := backend.NewProdPlanStore(cfg.PlansDir)
+			issues, err := store.ReadIssues(slug)
 			if err != nil {
 				return err
 			}

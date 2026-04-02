@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
@@ -45,22 +46,13 @@ func NewWriteIssueCmd() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 
-			dir := filepath.Join(cfg.PlansDir, slug, "issues")
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			store := backend.NewProdPlanStore(cfg.PlansDir)
+			if err := store.WriteIssue(slug, &issue); err != nil {
 				return err
 			}
 
-			filename := fmt.Sprintf("%d-%s.yaml", issue.ID, issue.Slug)
-			outPath := filepath.Join(dir, filename)
-			outData, err := yaml.Marshal(&issue)
-			if err != nil {
-				return err
-			}
-
-			if err := atomicWriteFile(outPath, outData, 0o644); err != nil {
-				return err
-			}
-
+			outPath := filepath.Join(cfg.PlansDir, slug, "issues",
+				fmt.Sprintf("%d-%s.yaml", issue.ID, issue.Slug))
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
 					"status": "ok",

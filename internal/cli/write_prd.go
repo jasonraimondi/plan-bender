@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
@@ -46,21 +47,12 @@ func NewWritePrdCmd() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 
-			dir := filepath.Join(cfg.PlansDir, slug)
-			if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+			store := backend.NewProdPlanStore(cfg.PlansDir)
+			if err := store.WritePrd(slug, &prd); err != nil {
 				return err
 			}
 
-			outPath := filepath.Join(dir, "prd.yaml")
-			outData, err := yaml.Marshal(&prd)
-			if err != nil {
-				return err
-			}
-
-			if err := atomicWriteFile(outPath, outData, 0o644); err != nil {
-				return err
-			}
-
+			outPath := filepath.Join(cfg.PlansDir, slug, "prd.yaml")
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
 					"status": "ok",
@@ -85,26 +77,3 @@ func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
 	return io.ReadAll(cmd.InOrStdin())
 }
 
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".pb-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Chmod(tmpName, perm); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return os.Rename(tmpName, path)
-}
