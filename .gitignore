@@ -23,3 +23,4 @@ CLAUDE.local.md
 .plan-bender/
 .claude/skills/bender-*
 .claude/worktrees/
+.pi/skills/bender-*
