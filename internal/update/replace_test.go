@@ -73,7 +73,7 @@ func TestRecreateSymlink(t *testing.T) {
 		binaryPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(binaryPath, []byte("binary"), 0o755))
 
-		err := RecreateSymlink(dir)
+		err := RecreateSymlink(dir, "plan-bender", "pb")
 		require.NoError(t, err)
 
 		symlinkPath := filepath.Join(dir, "pb")
@@ -82,7 +82,21 @@ func TestRecreateSymlink(t *testing.T) {
 		assert.Equal(t, "plan-bender", target)
 	})
 
-	t.Run("replaces existing pb symlink", func(t *testing.T) {
+	t.Run("creates pba symlink pointing to plan-bender-agent", func(t *testing.T) {
+		dir := t.TempDir()
+		binaryPath := filepath.Join(dir, "plan-bender-agent")
+		require.NoError(t, os.WriteFile(binaryPath, []byte("agent-binary"), 0o755))
+
+		err := RecreateSymlink(dir, "plan-bender-agent", "pba")
+		require.NoError(t, err)
+
+		symlinkPath := filepath.Join(dir, "pba")
+		target, err := os.Readlink(symlinkPath)
+		require.NoError(t, err)
+		assert.Equal(t, "plan-bender-agent", target)
+	})
+
+	t.Run("replaces existing symlink", func(t *testing.T) {
 		dir := t.TempDir()
 		binaryPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(binaryPath, []byte("binary"), 0o755))
@@ -91,7 +105,7 @@ func TestRecreateSymlink(t *testing.T) {
 		symlinkPath := filepath.Join(dir, "pb")
 		require.NoError(t, os.Symlink("old-target", symlinkPath))
 
-		err := RecreateSymlink(dir)
+		err := RecreateSymlink(dir, "plan-bender", "pb")
 		require.NoError(t, err)
 
 		target, err := os.Readlink(symlinkPath)
@@ -99,7 +113,7 @@ func TestRecreateSymlink(t *testing.T) {
 		assert.Equal(t, "plan-bender", target)
 	})
 
-	t.Run("replaces existing pb regular file", func(t *testing.T) {
+	t.Run("replaces existing regular file", func(t *testing.T) {
 		dir := t.TempDir()
 		binaryPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(binaryPath, []byte("binary"), 0o755))
@@ -108,7 +122,7 @@ func TestRecreateSymlink(t *testing.T) {
 		symlinkPath := filepath.Join(dir, "pb")
 		require.NoError(t, os.WriteFile(symlinkPath, []byte("not-a-symlink"), 0o755))
 
-		err := RecreateSymlink(dir)
+		err := RecreateSymlink(dir, "plan-bender", "pb")
 		require.NoError(t, err)
 
 		target, err := os.Readlink(symlinkPath)

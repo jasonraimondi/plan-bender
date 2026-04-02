@@ -89,45 +89,62 @@ func TestVerifyChecksum(t *testing.T) {
 	})
 }
 
-func TestExtractBinary(t *testing.T) {
-	t.Run("extracts plan-bender binary from tarball", func(t *testing.T) {
+func TestExtractBinaries(t *testing.T) {
+	t.Run("extracts both binaries from tarball", func(t *testing.T) {
 		tarball := createTestTarball(t, map[string][]byte{
-			"plan-bender": []byte("#!/bin/fake-binary"),
-			"README.md":   []byte("# Plan Bender"),
+			"plan-bender":       []byte("#!/bin/fake-binary"),
+			"plan-bender-agent": []byte("#!/bin/fake-agent"),
+			"README.md":         []byte("# Plan Bender"),
 		})
 
 		dest := t.TempDir()
-		binPath, err := ExtractBinary(tarball, dest)
+		mainBin, agentBin, err := ExtractBinaries(tarball, dest)
 		require.NoError(t, err)
 
-		assert.Equal(t, filepath.Join(dest, "plan-bender"), binPath)
+		assert.Equal(t, filepath.Join(dest, "plan-bender"), mainBin)
+		assert.Equal(t, filepath.Join(dest, "plan-bender-agent"), agentBin)
 
-		data, err := os.ReadFile(binPath)
+		data, err := os.ReadFile(mainBin)
 		require.NoError(t, err)
 		assert.Equal(t, "#!/bin/fake-binary", string(data))
+
+		agentData, err := os.ReadFile(agentBin)
+		require.NoError(t, err)
+		assert.Equal(t, "#!/bin/fake-agent", string(agentData))
 
 		// README should not be extracted
 		_, err = os.Stat(filepath.Join(dest, "README.md"))
 		assert.True(t, os.IsNotExist(err))
 	})
 
-	t.Run("returns error when binary not found in archive", func(t *testing.T) {
+	t.Run("returns error when main binary not found", func(t *testing.T) {
 		tarball := createTestTarball(t, map[string][]byte{
-			"README.md": []byte("# no binary here"),
+			"plan-bender-agent": []byte("#!/bin/fake-agent"),
 		})
 
 		dest := t.TempDir()
-		_, err := ExtractBinary(tarball, dest)
+		_, _, err := ExtractBinaries(tarball, dest)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "plan-bender binary not found")
+	})
+
+	t.Run("returns error when agent binary not found", func(t *testing.T) {
+		tarball := createTestTarball(t, map[string][]byte{
+			"plan-bender": []byte("#!/bin/fake-binary"),
+		})
+
+		dest := t.TempDir()
+		_, _, err := ExtractBinaries(tarball, dest)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "plan-bender-agent binary not found")
 	})
 }
 
 func TestDownloadAndVerify(t *testing.T) {
-	binaryContent := []byte("#!/bin/fake-plan-bender")
 	tarballBytes := createTestTarballBytes(t, map[string][]byte{
-		"plan-bender": binaryContent,
-		"README.md":   []byte("# Plan Bender"),
+		"plan-bender":       []byte("#!/bin/fake-plan-bender"),
+		"plan-bender-agent": []byte("#!/bin/fake-agent"),
+		"README.md":         []byte("# Plan Bender"),
 	})
 
 	tarballHash := sha256.Sum256(tarballBytes)
@@ -145,21 +162,25 @@ func TestDownloadAndVerify(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	binPath, err := DownloadAndVerify("v1.0.0", "darwin", "arm64", srv.URL+"/releases/download")
+	mainBin, agentBin, err := DownloadAndVerify("v1.0.0", "darwin", "arm64", srv.URL+"/releases/download")
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(binPath)
+	data, err := os.ReadFile(mainBin)
 	require.NoError(t, err)
 	assert.Equal(t, "#!/bin/fake-plan-bender", string(data))
 
+	agentData, err := os.ReadFile(agentBin)
+	require.NoError(t, err)
+	assert.Equal(t, "#!/bin/fake-agent", string(agentData))
+
 	// Cleanup
-	os.Remove(binPath)
-	os.Remove(filepath.Dir(binPath))
+	os.RemoveAll(filepath.Dir(mainBin))
 }
 
 func TestDownloadAndVerify_ChecksumMismatch(t *testing.T) {
 	tarballBytes := createTestTarballBytes(t, map[string][]byte{
-		"plan-bender": []byte("binary"),
+		"plan-bender":       []byte("binary"),
+		"plan-bender-agent": []byte("agent"),
 	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +195,7 @@ func TestDownloadAndVerify_ChecksumMismatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := DownloadAndVerify("v1.0.0", "linux", "amd64", srv.URL+"/releases/download")
+	_, _, err := DownloadAndVerify("v1.0.0", "linux", "amd64", srv.URL+"/releases/download")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "checksum mismatch")
 }
@@ -183,7 +204,7 @@ func TestDownloadAndVerify_404(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	defer srv.Close()
 
-	_, err := DownloadAndVerify("v99.99.99", "linux", "amd64", srv.URL+"/releases/download")
+	_, _, err := DownloadAndVerify("v99.99.99", "linux", "amd64", srv.URL+"/releases/download")
 	require.Error(t, err)
 }
 

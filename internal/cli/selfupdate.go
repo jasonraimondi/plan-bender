@@ -116,19 +116,27 @@ func defaultDownloadAndReplace(version string) error {
 		return fmt.Errorf("resolving symlinks: %w", err)
 	}
 
-	newBinaryPath, err := update.DownloadAndVerify(version, runtime.GOOS, runtime.GOARCH, "")
+	mainBin, agentBin, err := update.DownloadAndVerify(version, runtime.GOOS, runtime.GOARCH, "")
 	if err != nil {
 		return fmt.Errorf("downloading update: %w", err)
 	}
-	defer os.RemoveAll(filepath.Dir(newBinaryPath))
-
-	if err := update.ReplaceBinary(newBinaryPath, realPath); err != nil {
-		return err
-	}
+	defer os.RemoveAll(filepath.Dir(mainBin))
 
 	binaryDir := filepath.Dir(realPath)
-	if err := update.RecreateSymlink(binaryDir); err != nil {
+
+	if err := update.ReplaceBinary(mainBin, realPath); err != nil {
+		return err
+	}
+	if err := update.RecreateSymlink(binaryDir, "plan-bender", "pb"); err != nil {
 		return fmt.Errorf("recreating symlink: %w", err)
+	}
+
+	agentTargetPath := filepath.Join(binaryDir, "plan-bender-agent")
+	if err := update.ReplaceBinary(agentBin, agentTargetPath); err != nil {
+		return fmt.Errorf("replacing agent binary: %w", err)
+	}
+	if err := update.RecreateSymlink(binaryDir, "plan-bender-agent", "pba"); err != nil {
+		return fmt.Errorf("recreating agent symlink: %w", err)
 	}
 
 	return nil

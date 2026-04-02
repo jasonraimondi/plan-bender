@@ -47,18 +47,17 @@ func ReplaceBinary(newBinaryPath, targetPath string) error {
 	return nil
 }
 
-// RecreateSymlink creates (or recreates) a "pb" symlink in binaryDir
-// pointing to "plan-bender". Any existing file or symlink at the pb path
-// is removed first.
-func RecreateSymlink(binaryDir string) error {
-	symlinkPath := filepath.Join(binaryDir, "pb")
+// RecreateSymlink creates (or recreates) a symlink named linkName in binaryDir
+// pointing to target. Any existing file or symlink at the path is removed first.
+func RecreateSymlink(binaryDir, target, linkName string) error {
+	symlinkPath := filepath.Join(binaryDir, linkName)
 
 	// Remove whatever is there (symlink, file, or nothing)
 	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing old symlink: %w", err)
 	}
 
-	if err := os.Symlink("plan-bender", symlinkPath); err != nil {
+	if err := os.Symlink(target, symlinkPath); err != nil {
 		return fmt.Errorf("creating symlink: %w", err)
 	}
 
