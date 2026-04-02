@@ -113,7 +113,6 @@ agents:
   - claude-code
 plans_dir: ./.plan-bender/plans/
 max_points: 3                  # Cap per issue — forces thin slices
-step_pattern: "Target — behavior"
 
 tracks:
   - intent
