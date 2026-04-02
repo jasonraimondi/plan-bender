@@ -23,6 +23,11 @@ func NewClient(apiKey string) *Client {
 			base:   http.DefaultTransport,
 		},
 	}
+	return NewClientWithHTTP(httpClient)
+}
+
+// NewClientWithHTTP creates a Linear client with a custom http.Client (for testing).
+func NewClientWithHTTP(httpClient *http.Client) *Client {
 	gql := graphql.NewClient(linearAPIURL, httpClient)
 	return &Client{gql: gql}
 }

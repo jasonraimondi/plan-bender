@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/linear"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,4 +64,49 @@ func TestResolveStateID(t *testing.T) {
 
 	// No match
 	assert.Equal(t, "", b.resolveStateID("nonexistent"))
+}
+
+func TestLinearIssueToRemote_WithAssignee(t *testing.T) {
+	issue := &linear.Issue{
+		ID:       "lin-1",
+		Title:    "Test",
+		Priority: 2,
+		URL:      "https://linear.app/issue/lin-1",
+	}
+	issue.State.Name = "In Progress"
+	issue.Labels.Nodes = []struct{ Name string }{{Name: "bug"}, {Name: "p0"}}
+	issue.Assignee = &struct{ Name string }{Name: "alice"}
+
+	remote := linearIssueToRemote(issue)
+	assert.Equal(t, "lin-1", remote.ID)
+	assert.Equal(t, "Test", remote.Title)
+	assert.Equal(t, "In Progress", remote.Status)
+	assert.Equal(t, "high", remote.Priority) // Linear 2 → "high"
+	assert.Equal(t, []string{"bug", "p0"}, remote.Labels)
+	assert.Equal(t, "alice", remote.Assignee)
+	assert.Equal(t, "https://linear.app/issue/lin-1", remote.URL)
+}
+
+func TestLinearIssueToRemote_NilAssignee(t *testing.T) {
+	issue := &linear.Issue{
+		ID:       "lin-2",
+		Title:    "No Assignee",
+		Priority: 0,
+	}
+	issue.State.Name = "Backlog"
+
+	remote := linearIssueToRemote(issue)
+	assert.Equal(t, "", remote.Assignee)
+	assert.Equal(t, "medium", remote.Priority) // Linear 0 → "medium" (default)
+	assert.Nil(t, remote.Labels)
+}
+
+func TestLinearIssueToRemote_MultipleLabels(t *testing.T) {
+	issue := &linear.Issue{ID: "lin-3"}
+	issue.Labels.Nodes = []struct{ Name string }{
+		{Name: "feature"}, {Name: "frontend"}, {Name: "urgent"},
+	}
+
+	remote := linearIssueToRemote(issue)
+	assert.Equal(t, []string{"feature", "frontend", "urgent"}, remote.Labels)
 }
