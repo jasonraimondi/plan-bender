@@ -1,18 +1,30 @@
 # plan-bender
 
-> Structured planning pipeline for AI coding agents — interview, PRD, issues, review, implement, archive
+> Structured planning pipeline for AI coding agents — from interview to implementation
 
-Two binaries from one module:
+## Highlights
 
-- **`plan-bender`** (`pb`) — human CLI for setup and updates
-- **`plan-bender-agent`** — agent CLI, JSON-only, for AI coding agents
-
-Skills (`/bender-*`) are the primary interface. The agent CLI is plumbing: validation, atomic writes, context dumps, sync, and structured JSON output.
+- **Full pipeline** — Interview, PRD, issues, review, implement, archive
+- **YAML-first** — Plans are version-controllable and mergeable
+- **Dual CLI** — Human-friendly `pb` + JSON-only `plan-bender-agent` for agents
+- **Multi-agent** — Works with Claude Code, OpenCode, OpenClaw, Pi
+- **Thin slices** — Configurable point cap forces small, focused issues
+- **Linear sync** — Optional two-way sync with Linear
+- **Customizable** — Tracks, workflows, templates, custom fields
 
 ## Install
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/install.sh | bash
+```
+
+Installs `plan-bender` (aliased `pb`) and `plan-bender-agent` (aliased `pba`) to `~/.local/bin`.
+
+Or with Go:
+
+```sh
+go install github.com/jasonraimondi/plan-bender/cmd/plan-bender@latest
+go install github.com/jasonraimondi/plan-bender/cmd/plan-bender-agent@latest
 ```
 
 ## Usage
@@ -27,21 +39,23 @@ Then in Claude Code:
 /bender-orchestrator
 ```
 
-That's it. The orchestrator reads your plan state and suggests the next action.
+The orchestrator reads your plan state and suggests the next action. That's it.
 
-## Pipeline
+### Pipeline
 
 ```
 Interview → Write PRD → Break into Issues → Review → Implement → Archive
 ```
 
-Each stage is an agent skill. Enter at any point. Skip what you don't need.
+Enter at any point. Skip what you don't need.
 
 ## Skills
 
-| Skill | Purpose |
-|---|---|
-| `/bender-orchestrator` | Menu — shows plans, suggests next action |
+Skills are the primary interface — agent-side slash commands that drive the pipeline.
+
+| Skill | What it does |
+| --- | --- |
+| `/bender-orchestrator` | Menu — lists plans, suggests next action |
 | `/bender-interview-me` | Stress-test an idea before writing anything |
 | `/bender-write-prd` | Interview + explore codebase + write `prd.yaml` |
 | `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
@@ -52,30 +66,32 @@ Each stage is an agent skill. Enter at any point. Skip what you don't need.
 
 Exclude skills with `pipeline.skip: [bender-interview-me]` in config.
 
-## Human CLI (`pb`)
+## CLI
 
-| Command | Purpose |
-|---|---|
-| `pb setup` | Write defaults + generate skills + symlink install |
-| `pb setup --linear` | Configure Linear integration (validates credentials) |
-| `pb setup --yes` | Non-interactive mode (for CI) |
-| `pb doctor` | Verify installation health (exit 1 on failure) |
-| `pb self-update [--force]` | Update to latest release |
-| `pb completion <shell>` | Shell completion (bash/zsh/fish) |
+### `pb` — Human CLI
 
-`pb setup` (aliased as `pb init`) is idempotent — first run writes default config, subsequent runs regenerate and re-symlink skills. Use `--linear` to enable Linear sync; credentials are read from `$LINEAR_API_KEY`/`$LINEAR_TEAM` env vars or prompted interactively.
+| Command | What it does |
+| --- | --- |
+| `pb setup` | Write defaults, generate skills, symlink install |
+| `pb setup --linear` | Configure Linear integration |
+| `pb setup --yes` | Non-interactive mode |
+| `pb doctor` | Verify installation health |
+| `pb self-update` | Update to latest release |
+| `pb completion <shell>` | Shell completion — bash, zsh, fish |
 
-## Agent CLI (`plan-bender-agent`)
+`pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
+
+### `plan-bender-agent` — Agent CLI
 
 All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero exit codes.
 
-| Command | Purpose |
-|---|---|
+| Command | What it does |
+| --- | --- |
 | `plan-bender-agent context` | Summary of all plans |
-| `plan-bender-agent context <slug>` | Full dump: PRD, issues, dependency graph, stats |
-| `plan-bender-agent validate <slug>` | Structured errors with severity, file, field, message |
-| `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write a PRD |
-| `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write an issue |
+| `plan-bender-agent context <slug>` | Full dump — PRD, issues, dependency graph, stats |
+| `plan-bender-agent validate <slug>` | Structured validation errors |
+| `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write PRD |
+| `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write issue |
 | `plan-bender-agent sync push <slug>` | Push local issues to Linear |
 | `plan-bender-agent sync pull <slug>` | Pull remote state to local |
 | `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |
@@ -84,20 +100,19 @@ All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero e
 
 ## Configuration
 
-Three layers, deep-merged (later wins):
+Three layers, deep-merged — later wins:
 
-| File | Purpose |
-|---|---|
-| `~/.config/plan-bender/defaults.yaml` | Shared across projects |
-| `.plan-bender.yaml` | Committed to repo |
-| `.plan-bender.local.yaml` | Gitignored — secrets, personal overrides |
+| File | Scope |
+| --- | --- |
+| `~/.config/plan-bender/defaults.yaml` | Global — shared across projects |
+| `.plan-bender.yaml` | Project — committed to repo |
+| `.plan-bender.local.yaml` | Local — gitignored, secrets go here |
 
 ```yaml
-agents:                        # which agents to install skills for
-  - claude-code                # .claude/skills/ (project or user scope)
-  - openclaw                   # ~/.openclaw/skills/ (user scope)
+agents:
+  - claude-code
 plans_dir: ./.plan-bender/plans/
-max_points: 3                  # cap per issue — forces thin slices
+max_points: 3                  # Cap per issue — forces thin slices
 step_pattern: "Target — behavior"
 
 tracks:
@@ -118,7 +133,7 @@ workflow_states:
   - canceled
 
 pipeline:
-  skip: []                     # skill names to exclude
+  skip: []
 
 issue_schema:
   custom_fields:
@@ -127,7 +142,7 @@ issue_schema:
       required: true
       enum_values: [frontend, backend, platform]
 
-# Put credentials in .plan-bender.local.yaml
+# Credentials go in .plan-bender.local.yaml
 linear:
   enabled: true
   api_key: "lin_api_..."
@@ -142,24 +157,11 @@ Tracks and workflow states are fully customizable.
 ### Supported agents
 
 | Agent | Skill directory | Scope |
-|---|---|---|
+| --- | --- | --- |
 | `claude-code` | `.claude/skills/` | Project or user |
 | `opencode` | `.opencode/skills/` | Project or user |
 | `openclaw` | `~/.openclaw/skills/` | User only |
 | `pi` | `.pi/skills/` | Project or user |
-
-### Migrating from `install_target`
-
-If your config uses `install_target`, replace it:
-
-```yaml
-# Before
-install_target: project
-
-# After
-agents:
-  - claude-code
-```
 
 ## Plan structure
 
@@ -184,25 +186,24 @@ created: 2025-03-15
 updated: 2025-03-15
 
 description: "JWT-based auth with token refresh and role-based access."
-why: "API endpoints are unprotected. Any request can access any resource."
-outcome: "All API routes require valid auth. Roles control access. Tokens refresh transparently."
+why: "API endpoints are unprotected."
+outcome: "All API routes require valid auth."
 
 in_scope:
   - "JWT validation middleware"
   - "Token refresh endpoint"
-  - "Role-based route guards"
 out_of_scope:
   - "Social login providers"
   - "MFA"
 
 use_cases:
   - id: UC-1
-    description: "User logs in with email and password, receives access + refresh tokens"
+    description: "User logs in, receives access + refresh tokens"
 
 decisions:
   - "Short-lived JWTs (15m) + long-lived refresh tokens (7d)"
 open_questions:
-  - "Do we need to support multiple concurrent sessions per user?"
+  - "Support multiple concurrent sessions per user?"
 risks:
   - "Token revocation requires a blocklist store — adds Redis dependency"
 validation:
@@ -223,14 +224,14 @@ track: rules
 status: backlog
 priority: high                 # urgent | high | medium | low
 points: 2                     # 1 to max_points
-labels: [AFK]                 # AFK = autonomous | HITL = needs human input
+labels: [AFK]                 # AFK = autonomous, HITL = needs human input
 assignee: null
 blocked_by: []
 blocking: [2, 3]
-tdd: true                     # write tests first
-headed: false                 # verify in browser
+tdd: true                     # Write tests first
+headed: false                 # Verify in browser
 
-outcome: "Auth middleware validates JWTs and attaches user context to requests."
+outcome: "Auth middleware validates JWTs and attaches user context."
 scope: "Middleware only — no login UI, no token issuance."
 
 acceptance_criteria:
@@ -239,21 +240,21 @@ acceptance_criteria:
   - "Missing JWT → 401"
 
 steps:
-  - "Auth middleware — reject requests with missing or malformed Authorization header"
+  - "Auth middleware — reject missing or malformed Authorization header"
   - "Auth middleware — decode JWT, verify signature and expiry"
   - "Auth middleware — attach decoded user context to request object"
 
 use_cases: [UC-1]
 ```
 
-#### Key fields
+**Key fields:**
 
-- **`track`** classifies the concern. PRD-to-issues checks track coverage.
-- **`tdd`** — agent writes tests first, then makes them pass.
-- **`headed`** — agent verifies visual outcomes in a browser.
-- **`AFK` / `HITL`** — autonomous vs. needs human input.
-- **`blocked_by` / `blocking`** — dependency graph for implementation ordering.
-- **`steps`** — ordered build actions. Steps tell the agent *how*; acceptance criteria tell reviewers *what*.
+- **`track`** — Classifies the concern. PRD-to-issues checks track coverage.
+- **`tdd`** — Agent writes tests first, then makes them pass.
+- **`headed`** — Agent verifies visual outcomes in a browser.
+- **`AFK` / `HITL`** — Autonomous vs. needs human input.
+- **`blocked_by` / `blocking`** — Dependency graph for implementation ordering.
+- **`steps`** — How to build it. Acceptance criteria define *what*; steps define *how*.
 
 ## Customizing templates
 
@@ -261,9 +262,9 @@ Copy a bundled `.skill.tmpl` to `.plan-bender/templates/` and edit. Run `pb setu
 
 ## Tips
 
-- Start with `/bender-orchestrator`. It reads plan state and suggests next actions.
-- Run `/bender-review-prd` before decomposing. Catches scope gaps early.
-- Keep issues small. `max_points` forces thin slices.
+- Start with `/bender-orchestrator` — it reads plan state and suggests next actions.
+- Run `/bender-review-prd` before decomposing — catches scope gaps early.
+- Keep issues small — `max_points` forces thin slices.
 - Use `.plan-bender.local.yaml` for secrets and experiments.
 
 ## License
