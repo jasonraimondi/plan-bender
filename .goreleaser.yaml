@@ -46,13 +46,23 @@ builds:
           output: true
 
 archives:
-  - format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - ids: [plan-bender]
+    format: tar.gz
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         format: zip
     files:
       - README.md
+      - src: "dist/plan-bender-agent_{{ .Os }}_{{ .Arch }}*/plan-bender-agent{{ if eq .Os \"windows\" }}.exe{{ end }}"
+        dst: .
+        strip_parent: true
+  - ids: [plan-bender-agent]
+    format: tar.gz
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
 
 checksum:
   name_template: checksums.txt
@@ -65,15 +75,17 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# TODO: add homebrew formula once jasonraimondi/homebrew-tap repo is created
-# brews:
-#   - repository:
-#       owner: jasonraimondi
-#       name: homebrew-tap
-#     homepage: https://github.com/jasonraimondi/plan-bender
-#     description: Plan management CLI tool
-#     install: |
-#       bin.install "plan-bender"
-#       bin.install_symlink "plan-bender", "pb"
-#     test: |
-#       system "#{bin}/plan-bender", "--version"
+brews:
+  - ids: [plan-bender]
+    repository:
+      owner: jasonraimondi
+      name: homebrew-tap
+    homepage: https://github.com/jasonraimondi/plan-bender
+    description: Plan management CLI tool
+    install: |
+      bin.install "plan-bender"
+      bin.install "plan-bender-agent"
+      bin.install_symlink bin/"plan-bender" => "pb"
+      bin.install_symlink bin/"plan-bender-agent" => "pba"
+    test: |
+      system "#{bin}/plan-bender", "--version"
