@@ -26,7 +26,7 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 
 		for name, content := range templates {
 			skillName := strings.TrimSuffix(name, ".skill.tmpl")
-			outDir := filepath.Join(root, ".plan-bender", "skills", agent, skillName)
+			outDir := filepath.Join(root, ".plan-bender", "skills", agent.Name, skillName)
 			if err := os.MkdirAll(outDir, 0o755); err != nil {
 				return 0, fmt.Errorf("creating dir %s: %w", outDir, err)
 			}

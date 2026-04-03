@@ -28,7 +28,15 @@ var defaultPipelinePhases = []PipelinePhase{
 }
 
 // BuildContext produces the template rendering context from config for a specific agent.
-func BuildContext(cfg config.Config, agent string) map[string]any {
+// Extra keys from the agent are flat-merged first; built-in keys always win on collision.
+func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any {
+	ctx := make(map[string]any)
+
+	// Flat-merge agent extra options first so built-ins can override on collision
+	for k, v := range agent.Extra {
+		ctx[k] = v
+	}
+
 	// Track descriptions
 	tds := make([]map[string]string, len(cfg.Tracks))
 	for i, t := range cfg.Tracks {
@@ -66,16 +74,17 @@ func BuildContext(cfg config.Config, agent string) map[string]any {
 		}
 	}
 
-	return map[string]any{
-		"plans_dir":          cfg.PlansDir,
-		"tracks":             cfg.Tracks,
-		"workflow_states":    cfg.WorkflowStates,
-		"step_pattern":       "Target — behavior",
-		"max_points":         cfg.MaxPoints,
-		"has_backend_sync":   cfg.Linear.Enabled,
-		"custom_fields":      cfs,
-		"track_descriptions": tds,
-		"pipeline_phases":    phases,
-		"agent":              agent,
-	}
+	// Built-in keys overwrite any extra keys with the same name
+	ctx["plans_dir"] = cfg.PlansDir
+	ctx["tracks"] = cfg.Tracks
+	ctx["workflow_states"] = cfg.WorkflowStates
+	ctx["step_pattern"] = "Target — behavior"
+	ctx["max_points"] = cfg.MaxPoints
+	ctx["has_backend_sync"] = cfg.Linear.Enabled
+	ctx["custom_fields"] = cfs
+	ctx["track_descriptions"] = tds
+	ctx["pipeline_phases"] = phases
+	ctx["agent"] = agent.Name
+
+	return ctx
 }

@@ -71,35 +71,55 @@ func readPartial(path string) (PartialConfig, error) {
 // install_target → hard error (user must fix manually).
 // backend: linear → linear.enabled: true (silent migration).
 // backend: yaml-fs → dropped (default behavior).
+// agents: [seq] → agents: {name: true, ...} (silent migration to map format).
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return data, nil // let the caller handle parse errors
 	}
 	if _, ok := raw["install_target"]; ok {
-		return nil, fmt.Errorf("install_target is removed — replace with agents: [claude-code] in your .plan-bender.yaml")
+		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  claude-code: true\nin your .plan-bender.yaml")
+	}
+
+	modified := false
+
+	// Migrate old agents array format to map format
+	if agentsVal, ok := raw["agents"]; ok {
+		if agentsList, ok := agentsVal.([]any); ok {
+			agentsMap := make(map[string]any, len(agentsList))
+			for _, item := range agentsList {
+				if name, ok := item.(string); ok {
+					agentsMap[name] = true
+				}
+			}
+			raw["agents"] = agentsMap
+			modified = true
+		}
 	}
 
 	backend, hasBackend := raw["backend"]
-	if !hasBackend {
+	if hasBackend {
+		if backend == "linear" {
+			linear, _ := raw["linear"].(map[string]any)
+			if linear == nil {
+				linear = make(map[string]any)
+			}
+			if _, exists := linear["enabled"]; !exists {
+				linear["enabled"] = true
+				raw["linear"] = linear
+			}
+		}
+		delete(raw, "backend")
+		modified = true
+	}
+
+	if !modified {
 		return data, nil
 	}
 
-	if backend == "linear" {
-		linear, _ := raw["linear"].(map[string]any)
-		if linear == nil {
-			linear = make(map[string]any)
-		}
-		if _, exists := linear["enabled"]; !exists {
-			linear["enabled"] = true
-			raw["linear"] = linear
-		}
-	}
-	delete(raw, "backend")
-
-	modified, err := yaml.Marshal(raw)
+	out, err := yaml.Marshal(raw)
 	if err != nil {
 		return data, nil
 	}
-	return modified, nil
+	return out, nil
 }
