@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 )
@@ -17,26 +18,13 @@ func validate(cfg *Config) error {
 		errs = append(errs, FieldError{Field: "max_points", Message: "must be at least 1"})
 	}
 
-	// Deduplicate agents
-	seen := make(map[string]bool, len(cfg.Agents))
-	deduped := make([]string, 0, len(cfg.Agents))
-	for _, a := range cfg.Agents {
-		if !seen[a] {
-			seen[a] = true
-			deduped = append(deduped, a)
-		}
-	}
-	cfg.Agents = deduped
-
-	if len(cfg.Agents) == 0 {
-		errs = append(errs, FieldError{Field: "agents", Message: "must not be empty"})
-	}
-	for i, name := range cfg.Agents {
-		if _, err := agents.Get(name); err != nil {
-			errs = append(errs, FieldError{
-				Field:   fmt.Sprintf("agents[%d]", i),
-				Message: fmt.Sprintf("unknown agent %q", name),
-			})
+	resolved, agentErrs := resolveAgents(cfg.rawAgents)
+	errs = append(errs, agentErrs...)
+	if len(agentErrs) == 0 {
+		if len(resolved) == 0 {
+			errs = append(errs, FieldError{Field: "agents", Message: "must have at least one enabled agent"})
+		} else {
+			cfg.Agents = resolved
 		}
 	}
 
@@ -68,4 +56,67 @@ func validate(cfg *Config) error {
 		return &ConfigError{Errors: errs}
 	}
 	return nil
+}
+
+// resolveAgents validates all agent names against the registry (including disabled entries)
+// and returns the slice of enabled agents with registry defaults merged with per-agent overrides.
+// Returns field errors for unknown agent names.
+func resolveAgents(rawAgents map[string]*AgentEntry) ([]ResolvedAgent, []FieldError) {
+	if len(rawAgents) == 0 {
+		return nil, nil
+	}
+
+	// Sort for deterministic output
+	names := make([]string, 0, len(rawAgents))
+	for name := range rawAgents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var errs []FieldError
+	var resolved []ResolvedAgent
+
+	for _, name := range names {
+		entry := rawAgents[name]
+		ac, err := agents.Get(name)
+		if err != nil {
+			errs = append(errs, FieldError{
+				Field:   fmt.Sprintf("agents[%s]", name),
+				Message: fmt.Sprintf("unknown agent %q", name),
+			})
+			continue
+		}
+
+		// Disabled agents are validated but not included in the resolved slice
+		if entry == nil || !entry.Enabled {
+			continue
+		}
+
+		ra := ResolvedAgent{
+			Name:             name,
+			ProjectDir:       ac.ProjectDir,
+			UserDir:          ac.UserDir,
+			Scope:            ac.Scope,
+			GitignorePattern: ac.GitignorePattern,
+			Extra:            entry.Options.Extra,
+		}
+
+		// Apply per-agent overrides over registry defaults
+		if entry.Options.ProjectDir != nil {
+			ra.ProjectDir = *entry.Options.ProjectDir
+		}
+		if entry.Options.UserDir != nil {
+			ra.UserDir = *entry.Options.UserDir
+		}
+		if entry.Options.Scope != nil {
+			ra.Scope = agents.Scope(*entry.Options.Scope)
+		}
+		if entry.Options.GitignorePattern != nil {
+			ra.GitignorePattern = *entry.Options.GitignorePattern
+		}
+
+		resolved = append(resolved, ra)
+	}
+
+	return resolved, errs
 }

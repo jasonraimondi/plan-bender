@@ -115,18 +115,35 @@ func TestMerge_UpdateCheckOverrideToFalse(t *testing.T) {
 	assert.False(t, result.UpdateCheck)
 }
 
-func TestMerge_AgentsReplacement(t *testing.T) {
+func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{
-		Agents: []string{"claude-code", "openclaw"},
+		Agents: map[string]*AgentEntry{"pi": {Enabled: true}},
 	})
-	assert.Equal(t, []string{"claude-code", "openclaw"}, result.Agents)
+	// Both claude-code (from base) and pi (from layer) are present
+	assert.NotNil(t, result.rawAgents["claude-code"])
+	assert.NotNil(t, result.rawAgents["pi"])
 }
 
-func TestMerge_AgentsNilPreservesDefault(t *testing.T) {
+func TestMerge_AgentsNilLayerPreservesBase(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{})
-	assert.Equal(t, []string{"claude-code"}, result.Agents)
+	assert.NotNil(t, result.rawAgents["claude-code"])
+	assert.Len(t, result.rawAgents, 1)
+}
+
+func TestMerge_AgentsPerKeyOverride(t *testing.T) {
+	base := Defaults()
+	customDir := ".custom/skills/"
+	result := merge(base, PartialConfig{
+		Agents: map[string]*AgentEntry{
+			"claude-code": {Enabled: true, Options: AgentOptions{ProjectDir: &customDir}},
+		},
+	})
+	e := result.rawAgents["claude-code"]
+	require.NotNil(t, e)
+	require.NotNil(t, e.Options.ProjectDir)
+	assert.Equal(t, customDir, *e.Options.ProjectDir)
 }
 
 func TestMerge_DefaultsImmutable(t *testing.T) {

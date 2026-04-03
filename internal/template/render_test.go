@@ -74,14 +74,14 @@ func TestLoadTemplates_Embedded(t *testing.T) {
 
 func TestBuildContext_IncludesAgent(t *testing.T) {
 	cfg := config.Defaults()
-	ctx := BuildContext(cfg, "claude-code")
+	ctx := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
 	assert.Equal(t, "claude-code", ctx["agent"])
 }
 
 func TestBuildContext_DifferentAgents(t *testing.T) {
 	cfg := config.Defaults()
-	ctx1 := BuildContext(cfg, "claude-code")
-	ctx2 := BuildContext(cfg, "openclaw")
+	ctx1 := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+	ctx2 := BuildContext(cfg, config.ResolvedAgent{Name: "openclaw"})
 	assert.Equal(t, "claude-code", ctx1["agent"])
 	assert.Equal(t, "openclaw", ctx2["agent"])
 }
