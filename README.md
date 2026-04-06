@@ -37,11 +37,10 @@ Skills are the primary interface — agent-side slash commands that drive the pi
 
 | Skill | What it does |
 | --- | --- |
-| `/bender-orchestrator` | Menu — lists plans, suggests next action |
 | `/bender-interview-me` | Stress-test an idea before writing anything |
 | `/bender-write-prd` | Interview + explore codebase + write `prd.yaml` |
-| `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-write-issue` | Create a single issue |
+| `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
 | `/bender-implement-prd` | Work all issues in dependency order |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
