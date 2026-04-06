@@ -74,16 +74,42 @@ func TestLoad_DefaultAgents(t *testing.T) {
 	dir := t.TempDir()
 	cfg, err := Load(dir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"claude-code"}, cfg.Agents)
+	require.Len(t, cfg.Agents, 1)
+	assert.Equal(t, "claude-code", cfg.Agents[0].Name)
 }
 
 func TestLoad_MultipleAgentsFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "agents:\n  claude-code: true\n  openclaw: true\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, cfg.Agents, 2)
+	names := []string{cfg.Agents[0].Name, cfg.Agents[1].Name}
+	assert.Contains(t, names, "claude-code")
+	assert.Contains(t, names, "openclaw")
+}
+
+func TestLoad_OldAgentsArrayMigrated(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "agents:\n  - claude-code\n  - openclaw\n")
 
 	cfg, err := Load(dir)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"claude-code", "openclaw"}, cfg.Agents)
+	require.Len(t, cfg.Agents, 2)
+	names := []string{cfg.Agents[0].Name, cfg.Agents[1].Name}
+	assert.Contains(t, names, "claude-code")
+	assert.Contains(t, names, "openclaw")
+}
+
+func TestLoad_NewAgentsMapUntouched(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "agents:\n  claude-code: true\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, cfg.Agents, 1)
+	assert.Equal(t, "claude-code", cfg.Agents[0].Name)
 }
 
 func TestLoad_InstallTargetReturnsMigrationError(t *testing.T) {
@@ -93,7 +119,7 @@ func TestLoad_InstallTargetReturnsMigrationError(t *testing.T) {
 	_, err := Load(dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "install_target")
-	assert.Contains(t, err.Error(), "agents: [claude-code]")
+	assert.Contains(t, err.Error(), "agents:")
 }
 
 func TestLoad_InstallTargetInLocalLayerReturnsMigrationError(t *testing.T) {
@@ -108,12 +134,12 @@ func TestLoad_InstallTargetInLocalLayerReturnsMigrationError(t *testing.T) {
 
 func TestLoad_InstallTargetWithAgentsStillFails(t *testing.T) {
 	dir := t.TempDir()
-	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "install_target: project\nagents:\n  - claude-code\n")
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "install_target: project\nagents:\n  claude-code: true\n")
 
 	_, err := Load(dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "install_target")
-	assert.Contains(t, err.Error(), "agents: [claude-code]")
+	assert.Contains(t, err.Error(), "agents:")
 }
 
 func TestLoad_CleanConfigWithoutInstallTarget(t *testing.T) {

@@ -69,7 +69,10 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 
 	cfg, err := config.Load(dir)
 	require.NoError(t, err)
-	cfg.Agents = []string{"claude-code", "openclaw"}
+	cfg.Agents = []config.ResolvedAgent{
+		{Name: "claude-code"},
+		{Name: "openclaw"},
+	}
 
 	var out strings.Builder
 	count, err := GenerateSkills(dir, cfg, &out)

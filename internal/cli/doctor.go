@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jasonraimondi/plan-bender/internal/agents"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/linear"
 	"github.com/spf13/cobra"
@@ -104,16 +103,11 @@ func skillsCheck(root string, cfg config.Config) CheckResult {
 	totalSkills := 0
 	totalSymlinks := 0
 
-	for _, agentName := range cfg.Agents {
-		ac, err := agents.Get(agentName)
-		if err != nil {
-			return CheckResult{Name: "skills", Pass: false, Message: fmt.Sprintf("unknown agent %q", agentName)}
-		}
-
-		sourceDir := filepath.Join(root, ".plan-bender", "skills", agentName)
+	for _, agent := range cfg.Agents {
+		sourceDir := filepath.Join(root, ".plan-bender", "skills", agent.Name)
 		entries, err := os.ReadDir(sourceDir)
 		if err != nil {
-			return CheckResult{Name: "skills", Pass: false, Message: fmt.Sprintf("skills not generated for %s", agentName)}
+			return CheckResult{Name: "skills", Pass: false, Message: fmt.Sprintf("skills not generated for %s", agent.Name)}
 		}
 
 		skillDirs := 0
@@ -124,9 +118,9 @@ func skillsCheck(root string, cfg config.Config) CheckResult {
 		}
 		totalSkills += skillDirs
 
-		targetDir, err := resolveAgentDir(root, ac)
+		targetDir, err := resolveAgentDir(root, agent)
 		if err != nil {
-			return CheckResult{Name: "skills", Pass: false, Message: fmt.Sprintf("cannot resolve target dir for %s: %s", agentName, err)}
+			return CheckResult{Name: "skills", Pass: false, Message: fmt.Sprintf("cannot resolve target dir for %s: %s", agent.Name, err)}
 		}
 
 		for _, e := range entries {
@@ -139,7 +133,7 @@ func skillsCheck(root string, cfg config.Config) CheckResult {
 				return CheckResult{
 					Name:    "skills",
 					Pass:    false,
-					Message: fmt.Sprintf("symlink missing: %s in %s", e.Name(), agentName),
+					Message: fmt.Sprintf("symlink missing: %s in %s", e.Name(), agent.Name),
 				}
 			}
 			totalSymlinks++

@@ -73,28 +73,46 @@ func TestValidate_EnumRequiresValues(t *testing.T) {
 	assertFieldError(t, err, "issue_schema.custom_fields[0].enum_values")
 }
 
-func TestValidate_EmptyAgents(t *testing.T) {
+func TestValidate_AllDisabledAgentsError(t *testing.T) {
 	cfg := Defaults()
-	cfg.Agents = []string{}
+	cfg.rawAgents = map[string]*AgentEntry{"claude-code": {Enabled: false}}
 	err := validate(&cfg)
 	require.Error(t, err)
 	assertFieldError(t, err, "agents")
 }
 
-func TestValidate_UnknownAgent(t *testing.T) {
+func TestValidate_UnknownAgentInDisabledEntry(t *testing.T) {
 	cfg := Defaults()
-	cfg.Agents = []string{"claude-code", "unknown-agent"}
+	cfg.rawAgents = map[string]*AgentEntry{
+		"claude-code": {Enabled: true},
+		"typo-agent":  {Enabled: false},
+	}
 	err := validate(&cfg)
 	require.Error(t, err)
-	assertFieldError(t, err, "agents[1]")
+	assertFieldError(t, err, "agents[typo-agent]")
 }
 
-func TestValidate_DuplicateAgentsDeduplicated(t *testing.T) {
+func TestValidate_UnknownAgentEnabled(t *testing.T) {
 	cfg := Defaults()
-	cfg.Agents = []string{"claude-code", "claude-code"}
+	cfg.rawAgents = map[string]*AgentEntry{
+		"claude-code":   {Enabled: true},
+		"unknown-agent": {Enabled: true},
+	}
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "agents[unknown-agent]")
+}
+
+func TestValidate_AgentOptionsOverrideRegistryField(t *testing.T) {
+	cfg := Defaults()
+	customDir := ".custom/skills/"
+	cfg.rawAgents = map[string]*AgentEntry{
+		"claude-code": {Enabled: true, Options: AgentOptions{ProjectDir: &customDir}},
+	}
 	err := validate(&cfg)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"claude-code"}, cfg.Agents)
+	require.Len(t, cfg.Agents, 1)
+	assert.Equal(t, ".custom/skills/", cfg.Agents[0].ProjectDir)
 }
 
 func TestValidate_MultipleErrors(t *testing.T) {

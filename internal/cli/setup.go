@@ -235,19 +235,14 @@ func mergeYAMLFile(path string, updates map[string]any) error {
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.
 func symlinkSkills(root string, cfg config.Config) (int, error) {
 	count := 0
-	for _, agentName := range cfg.Agents {
-		ac, err := agents.Get(agentName)
-		if err != nil {
-			return 0, fmt.Errorf("unknown agent %q", agentName)
-		}
-
-		sourceDir := filepath.Join(root, ".plan-bender", "skills", agentName)
+	for _, agent := range cfg.Agents {
+		sourceDir := filepath.Join(root, ".plan-bender", "skills", agent.Name)
 		entries, err := os.ReadDir(sourceDir)
 		if err != nil {
-			return 0, fmt.Errorf("reading skills dir for agent %s: %w", agentName, err)
+			return 0, fmt.Errorf("reading skills dir for agent %s: %w", agent.Name, err)
 		}
 
-		targetDir, err := resolveAgentDir(root, ac)
+		targetDir, err := resolveAgentDir(root, agent)
 		if err != nil {
 			return 0, err
 		}
@@ -273,7 +268,7 @@ func symlinkSkills(root string, cfg config.Config) (int, error) {
 			}
 
 			if err := os.Symlink(src, dst); err != nil {
-				return 0, fmt.Errorf("symlinking %s to %s: %w", e.Name(), agentName, err)
+				return 0, fmt.Errorf("symlinking %s to %s: %w", e.Name(), agent.Name, err)
 			}
 			count++
 		}
@@ -283,12 +278,12 @@ func symlinkSkills(root string, cfg config.Config) (int, error) {
 }
 
 // resolveAgentDir returns the absolute target directory for an agent based on its scope.
-func resolveAgentDir(root string, ac agents.AgentConfig) (string, error) {
-	switch ac.Scope {
+func resolveAgentDir(root string, agent config.ResolvedAgent) (string, error) {
+	switch agent.Scope {
 	case agents.UserOnly:
-		return expandHome(ac.UserDir)
+		return expandHome(agent.UserDir)
 	default:
-		return filepath.Join(root, ac.ProjectDir), nil
+		return filepath.Join(root, agent.ProjectDir), nil
 	}
 }
 
@@ -304,19 +299,15 @@ func expandHome(path string) (string, error) {
 }
 
 // ensureGitignoreForAgents writes registry-driven gitignore patterns for project-scoped agents.
-func ensureGitignoreForAgents(root string, agentNames []string) {
+func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) {
 	entries := []string{".plan-bender/", ".plan-bender.local.yaml"}
 
-	for _, name := range agentNames {
-		ac, err := agents.Get(name)
-		if err != nil {
+	for _, agent := range agts {
+		if agent.Scope == agents.UserOnly {
 			continue
 		}
-		if ac.Scope == agents.UserOnly {
-			continue
-		}
-		if ac.GitignorePattern != "" {
-			entries = append(entries, ac.GitignorePattern)
+		if agent.GitignorePattern != "" {
+			entries = append(entries, agent.GitignorePattern)
 		}
 	}
 
