@@ -139,6 +139,7 @@ Allowed values: {{join ", " .enum_values}}
 {{end}}
 {{end}}
 
+{{if contains .review_with_user "bender-write-issue"}}
 ### 5. Review with the user
 
 Present the drafted issue. Ask:
@@ -151,6 +152,9 @@ Present the drafted issue. Ask:
 Iterate until approved.
 
 ### 6. Write the file
+{{- else}}
+### 5. Write the file
+{{- end}}
 
 Write the issue YAML to a temporary file, then run `{{.commands.write_issue}} {slug} <tempfile>` to validate and write it atomically.
 
@@ -170,7 +174,7 @@ Rules:
 After writing the issue file, run `{{.commands.sync}} {slug}#{id}` to push the issue to the configured backend.
 {{end}}
 
-### 7. Hand off cleanly
+### {{if contains .review_with_user "bender-write-issue"}}7{{else}}6{{end}}. Hand off cleanly
 
 After creation, share:
 

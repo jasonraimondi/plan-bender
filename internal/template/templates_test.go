@@ -184,6 +184,48 @@ func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	assert.Contains(t, out, "plan-bender-agent write-issue")
 }
 
+func TestWritePrdTemplate_ConditionalReviewStep(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+	tmplContent := tmpls["bender-write-prd.skill.tmpl"]
+
+	t.Run("with review", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["review_with_user"] = []string{"bender-write-prd"}
+		out, err := Render("write-prd", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.Contains(t, out, "Review with the user")
+	})
+
+	t.Run("without review", func(t *testing.T) {
+		ctx := fixtureContext()
+		out, err := Render("write-prd", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, out, "Review with the user")
+	})
+}
+
+func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+	tmplContent := tmpls["bender-write-issue.skill.tmpl"]
+
+	t.Run("with review", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["review_with_user"] = []string{"bender-write-issue"}
+		out, err := Render("write-issue", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.Contains(t, out, "Review with the user")
+	})
+
+	t.Run("without review", func(t *testing.T) {
+		ctx := fixtureContext()
+		out, err := Render("write-issue", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, out, "Review with the user")
+	})
+}
+
 func TestWorkflowStatesJoin(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
