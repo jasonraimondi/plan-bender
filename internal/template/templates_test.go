@@ -25,7 +25,8 @@ func fixtureContext() map[string]any {
 		},
 		"custom_fields":     []map[string]any{},
 		"track_descriptions": []map[string]string{},
-		"agent": "claude-code",
+		"agent":            "claude-code",
+		"review_with_user": []string{},
 		"commands": map[string]string{
 			"context":     "plan-bender-agent context",
 			"validate":    "plan-bender-agent validate",

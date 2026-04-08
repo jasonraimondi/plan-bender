@@ -95,6 +95,7 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 	ctx["pipeline_phases"] = phases
 	ctx["agent"] = agent.Name
 	ctx["commands"] = defaultCommands
+	ctx["review_with_user"] = cfg.ReviewWithUser
 
 	return ctx
 }

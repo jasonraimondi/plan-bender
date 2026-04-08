@@ -41,6 +41,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.Linear != nil {
 		mergeLinear(&out.Linear, layer.Linear)
 	}
+	if layer.ReviewWithUser != nil {
+		out.ReviewWithUser = layer.ReviewWithUser
+	}
 
 	return out
 }
