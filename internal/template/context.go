@@ -2,6 +2,15 @@ package template
 
 import "github.com/jasonraimondi/plan-bender/internal/config"
 
+var defaultCommands = map[string]string{
+	"context":     "plan-bender-agent context",
+	"validate":    "plan-bender-agent validate",
+	"write_prd":   "plan-bender-agent write-prd",
+	"write_issue": "plan-bender-agent write-issue",
+	"sync":        "plan-bender-agent sync",
+	"archive":     "plan-bender-agent archive",
+}
+
 var defaultTrackDescriptions = map[string]string{
 	"intent":     "What the system should do — features, commands, API behavior",
 	"experience": "How users interact with the system — UI, UX, accessibility",
@@ -85,6 +94,7 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 	ctx["track_descriptions"] = tds
 	ctx["pipeline_phases"] = phases
 	ctx["agent"] = agent.Name
+	ctx["commands"] = defaultCommands
 
 	return ctx
 }
