@@ -52,14 +52,9 @@ Update the YAML file:
 - blocked → todo (when blocker is cleared)
 - todo → in-progress (when implementation starts)
 - always update the `updated` date on status changes
-{{if .has_backend_sync}}
-
-**Linear sync**: if the issue has `linear_id`, also update the Linear issue state:
-
-```bash
-linear issue update {linear_id} --state "{new_status}"
-```
-{{end}}
+{{- if .has_backend_sync}}
+- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section)
+{{- end}}
 
 ### 3. Branch setup
 
@@ -122,20 +117,9 @@ Update the issue file:
 - after merge: `status: qa` if verification needed, or `status: done`
 - if blocked after starting: `status: blocked`, explain in `notes`
 - always update `updated` date
-{{if .has_backend_sync}}
-
-**Linear sync**: if the issue has `linear_id`, also push these changes to Linear:
-
-```bash
-linear issue update {linear_id} --state "{new_status}"
-```
-
-Attach the PR to the Linear issue if one was created:
-
-```bash
-linear api --method POST --body '{"query":"mutation{attachmentCreate(input:{issueId:\"{linear_id}\",url:\"{pr_url}\",title:\"Pull Request\"}){success}}"}'
-```
-{{end}}
+{{- if .has_backend_sync}}
+- if the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section)
+{{- end}}
 
 ### 9. Next issue
 
@@ -148,9 +132,21 @@ If there are more issues, proceed to the next one.
 
 ## Linear sync
 
-When a plan has been synced to Linear (issues have a `linear_id` field), update both local YAML **and** Linear on every status change. Local YAML is always updated first — Linear updates are best-effort. If a Linear update fails, log the failure and continue.
+When a plan has been synced to Linear (issues have a `linear_id` field), update both local YAML **and** Linear on every status change. Local YAML is always updated first. Linear updates are best-effort — if they fail, log the failure and continue.
 
 Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 2 and 8 push to Linear.
+
+**Update status:**
+
+```bash
+linear issue update {linear_id} --state "{new_status}"
+```
+
+**Attach PR** (after creating a PR in step 7):
+
+```bash
+linear api --method POST --body '{"query":"mutation{attachmentCreate(input:{issueId:\"{linear_id}\",url:\"{pr_url}\",title:\"Pull Request\"}){success}}"}'
+```
 {{end}}
 
 ## Multiple issues
