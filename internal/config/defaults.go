@@ -34,6 +34,6 @@ func Defaults() Config {
 		IssueSchema:    IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:         LinearConfig{},
 		UpdateCheck:    true,
-		ReviewWithUser: []string{},
+		ReviewWithUser: []string{"bender-write-prd", "bender-write-issue"},
 	}
 }

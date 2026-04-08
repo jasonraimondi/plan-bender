@@ -26,7 +26,7 @@ func fixtureContext() map[string]any {
 		"custom_fields":     []map[string]any{},
 		"track_descriptions": []map[string]string{},
 		"agent":            "claude-code",
-		"review_with_user": []string{},
+		"review_with_user": []string{"bender-write-prd", "bender-write-issue"},
 		"commands": map[string]string{
 			"context":     "plan-bender-agent context",
 			"validate":    "plan-bender-agent validate",
@@ -199,6 +199,7 @@ func TestWritePrdTemplate_ConditionalReviewStep(t *testing.T) {
 
 	t.Run("without review", func(t *testing.T) {
 		ctx := fixtureContext()
+		ctx["review_with_user"] = []string{}
 		out, err := Render("write-prd", tmplContent, ctx)
 		require.NoError(t, err)
 		assert.NotContains(t, out, "Review with the user")
@@ -212,7 +213,6 @@ func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
 
 	t.Run("with review", func(t *testing.T) {
 		ctx := fixtureContext()
-		ctx["review_with_user"] = []string{"bender-write-issue"}
 		out, err := Render("write-issue", tmplContent, ctx)
 		require.NoError(t, err)
 		assert.Contains(t, out, "Review with the user")
@@ -220,6 +220,7 @@ func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
 
 	t.Run("without review", func(t *testing.T) {
 		ctx := fixtureContext()
+		ctx["review_with_user"] = []string{}
 		out, err := Render("write-issue", tmplContent, ctx)
 		require.NoError(t, err)
 		assert.NotContains(t, out, "Review with the user")

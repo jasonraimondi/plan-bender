@@ -56,8 +56,9 @@ issue_schema:
   #   required: true
   #   enum_values: [frontend, backend, platform]
 
-review_with_user: []           # Skills that include a user review step before writing
-  # e.g. [bender-write-prd, bender-write-issue]
+review_with_user:              # Skills that include a user review step before writing
+  - bender-write-prd           # Set to [] to skip review steps entirely
+  - bender-write-issue
 
 update_check: true             # Check for new releases on pb commands
 
