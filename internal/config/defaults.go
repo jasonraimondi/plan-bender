@@ -30,9 +30,10 @@ func Defaults() Config {
 			Scope:            ac.Scope,
 			GitignorePattern: ac.GitignorePattern,
 		}},
-		Pipeline:    PipelineConfig{Skip: []string{}},
-		IssueSchema: IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
-		Linear:      LinearConfig{},
-		UpdateCheck: true,
+		Pipeline:       PipelineConfig{Skip: []string{}},
+		IssueSchema:    IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
+		Linear:         LinearConfig{},
+		UpdateCheck:    true,
+		ReviewWithUser: []string{"bender-write-prd", "bender-write-issue"},
 	}
 }

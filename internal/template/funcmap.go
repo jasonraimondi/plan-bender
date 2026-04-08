@@ -10,20 +10,10 @@ import (
 // FuncMap returns the custom template functions.
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
-		"upper":  fnUpper,
-		"lower":  fnLower,
-		"kebab":  fnKebab,
-		"join":   fnJoin,
-		"indent": fnIndent,
+		"kebab":    fnKebab,
+		"join":     fnJoin,
+		"contains": fnContains,
 	}
-}
-
-func fnUpper(s string) string {
-	return strings.ToUpper(s)
-}
-
-func fnLower(s string) string {
-	return strings.ToLower(s)
 }
 
 var (
@@ -49,14 +39,11 @@ func fnJoin(sep string, items []string) string {
 	return strings.Join(items, sep)
 }
 
-func fnIndent(n int, s string) string {
-	if s == "" {
-		return ""
+func fnContains(list []string, item string) bool {
+	for _, v := range list {
+		if v == item {
+			return true
+		}
 	}
-	prefix := strings.Repeat(" ", n)
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
+	return false
 }

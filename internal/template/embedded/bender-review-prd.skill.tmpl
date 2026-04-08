@@ -32,8 +32,13 @@ These are mechanical violations of the issue schema spec. Fix silently and repor
 | Steps missing location context (no route, file, service, or component) | Add location context |
 | Steps using vague language ("handle errors appropriately", "set up properly") | Rewrite with specific behavior |
 | `blocked_by` / `blocking` out of sync across issues | Sync both directions |
-| Points > {{.max_points}} | Flag for split (cannot auto-fix — needs user input) |
 | Missing `updated` date or stale date | Set to today |
+
+## Flags (surface to user)
+
+These cannot be auto-fixed — surface them for the user to decide.
+
+- **Points > {{.max_points}}** — flag for split. Ask how to decompose.
 
 ## Review rubric
 

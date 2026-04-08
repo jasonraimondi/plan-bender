@@ -96,6 +96,7 @@ type Config struct {
 	IssueSchema    IssueSchemaConfig `yaml:"issue_schema"`
 	Linear         LinearConfig      `yaml:"linear"`
 	UpdateCheck    bool              `yaml:"update_check"`
+	ReviewWithUser []string          `yaml:"review_with_user"`
 }
 
 // PartialConfig is used for YAML layer loading — all fields optional.
@@ -109,4 +110,5 @@ type PartialConfig struct {
 	IssueSchema    *IssueSchemaConfig      `yaml:"issue_schema,omitempty"`
 	Linear         *LinearConfig           `yaml:"linear,omitempty"`
 	UpdateCheck    *bool                   `yaml:"update_check,omitempty"`
+	ReviewWithUser []string                `yaml:"review_with_user,omitempty"`
 }

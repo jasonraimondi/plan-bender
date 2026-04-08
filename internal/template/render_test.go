@@ -31,11 +31,11 @@ func TestRender_Loop(t *testing.T) {
 	assert.Equal(t, "- a\n- b\n- c\n", out)
 }
 
-func TestRender_Pipes(t *testing.T) {
-	tmpl := `{{.Name | upper}}`
-	out, err := Render("test", tmpl, map[string]string{"Name": "hello"})
+func TestRender_ContainsPipe(t *testing.T) {
+	tmpl := `{{if contains .Items "b"}}found{{else}}missing{{end}}`
+	out, err := Render("test", tmpl, map[string]any{"Items": []string{"a", "b", "c"}})
 	require.NoError(t, err)
-	assert.Equal(t, "HELLO", out)
+	assert.Equal(t, "found", out)
 }
 
 func TestRender_KebabPipe(t *testing.T) {
@@ -52,11 +52,11 @@ func TestRender_JoinPipe(t *testing.T) {
 	assert.Equal(t, "a, b", out)
 }
 
-func TestRender_IndentPipe(t *testing.T) {
-	tmpl := `{{indent 4 .Text}}`
-	out, err := Render("test", tmpl, map[string]string{"Text": "line1\nline2"})
+func TestRender_ContainsNotFound(t *testing.T) {
+	tmpl := `{{if contains .Items "z"}}found{{else}}missing{{end}}`
+	out, err := Render("test", tmpl, map[string]any{"Items": []string{"a", "b"}})
 	require.NoError(t, err)
-	assert.Equal(t, "    line1\n    line2", out)
+	assert.Equal(t, "missing", out)
 }
 
 func TestRender_InvalidTemplate(t *testing.T) {

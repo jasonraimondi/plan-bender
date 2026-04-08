@@ -105,10 +105,26 @@ base_url: "http://localhost:3000"
 ```
 
 Keep it scannable. The PRD should support decomposition into issues — not be a dumping ground for every implementation detail.
+{{if contains .review_with_user "bender-write-prd"}}
+
+### 6. Review with the user
+
+Present the drafted PRD. Ask:
+
+- Does the scope feel right?
+- Are the use cases complete?
+- Are the decisions and risks accurate?
+- Any open questions to resolve before proceeding?
+
+Iterate until approved.
+
+### 7. Write the file
+{{- else}}
 
 ### 6. Write the file
+{{- end}}
 
-Write the PRD YAML to a temporary file, then run `plan-bender write-prd {slug} <tempfile>` to validate and write it atomically. This ensures schema validation before the file is placed in the plans directory.
+Write the PRD YAML to a temporary file, then run `{{.commands.write_prd}} {slug} <tempfile>` to validate and write it atomically. This ensures schema validation before the file is placed in the plans directory.
 
 Rules:
 
@@ -116,7 +132,7 @@ Rules:
 - use_cases are numbered (UC-1, UC-2, ...) so issues can reference them
 - do not include file paths or code snippets in the PRD
 
-### 7. Hand off cleanly
+### {{if contains .review_with_user "bender-write-prd"}}8{{else}}7{{end}}. Hand off cleanly
 
 After creation, share:
 
