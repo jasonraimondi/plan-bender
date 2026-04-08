@@ -156,7 +156,7 @@ Write the issue YAML to a temporary file, then run `plan-bender write-issue {slu
 
 **Inside a plan**: read existing issues to determine the next ID. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
 
-**Standalone**: omit `id`, `blocked_by`, `blocking`, and `use_cases` fields.
+**Standalone**: set `id: 1`, `blocked_by: []`, `blocking: []`, `use_cases: []` — full schema parity with plan issues.
 
 Rules:
 
