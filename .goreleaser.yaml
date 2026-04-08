@@ -46,23 +46,19 @@ builds:
           output: true
 
 archives:
-  - ids: [plan-bender]
-    format: tar.gz
+  - id: plan-bender
+    ids: [plan-bender]
+    formats: [tar.gz, zip]
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        format: zip
     files:
       - README.md
       - src: "dist/plan-bender-agent_{{ .Os }}_{{ .Arch }}*/plan-bender-agent{{ if eq .Os \"windows\" }}.exe{{ end }}"
         dst: .
         strip_parent: true
-  - ids: [plan-bender-agent]
-    format: tar.gz
+  - id: plan-bender-agent
+    ids: [plan-bender-agent]
+    formats: [tar.gz, zip]
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        format: zip
 
 checksum:
   name_template: checksums.txt
