@@ -152,7 +152,7 @@ Iterate until approved.
 
 ### 6. Write the file
 
-Write the issue YAML to a temporary file, then run `plan-bender write-issue {slug} <tempfile>` to validate and write it atomically.
+Write the issue YAML to a temporary file, then run `{{.commands.write_issue}} {slug} <tempfile>` to validate and write it atomically.
 
 **Inside a plan**: read existing issues to determine the next ID. Update `blocked_by`/`blocking` in sibling issues if dependencies were added.
 
@@ -167,7 +167,7 @@ Rules:
 
 ### Sync to backend
 
-After writing the issue file, run `plan-bender sync {slug}#{id}` to push the issue to the configured backend.
+After writing the issue file, run `{{.commands.sync}} {slug}#{id}` to push the issue to the configured backend.
 {{end}}
 
 ### 7. Hand off cleanly

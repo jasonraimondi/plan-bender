@@ -161,7 +161,7 @@ func TestWritePrdTemplate_UsesCLIWriteThrough(t *testing.T) {
 	ctx := fixtureContext()
 	out, err := Render("write-prd", tmpls["bender-write-prd.skill.tmpl"], ctx)
 	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender write-prd")
+	assert.Contains(t, out, "plan-bender-agent write-prd")
 }
 
 func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
@@ -171,7 +171,7 @@ func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
 	ctx := fixtureContext()
 	out, err := Render("prd-to-issues", tmpls["bender-prd-to-issues.skill.tmpl"], ctx)
 	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender write-issue")
+	assert.Contains(t, out, "plan-bender-agent write-issue")
 }
 
 func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
@@ -181,7 +181,7 @@ func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	ctx := fixtureContext()
 	out, err := Render("write-issue", tmpls["bender-write-issue.skill.tmpl"], ctx)
 	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender write-issue")
+	assert.Contains(t, out, "plan-bender-agent write-issue")
 }
 
 func TestWorkflowStatesJoin(t *testing.T) {
