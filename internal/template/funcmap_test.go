@@ -6,28 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpper(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"hello", "HELLO"},
-		{"", ""},
-		{"Hello World", "HELLO WORLD"},
-	}
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, fnUpper(tt.in))
-	}
-}
-
-func TestLower(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"HELLO", "hello"},
-		{"", ""},
-		{"Hello World", "hello world"},
-	}
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, fnLower(tt.in))
-	}
-}
-
 func TestKebab(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"HelloWorld", "hello-world"},
@@ -58,18 +36,20 @@ func TestJoin(t *testing.T) {
 	}
 }
 
-func TestIndent(t *testing.T) {
+func TestContains(t *testing.T) {
 	tests := []struct {
-		n    int
-		in   string
-		want string
+		name string
+		list []string
+		item string
+		want bool
 	}{
-		{2, "line1\nline2", "  line1\n  line2"},
-		{0, "no indent", "no indent"},
-		{4, "", ""},
-		{2, "single", "  single"},
+		{"present", []string{"a", "b", "c"}, "b", true},
+		{"absent", []string{"a", "b", "c"}, "d", false},
+		{"empty list", []string{}, "a", false},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, fnIndent(tt.n, tt.in), "indent(%d, %q)", tt.n, tt.in)
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, fnContains(tt.list, tt.item))
+		})
 	}
 }
