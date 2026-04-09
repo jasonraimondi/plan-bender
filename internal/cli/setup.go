@@ -59,18 +59,27 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	root, _ := os.Getwd()
 	out := cmd.OutOrStdout()
 	cfgPath := filepath.Join(root, ".plan-bender.yaml")
+	localPath := filepath.Join(root, ".plan-bender.local.yaml")
 
-	// 1. Write defaults if no config exists
+	// 1. Write defaults if no config exists.
+	// Skip creation when .plan-bender.local.yaml already exists — the user is
+	// intentionally using only the local layer, and the config loader handles
+	// the merge correctly without a project-level file.
 	created := false
+	localOnly := false
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		data, err := yaml.Marshal(config.StarterConfig())
-		if err != nil {
-			return err
+		if _, localErr := os.Stat(localPath); localErr == nil {
+			localOnly = true
+		} else {
+			data, err := yaml.Marshal(config.StarterConfig())
+			if err != nil {
+				return err
+			}
+			if err := backend.AtomicWrite(cfgPath, data, 0o644); err != nil {
+				return err
+			}
+			created = true
 		}
-		if err := backend.AtomicWrite(cfgPath, data, 0o644); err != nil {
-			return err
-		}
-		created = true
 	}
 
 	// 2. Handle --linear
@@ -101,12 +110,17 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		return err
 	}
 
-	ensureGitignoreForAgents(root, cfg.Agents)
+	if cfg.ManageGitignore {
+		ensureGitignoreForAgents(root, cfg.Agents)
+	}
 
 	// 5. Output summary
-	if created {
+	switch {
+	case created:
 		fmt.Fprintf(out, "Config:  .plan-bender.yaml (created)\n")
-	} else {
+	case localOnly:
+		fmt.Fprintf(out, "Config:  .plan-bender.local.yaml (local only)\n")
+	default:
 		fmt.Fprintf(out, "Config:  .plan-bender.yaml (exists)\n")
 	}
 

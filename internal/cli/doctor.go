@@ -30,6 +30,7 @@ func RunChecks(root string, cfg config.Config, version string) []CheckResult {
 		plansDirCheck(root, cfg),
 		versionCheck(version),
 		linearCheck(cfg),
+		gitignoreCheck(root, cfg),
 	}
 	return results
 }
@@ -189,6 +190,26 @@ func versionCheck(version string) CheckResult {
 		}
 	}
 	return CheckResult{Name: "versions", Pass: true, Message: version}
+}
+
+// gitignoreCheck verifies that when manage_gitignore is false, the user has
+// still gitignored .plan-bender.local.yaml — the only safety-critical entry
+// because it may contain secrets.
+func gitignoreCheck(root string, cfg config.Config) CheckResult {
+	if cfg.ManageGitignore {
+		return CheckResult{Name: "gitignore", Pass: true, Message: "managed"}
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil || !strings.Contains(string(data), ".plan-bender.local.yaml") {
+		return CheckResult{
+			Name:    "gitignore",
+			Pass:    false,
+			Message: ".plan-bender.local.yaml not gitignored (manage_gitignore is off)",
+		}
+	}
+
+	return CheckResult{Name: "gitignore", Pass: true, Message: "unmanaged, .plan-bender.local.yaml ok"}
 }
 
 func linearCheck(cfg config.Config) CheckResult {

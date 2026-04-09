@@ -12,6 +12,8 @@
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
 
 `pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
+If `.plan-bender.local.yaml` already exists, no `.plan-bender.yaml` is created. Set
+`manage_gitignore: false` in config to prevent `pb setup` from modifying `.gitignore`.
 
 ## `plan-bender-agent` — Agent CLI
 

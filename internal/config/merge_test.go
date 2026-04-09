@@ -115,6 +115,18 @@ func TestMerge_UpdateCheckOverrideToFalse(t *testing.T) {
 	assert.False(t, result.UpdateCheck)
 }
 
+func TestMerge_ManageGitignoreDefaultTrue(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.True(t, result.ManageGitignore)
+}
+
+func TestMerge_ManageGitignoreOverrideToFalse(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{ManageGitignore: ptr(false)})
+	assert.False(t, result.ManageGitignore)
+}
+
 func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{

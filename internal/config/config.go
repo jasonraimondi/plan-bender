@@ -86,29 +86,31 @@ type ResolvedAgent struct {
 
 // Config is the fully resolved configuration.
 type Config struct {
-	Tracks         []string          `yaml:"tracks"`
-	WorkflowStates []string          `yaml:"workflow_states"`
-	PlansDir       string            `yaml:"plans_dir"`
-	MaxPoints      int               `yaml:"max_points"`
-	Agents         []ResolvedAgent   `yaml:"agents"`
-	rawAgents      map[string]*AgentEntry
-	Pipeline       PipelineConfig    `yaml:"pipeline"`
-	IssueSchema    IssueSchemaConfig `yaml:"issue_schema"`
-	Linear         LinearConfig      `yaml:"linear"`
-	UpdateCheck    bool              `yaml:"update_check"`
-	ReviewWithUser []string          `yaml:"review_with_user"`
+	Tracks          []string          `yaml:"tracks"`
+	WorkflowStates  []string          `yaml:"workflow_states"`
+	PlansDir        string            `yaml:"plans_dir"`
+	MaxPoints       int               `yaml:"max_points"`
+	Agents          []ResolvedAgent   `yaml:"agents"`
+	rawAgents       map[string]*AgentEntry
+	Pipeline        PipelineConfig    `yaml:"pipeline"`
+	IssueSchema     IssueSchemaConfig `yaml:"issue_schema"`
+	Linear          LinearConfig      `yaml:"linear"`
+	UpdateCheck     bool              `yaml:"update_check"`
+	ManageGitignore bool              `yaml:"manage_gitignore"`
+	ReviewWithUser  []string          `yaml:"review_with_user"`
 }
 
 // PartialConfig is used for YAML layer loading — all fields optional.
 type PartialConfig struct {
-	Tracks         []string                `yaml:"tracks,omitempty"`
-	WorkflowStates []string                `yaml:"workflow_states,omitempty"`
-	PlansDir       *string                 `yaml:"plans_dir,omitempty"`
-	MaxPoints      *int                    `yaml:"max_points,omitempty"`
-	Agents         map[string]*AgentEntry  `yaml:"agents,omitempty"`
-	Pipeline       *PipelineConfig         `yaml:"pipeline,omitempty"`
-	IssueSchema    *IssueSchemaConfig      `yaml:"issue_schema,omitempty"`
-	Linear         *LinearConfig           `yaml:"linear,omitempty"`
-	UpdateCheck    *bool                   `yaml:"update_check,omitempty"`
-	ReviewWithUser []string                `yaml:"review_with_user,omitempty"`
+	Tracks          []string               `yaml:"tracks,omitempty"`
+	WorkflowStates  []string               `yaml:"workflow_states,omitempty"`
+	PlansDir        *string                `yaml:"plans_dir,omitempty"`
+	MaxPoints       *int                   `yaml:"max_points,omitempty"`
+	Agents          map[string]*AgentEntry `yaml:"agents,omitempty"`
+	Pipeline        *PipelineConfig        `yaml:"pipeline,omitempty"`
+	IssueSchema     *IssueSchemaConfig     `yaml:"issue_schema,omitempty"`
+	Linear          *LinearConfig          `yaml:"linear,omitempty"`
+	UpdateCheck     *bool                  `yaml:"update_check,omitempty"`
+	ManageGitignore *bool                  `yaml:"manage_gitignore,omitempty"`
+	ReviewWithUser  []string               `yaml:"review_with_user,omitempty"`
 }

@@ -101,6 +101,29 @@ func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	assert.NotContains(t, output, "(created)")
 }
 
+func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	// Only .plan-bender.local.yaml exists — user is intentionally local-only
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.local.yaml"),
+		[]byte("max_points: 2\n"),
+		0o644,
+	))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	// .plan-bender.yaml must NOT have been created
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender.yaml"))
+	assert.True(t, os.IsNotExist(err), ".plan-bender.yaml should not be created when .plan-bender.local.yaml exists")
+
+	output := h.output()
+	assert.Contains(t, output, "Config:  .plan-bender.local.yaml (local only)")
+	assert.NotContains(t, output, "(created)")
+}
+
 func TestSetup_YesFlagExitsZero(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
@@ -245,6 +268,46 @@ func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 	assert.Contains(t, content, ".plan-bender/")
 	assert.Contains(t, content, ".plan-bender.local.yaml")
 	assert.Contains(t, content, ".claude/skills/bender-*")
+}
+
+func TestSetup_ManageGitignoreFalseSkipsGitignoreWrite(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.yaml"),
+		[]byte("manage_gitignore: false\nagents:\n  - claude-code\n"),
+		0o644,
+	))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	// No .gitignore should have been written
+	_, err := os.Stat(filepath.Join(dir, ".gitignore"))
+	assert.True(t, os.IsNotExist(err), ".gitignore should not be created when manage_gitignore: false")
+}
+
+func TestSetup_ManageGitignoreFalsePreservesExistingGitignore(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	// Pre-existing .gitignore the user manages themselves
+	original := "# managed by user\nnode_modules/\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(original), 0o644))
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.yaml"),
+		[]byte("manage_gitignore: false\nagents:\n  - claude-code\n"),
+		0o644,
+	))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	require.NoError(t, err)
+	assert.Equal(t, original, string(data), ".gitignore must be untouched when manage_gitignore: false")
 }
 
 func TestEnsureGitignoreForAgents_SkipsUserOnlyAgents(t *testing.T) {

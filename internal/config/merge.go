@@ -32,6 +32,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.UpdateCheck != nil {
 		out.UpdateCheck = *layer.UpdateCheck
 	}
+	if layer.ManageGitignore != nil {
+		out.ManageGitignore = *layer.ManageGitignore
+	}
 	if layer.Pipeline != nil {
 		out.Pipeline.Skip = layer.Pipeline.Skip
 	}
