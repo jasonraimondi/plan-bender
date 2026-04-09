@@ -8,6 +8,9 @@ Three layers, deep-merged — later wins:
 | `.plan-bender.yaml` | Project — committed to repo, written by `pb setup` |
 | `.plan-bender.local.yaml` | Local — gitignored, secrets go here |
 
+If `.plan-bender.local.yaml` already exists when you run `pb setup`, no project-level
+`.plan-bender.yaml` is created — the loader merges whatever layers exist.
+
 ## Default config
 
 What `pb setup` writes on first run:
@@ -61,6 +64,12 @@ review_with_user:              # Skills that include a user review step before w
   - bender-write-issue
 
 update_check: true             # Check for new releases on pb commands
+
+manage_gitignore: true         # Let pb setup add .plan-bender/, .plan-bender.local.yaml,
+                               # and agent skill patterns to .gitignore. Set to false
+                               # if you manage .gitignore yourself (via template, CI, etc).
+                               # When off, pb doctor still warns if .plan-bender.local.yaml
+                               # is not gitignored.
 
 # Put this in .plan-bender.local.yaml and load from an env file (e.g. direnv)
 # Hardcoding credentials is supported but strongly discouraged

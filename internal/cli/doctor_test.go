@@ -147,14 +147,68 @@ func TestLinearCheck_Disabled(t *testing.T) {
 	assert.Contains(t, r.Message, "not enabled")
 }
 
+func TestGitignoreCheck_Managed(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults() // ManageGitignore is true
+
+	r := gitignoreCheck(dir, cfg)
+	assert.True(t, r.Pass)
+	assert.Equal(t, "gitignore", r.Name)
+	assert.Equal(t, "managed", r.Message)
+}
+
+func TestGitignoreCheck_UnmanagedLocalIgnored(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.ManageGitignore = false
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".gitignore"),
+		[]byte("node_modules/\n.plan-bender.local.yaml\n"),
+		0o644,
+	))
+
+	r := gitignoreCheck(dir, cfg)
+	assert.True(t, r.Pass)
+	assert.Contains(t, r.Message, "unmanaged")
+	assert.Contains(t, r.Message, ".plan-bender.local.yaml ok")
+}
+
+func TestGitignoreCheck_UnmanagedLocalMissing(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.ManageGitignore = false
+
+	// .gitignore exists but does not contain .plan-bender.local.yaml
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".gitignore"),
+		[]byte("node_modules/\n"),
+		0o644,
+	))
+
+	r := gitignoreCheck(dir, cfg)
+	assert.False(t, r.Pass)
+	assert.Contains(t, r.Message, ".plan-bender.local.yaml not gitignored")
+}
+
+func TestGitignoreCheck_UnmanagedNoGitignoreFile(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.ManageGitignore = false
+
+	// No .gitignore at all — .plan-bender.local.yaml is certainly not gitignored
+	r := gitignoreCheck(dir, cfg)
+	assert.False(t, r.Pass)
+	assert.Contains(t, r.Message, ".plan-bender.local.yaml not gitignored")
+}
+
 func TestRunChecks_ReturnsAllChecks(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
 
-	// Don't set up anything — just verify we get 5 results
 	t.Setenv("PATH", t.TempDir())
 	results := RunChecks(dir, cfg, "dev")
-	assert.Len(t, results, 5)
+	assert.Len(t, results, 6)
 
 	names := make([]string, len(results))
 	for i, r := range results {
@@ -165,6 +219,7 @@ func TestRunChecks_ReturnsAllChecks(t *testing.T) {
 	assert.Contains(t, names, "plans dir")
 	assert.Contains(t, names, "versions")
 	assert.Contains(t, names, "linear")
+	assert.Contains(t, names, "gitignore")
 }
 
 func TestDoctorCmd_HealthySetup(t *testing.T) {
