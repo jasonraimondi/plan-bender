@@ -10,6 +10,9 @@
 | `pb doctor` | Verify installation health |
 | `pb self-update` | Update to latest release |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
+| `pb docs` | Open GitHub repo in browser |
+| `pb docs --print` | Print repo URL without opening |
+| `pb docs --full` | Print full config reference |
 
 `pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
 If `.plan-bender.local.yaml` already exists, no `.plan-bender.yaml` is created. Set
