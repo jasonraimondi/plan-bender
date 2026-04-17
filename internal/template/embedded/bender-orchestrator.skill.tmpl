@@ -28,7 +28,8 @@ Offer these actions:
 - **Status dashboard**: show plan status → run `{{.commands.context}}`
 - **Validate**: check plan YAML for errors → run `{{.commands.validate}} {slug}`
 {{if .has_backend_sync}}
-- **Sync to backend**: push/pull plan state → run `{{.commands.sync}} {slug}`
+- **Push to backend**: push local plan state → run `{{.commands.sync_push}} {slug}`
+- **Pull from backend**: pull remote state → run `{{.commands.sync_pull}} {slug}`
 {{end}}
 - **Archive**: archive completed plan → run `{{.commands.archive}} {slug}`
 
