@@ -44,9 +44,7 @@ func NewAgentRootCmd(version string) *cobra.Command {
 	validateCmd.ValidArgsFunction = slugComplete
 
 	syncCmd := NewSyncCmd()
-	for _, sub := range syncCmd.Commands() {
-		sub.ValidArgsFunction = slugComplete
-	}
+	applySlugCompletionToLeaves(syncCmd, slugComplete)
 
 	root.AddCommand(
 		validateCmd,
@@ -58,6 +56,19 @@ func NewAgentRootCmd(version string) *cobra.Command {
 	)
 
 	return root
+}
+
+// applySlugCompletionToLeaves sets the given completion function on every leaf
+// (runnable) command in the subtree rooted at cmd.
+func applySlugCompletionToLeaves(cmd *cobra.Command, fn cobra.CompletionFunc) {
+	subs := cmd.Commands()
+	if len(subs) == 0 {
+		cmd.ValidArgsFunction = fn
+		return
+	}
+	for _, sub := range subs {
+		applySlugCompletionToLeaves(sub, fn)
+	}
 }
 
 // isAgentMode returns true when the command is running inside the agent binary.

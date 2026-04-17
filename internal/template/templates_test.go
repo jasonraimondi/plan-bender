@@ -32,7 +32,8 @@ func fixtureContext() map[string]any {
 			"validate":    "plan-bender-agent validate",
 			"write_prd":   "plan-bender-agent write-prd",
 			"write_issue": "plan-bender-agent write-issue",
-			"sync":        "plan-bender-agent sync",
+			"sync_push":   "plan-bender-agent sync linear push",
+			"sync_pull":   "plan-bender-agent sync linear pull",
 			"archive":     "plan-bender-agent archive",
 		},
 	}
@@ -225,6 +226,33 @@ func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, out, "Review with the user")
 	})
+}
+
+func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	ctx["has_backend_sync"] = true
+
+	cases := map[string]string{
+		"bender-prd-to-issues.skill.tmpl": "plan-bender-agent sync linear push",
+		"bender-write-issue.skill.tmpl":   "plan-bender-agent sync linear push",
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			out, err := Render(name, tmpls[name], ctx)
+			require.NoError(t, err)
+			assert.Contains(t, out, want)
+			assert.NotContains(t, out, "{{.commands.sync}}")
+		})
+	}
+
+	// Orchestrator surfaces both push and pull
+	out, err := Render("bender-orchestrator.skill.tmpl", tmpls["bender-orchestrator.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender-agent sync linear push")
+	assert.Contains(t, out, "plan-bender-agent sync linear pull")
 }
 
 func TestWorkflowStatesJoin(t *testing.T) {
