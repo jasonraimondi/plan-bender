@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,49 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	tmpl "github.com/jasonraimondi/plan-bender/internal/template"
+	"github.com/spf13/cobra"
 )
+
+// NewGenerateCmd creates the generate command, which re-renders skill
+// templates and refreshes symlinks from the current config without touching
+// the config file itself or running Linear setup.
+func NewGenerateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "generate",
+		Aliases: []string{"gen", "sync"},
+		Short:   "Regenerate skills from the current config",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("getting working directory: %w", err)
+			}
+
+			cfg, err := config.Load(root)
+			if err != nil {
+				var cfgErr *config.ConfigError
+				if errors.As(err, &cfgErr) {
+					fmt.Fprint(cmd.ErrOrStderr(), cfgErr.FormatHuman())
+					return fmt.Errorf("config validation failed")
+				}
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			if _, err := GenerateSkills(root, cfg, out); err != nil {
+				return err
+			}
+
+			count, err := symlinkSkills(root, cfg)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(out, "Skills:  %d installed\n", count)
+			return nil
+		},
+	}
+	return cmd
+}
 
 // GenerateSkills renders skill templates into .plan-bender/skills/{agent}/ for
 // each configured agent and returns the number of skill files written.

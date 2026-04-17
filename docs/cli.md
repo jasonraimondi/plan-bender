@@ -7,6 +7,7 @@
 | `pb setup` | Write defaults, generate skills, symlink install |
 | `pb setup --linear` | Configure Linear integration |
 | `pb setup --yes` | Non-interactive mode |
+| `pb generate` | Regenerate skills from current config (aliases: `gen`, `sync`) |
 | `pb doctor` | Verify installation health |
 | `pb self-update` | Update to latest release |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
