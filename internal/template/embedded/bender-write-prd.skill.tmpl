@@ -124,7 +124,15 @@ Iterate until approved.
 ### 6. Write the file
 {{- end}}
 
-Write the PRD YAML to a temporary file, then run `{{.commands.write_prd}} {slug} <tempfile>` to validate and write it atomically. This ensures schema validation before the file is placed in the plans directory.
+Pipe the PRD YAML to `{{.commands.write_prd}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/prd.yaml` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+
+```bash
+{{.commands.write_prd}} {slug} <<'EOF'
+name: "Project Name"
+slug: {slug}
+# ...rest of PRD YAML
+EOF
+```
 
 Rules:
 

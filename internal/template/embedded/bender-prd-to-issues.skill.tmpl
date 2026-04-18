@@ -224,7 +224,15 @@ Iterate until the user approves.
 
 ### 6. Write the issue files
 
-For each issue, write the YAML to a temporary file, then run `{{.commands.write_issue}} {slug} <tempfile>` to validate and write it atomically.
+For each issue, pipe the YAML to `{{.commands.write_issue}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.yaml` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+
+```bash
+{{.commands.write_issue}} {slug} <<'EOF'
+id: 1
+slug: issue-slug
+# ...rest of issue YAML
+EOF
+```
 
 Rules:
 
