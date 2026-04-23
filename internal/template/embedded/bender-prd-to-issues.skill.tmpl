@@ -55,11 +55,11 @@ scope: |
   What is included. Keep it narrow.
 
 acceptance_criteria:
-  - "Criterion 1"
-  - "Criterion 2"
+  - 'Criterion 1'
+  - 'Criterion 2'
 
 steps:
-  - "{{.step_pattern}}"
+  - '{{.step_pattern}}'
 
 use_cases:
   - UC-1
@@ -113,9 +113,9 @@ Ordered implementation actions following the `{{.step_pattern}}` pattern:
 
 ```yaml
 steps:
-  - "Route /auth/login — reject expired tokens with 401"
-  - "Token refresh endpoint — issue new token when refresh token is valid and not revoked"
-  - "Auth middleware — attach user context to request on valid token"
+  - 'Route /auth/login — reject expired tokens with 401'
+  - 'Token refresh endpoint — issue new token when refresh token is valid and not revoked'
+  - 'Auth middleware — attach user context to request on valid token'
 ```
 
 Steps tell the implementation agent **how** to build the issue. Acceptance criteria tell reviewers **what** to verify.
@@ -240,6 +240,7 @@ Rules:
 - IDs are sequential integers starting at 1
 - filename is `{id}-{slug}.yaml`
 - structure lives in YAML fields — do not duplicate dependencies or status in prose
+- single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
 {{if .has_backend_sync}}
 
 ### Sync to backend

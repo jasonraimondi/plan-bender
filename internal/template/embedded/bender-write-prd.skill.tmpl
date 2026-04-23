@@ -74,28 +74,28 @@ outcome: |
   What success looks like.
 
 in_scope:
-  - "Behavior or surface included"
+  - 'Behavior or surface included'
 
 out_of_scope:
-  - "What this PRD explicitly does not cover"
+  - 'What this PRD explicitly does not cover'
 
 use_cases:
   - id: UC-1
-    description: "..."
+    description: 'Short actor + action + outcome'
   - id: UC-2
-    description: "..."
+    description: 'Short actor + action + outcome'
 
 decisions:
-  - "Decision that is already settled"
+  - 'Decision that is already settled'
 
 open_questions:
-  - "Question that materially affects scope or architecture"
+  - 'Question that materially affects scope or architecture'
 
 risks:
-  - "Constraint, dependency, or rollout risk"
+  - 'Constraint, dependency, or rollout risk'
 
 validation:
-  - "How we know the work is correct or successful"
+  - 'How we know the work is correct or successful'
 
 notes: |
   High-signal notes about modules, contracts, schema changes, or testing strategy.
@@ -139,6 +139,7 @@ Rules:
 - the `slug` is a kebab-case version of the project name, used as the directory name
 - use_cases are numbered (UC-1, UC-2, ...) so issues can reference them
 - do not include file paths or code snippets in the PRD
+- single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
 
 ### {{if contains .review_with_user "bender-write-prd"}}8{{else}}7{{end}}. Hand off cleanly
 

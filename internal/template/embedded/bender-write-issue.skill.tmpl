@@ -79,11 +79,11 @@ scope: |
   What is included. Keep it narrow.
 
 acceptance_criteria:
-  - "Criterion 1"
-  - "Criterion 2"
+  - 'Criterion 1'
+  - 'Criterion 2'
 
 steps:
-  - "{{.step_pattern}}"
+  - '{{.step_pattern}}'
 
 use_cases:
   - UC-1
@@ -116,8 +116,8 @@ Ordered implementation actions using `{{.step_pattern}}`:
 
 ```yaml
 steps:
-  - "Route /auth/login — reject expired tokens with 401"
-  - "Auth middleware — attach user context to request on valid token"
+  - 'Route /auth/login — reject expired tokens with 401'
+  - 'Auth middleware — attach user context to request on valid token'
 ```
 
 Every step includes location context (route, file, service, component). No vague language.
@@ -175,6 +175,7 @@ Rules:
 - set `created` and `updated` to today's date
 - `blocked_by` and `blocking` must be kept in sync across issues
 - filename uses the issue slug
+- single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
 {{if .has_backend_sync}}
 
 ### Sync to backend
