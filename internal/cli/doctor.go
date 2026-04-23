@@ -221,7 +221,7 @@ func linearCheck(cfg config.Config) CheckResult {
 	defer cancel()
 
 	client := linear.NewClient(cfg.Linear.APIKey)
-	_, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
+	_, _, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
 	if err != nil {
 		return CheckResult{Name: "linear", Pass: false, Message: fmt.Sprintf("API unreachable: %s", err)}
 	}

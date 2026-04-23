@@ -197,10 +197,12 @@ func (c *Client) GetProject(ctx context.Context, projectID string) (*Project, []
 	return project, query.Project.Issues.Nodes, nil
 }
 
-// ListWorkflowStates fetches workflow states for a team.
-func (c *Client) ListWorkflowStates(ctx context.Context, teamID string) (map[string]string, error) {
+// ListWorkflowStates fetches the resolved team UUID and workflow states for a team.
+// teamKey may be a team key (e.g. "ENG") or a UUID; the returned resolvedID is always a UUID.
+func (c *Client) ListWorkflowStates(ctx context.Context, teamKey string) (resolvedID string, states map[string]string, err error) {
 	var query struct {
 		Team struct {
+			ID     string
 			States struct {
 				Nodes []struct {
 					ID   string
@@ -211,18 +213,18 @@ func (c *Client) ListWorkflowStates(ctx context.Context, teamID string) (map[str
 	}
 
 	vars := map[string]any{
-		"id": graphql.String(teamID),
+		"id": graphql.String(teamKey),
 	}
 
 	if err := c.gql.Query(ctx, &query, vars); err != nil {
-		return nil, fmt.Errorf("fetching workflow states: %w", err)
+		return "", nil, fmt.Errorf("fetching workflow states: %w", err)
 	}
 
-	states := make(map[string]string)
+	states = make(map[string]string)
 	for _, s := range query.Team.States.Nodes {
 		states[s.Name] = s.ID
 	}
-	return states, nil
+	return query.Team.ID, states, nil
 }
 
 // CreateAttachment creates a URL attachment on an issue.

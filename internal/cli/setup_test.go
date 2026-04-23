@@ -17,11 +17,11 @@ type mockValidator struct {
 	err error
 }
 
-func (m *mockValidator) ListWorkflowStates(_ context.Context, _ string) (map[string]string, error) {
+func (m *mockValidator) ListWorkflowStates(_ context.Context, _ string) (string, map[string]string, error) {
 	if m.err != nil {
-		return nil, m.err
+		return "", nil, m.err
 	}
-	return map[string]string{"Todo": "id-1", "Done": "id-2"}, nil
+	return "team-uuid-1", map[string]string{"Todo": "id-1", "Done": "id-2"}, nil
 }
 
 func testSetupCmd(deps setupDeps) *setupTestHarness {

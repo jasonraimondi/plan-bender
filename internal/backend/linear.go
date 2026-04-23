@@ -45,8 +45,8 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 
 	client := linear.NewClient(cfg.Linear.APIKey)
 
-	// Pre-fetch workflow states for the team
-	states, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
+	// Pre-fetch workflow states; also resolves team key → UUID for mutations.
+	teamID, states, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
 	if err != nil {
 		return nil, fmt.Errorf("fetching workflow states: %w", err)
 	}
@@ -54,7 +54,7 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 	return &linearBackend{
 		client:   client,
 		cfg:      cfg,
-		teamID:   cfg.Linear.Team,
+		teamID:   teamID,
 		stateIDs: states,
 	}, nil
 }

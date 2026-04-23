@@ -20,7 +20,7 @@ import (
 
 // linearValidator validates Linear credentials.
 type linearValidator interface {
-	ListWorkflowStates(ctx context.Context, teamID string) (map[string]string, error)
+	ListWorkflowStates(ctx context.Context, teamID string) (string, map[string]string, error)
 }
 
 type setupDeps struct {
@@ -193,7 +193,7 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 	defer cancel()
 
 	validator := deps.newValidator(apiKey)
-	if _, err := validator.ListWorkflowStates(ctx, team); err != nil {
+	if _, _, err := validator.ListWorkflowStates(ctx, team); err != nil {
 		return fmt.Errorf("linear credential validation failed: %w", err)
 	}
 
