@@ -78,7 +78,7 @@ func (c *Client) CreateProject(ctx context.Context, name, teamID string) (*Proje
 
 	vars := map[string]any{
 		"name":   graphql.String(name),
-		"teamID": graphql.ID(teamID),
+		"teamID": graphql.String(teamID),
 	}
 
 	if err := c.gql.Mutate(ctx, &mutation, vars); err != nil {
