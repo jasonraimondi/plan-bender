@@ -44,6 +44,7 @@ Skills are the primary interface — agent-side slash commands that drive the pi
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
 | `/bender-implement-prd` | Work all issues in dependency order |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
+| `/bender-sync-linear` | Sync plan with Linear (Linear backend only) |
 
 ## Docs
 
