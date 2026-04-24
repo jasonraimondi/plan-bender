@@ -52,6 +52,7 @@ func TestAllTemplatesLoad(t *testing.T) {
 		"bender-implement-prd.skill.tmpl",
 		"bender-implement-issue.skill.tmpl",
 		"bender-interview-me.skill.tmpl",
+		"bender-sync-linear.skill.tmpl",
 	}
 	for _, name := range expected {
 		assert.Contains(t, tmpls, name, "missing template %s", name)

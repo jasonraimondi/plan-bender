@@ -1,0 +1,112 @@
+---
+name: bender-sync-linear
+description: Sync a local plan directory with Linear in a chosen direction. Creates the Linear project and issues if they don't exist; updates them based on a source-of-truth direction (local→Linear or Linear→local). Use when user says "sync with linear", "push plan to linear", "pull linear updates", or "/bender-sync-linear".
+---
+
+# Sync with Linear
+
+Reconcile a local plan with Linear. Direction-of-truth is explicit, never inferred.
+
+## Input
+
+The user provides a project slug (e.g., `auth`) — the directory under `{{.plans_dir}}`.
+
+If none provided, ask: "Which plan should I sync? (slug)"
+
+## Step 1 — read the local state
+
+Read `{{.plans_dir}}{slug}/prd.yaml` and list `{{.plans_dir}}{slug}/issues/`.
+
+Capture:
+
+- `linear.project_id` on the PRD — is the plan already linked?
+- count of issues with `linear_id` set vs unset
+- counts by status
+
+## Step 2 — pick the direction
+
+Ask the user to pick one. Show the consequences before they choose:
+
+```
+Sync direction:
+
+  1. local → linear   PUSH local YAML to Linear
+                        - if no project_id: creates Linear project "<PRD name>"
+                        - issues without linear_id: creates them in Linear
+                        - issues with linear_id: updates title/status/priority in Linear
+                        - one-way: local wins on every field
+
+  2. linear → local   PULL Linear state into local YAML
+                        - requires linear.project_id on the PRD
+                        - matches by linear_id; updates status/priority/assignee
+                        - one-way: Linear wins on those fields
+                        - does NOT delete local issues missing from Linear
+
+  3. cancel
+```
+
+Notes to surface explicitly:
+
+- v1 has **no conflict detection** — whichever side you pick wins, full stop.
+- pull only reconciles `status`, `priority`, `assignee` — title/description changes in Linear are not pulled back yet.
+- push only sends title/description on **create**; updates push title/status/priority.
+
+## Step 3 — confirm before mutating Linear (push only)
+
+If the user picked **local → linear** and the PRD has no `linear.project_id`:
+
+> "This will create a new Linear project '<PRD name>' and N issues. Proceed?"
+
+If the user picked **local → linear** and `linear.project_id` exists:
+
+> "This will update the existing Linear project and sync N issues (M new, K updates). Proceed?"
+
+For **linear → local**, no confirmation needed — local YAML is git-tracked, easy to revert.
+
+## Step 4 — run the sync
+
+Use the agent CLI (JSON output):
+
+**Push (local → Linear):**
+
+```bash
+{{.commands.sync_push}} {slug}
+```
+
+**Pull (Linear → local):**
+
+```bash
+{{.commands.sync_pull}} {slug}
+```
+
+(Equivalent human form: `pb sync linear {slug} --from local|linear`.)
+
+Parse the JSON response. Expected shape:
+
+```json
+{"status": "ok|partial", "created": N, "updated": M, "errors": [{"issue_id": ..., "error": "..."}]}
+```
+
+## Step 5 — report
+
+Tell the user:
+
+- direction that ran
+- counts (created, updated)
+- any per-issue errors
+- if push created the project: the new `linear.project_id` written back to `prd.yaml`
+
+If the run was `partial`, list the failing issue IDs and their errors. Do not retry automatically — surface and ask.
+
+## When to suggest the other direction
+
+After a successful sync, if the user might want the other direction next, suggest it. Examples:
+
+- After **push**: "Linear is now in sync. Pull anytime to grab status changes from teammates."
+- After **pull**: "Local is updated. Push when you've made local edits you want to reflect."
+
+## Failure modes
+
+- `linear.api_key is required` — config missing; tell the user to run `pb setup` and pick Linear.
+- `no linear.project_id in PRD — run push first` — they tried to pull before linking. Suggest push first.
+- HTTP/auth errors from Linear — surface verbatim; don't paper over.

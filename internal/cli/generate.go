@@ -19,7 +19,7 @@ import (
 func NewGenerateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "generate",
-		Aliases: []string{"gen", "sync"},
+		Aliases: []string{"gen"},
 		Short:   "Regenerate skills from the current config",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := os.Getwd()
@@ -69,6 +69,9 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 
 		for name, content := range templates {
 			skillName := strings.TrimSuffix(name, ".skill.tmpl")
+			if tmpl.SkillRequiresBackend(skillName) && !cfg.Linear.Enabled {
+				continue
+			}
 			outDir := filepath.Join(root, ".plan-bender", "skills", agent.Name, skillName)
 			if err := os.MkdirAll(outDir, 0o755); err != nil {
 				return 0, fmt.Errorf("creating dir %s: %w", outDir, err)

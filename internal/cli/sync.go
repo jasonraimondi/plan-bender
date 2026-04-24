@@ -24,10 +24,35 @@ func NewSyncCmd() *cobra.Command {
 }
 
 func newSyncLinearCmd() *cobra.Command {
+	var from string
+
 	cmd := &cobra.Command{
-		Use:   "linear",
+		Use:   "linear <slug>",
 		Short: "Sync issues with Linear",
+		Long: `Sync local plan with Linear in either direction.
+
+  --from local    push local PRD/issues to Linear (creates project + issues if missing)
+  --from linear   pull Linear state into local YAML
+
+Or use the explicit subcommands: 'sync linear push <slug>' / 'sync linear pull <slug>'.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			switch from {
+			case "local":
+				return syncPush(cmd, args[0])
+			case "linear":
+				return syncPull(cmd, args[0])
+			case "":
+				return fmt.Errorf("--from required: 'local' (push) or 'linear' (pull)")
+			default:
+				return fmt.Errorf("--from must be 'local' or 'linear', got %q", from)
+			}
+		},
 	}
+	cmd.Flags().StringVar(&from, "from", "", "source of truth: 'local' (push) or 'linear' (pull)")
 
 	cmd.AddCommand(newSyncPushCmd(), newSyncPullCmd())
 	return cmd

@@ -76,7 +76,7 @@ func TestGenerateCmd_RepicksUpTemplateOverride(t *testing.T) {
 
 func TestGenerateCmd_Aliases(t *testing.T) {
 	cmd := NewGenerateCmd()
-	assert.ElementsMatch(t, []string{"gen", "sync"}, cmd.Aliases)
+	assert.ElementsMatch(t, []string{"gen"}, cmd.Aliases)
 }
 
 func TestGenerateCmd_InvalidConfigReportsError(t *testing.T) {

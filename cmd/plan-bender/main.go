@@ -87,6 +87,7 @@ func rootCmd() *cobra.Command {
 	root.AddCommand(
 		cli.NewSetupCmd(version),
 		cli.NewGenerateCmd(),
+		cli.NewSyncCmd(),
 		cli.NewDoctorCmd(version),
 		cli.NewSelfUpdateCmd(version),
 		cli.NewCompletionCmd(),

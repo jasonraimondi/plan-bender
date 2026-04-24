@@ -44,3 +44,36 @@ func TestBuildContext_NoExtraKeysIsClean(t *testing.T) {
 	assert.Equal(t, "claude-code", ctx["agent"])
 	assert.NotNil(t, ctx["plans_dir"])
 }
+
+func TestBuildContext_BackendOnlyPhaseHiddenWhenLinearDisabled(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Linear.Enabled = false
+	ctx := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+
+	phases, _ := ctx["pipeline_phases"].([]map[string]string)
+	for _, p := range phases {
+		assert.NotEqual(t, "bender-sync-linear", p["skill"], "sync phase must be hidden when Linear is disabled")
+	}
+}
+
+func TestBuildContext_BackendOnlyPhaseShownWhenLinearEnabled(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Linear.Enabled = true
+	ctx := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+
+	phases, _ := ctx["pipeline_phases"].([]map[string]string)
+	found := false
+	for _, p := range phases {
+		if p["skill"] == "bender-sync-linear" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "sync phase must be present when Linear is enabled")
+}
+
+func TestSkillRequiresBackend(t *testing.T) {
+	assert.True(t, SkillRequiresBackend("bender-sync-linear"))
+	assert.False(t, SkillRequiresBackend("bender-write-prd"))
+	assert.False(t, SkillRequiresBackend("does-not-exist"))
+}

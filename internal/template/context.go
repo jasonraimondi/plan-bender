@@ -22,9 +22,21 @@ var defaultTrackDescriptions = map[string]string{
 
 // PipelinePhase is a step in the planning pipeline.
 type PipelinePhase struct {
-	Name        string
-	Description string
-	Skill       string
+	Name            string
+	Description     string
+	Skill           string
+	RequiresBackend bool
+}
+
+// SkillRequiresBackend reports whether a skill template should only be
+// generated when a backend (Linear) is enabled.
+func SkillRequiresBackend(skill string) bool {
+	for _, p := range defaultPipelinePhases {
+		if p.Skill == skill {
+			return p.RequiresBackend
+		}
+	}
+	return false
 }
 
 var defaultPipelinePhases = []PipelinePhase{
@@ -35,6 +47,7 @@ var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Review PRD", Description: "Review plan quality", Skill: "bender-review-prd"},
 	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd"},
 	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue"},
+	{Name: "Sync with Linear", Description: "Push local plan to Linear or pull Linear state", Skill: "bender-sync-linear", RequiresBackend: true},
 }
 
 // BuildContext produces the template rendering context from config for a specific agent.
@@ -64,13 +77,17 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 	}
 	var phases []map[string]string
 	for _, p := range defaultPipelinePhases {
-		if !skipSet[p.Skill] {
-			phases = append(phases, map[string]string{
-				"name":        p.Name,
-				"description": p.Description,
-				"skill":       p.Skill,
-			})
+		if skipSet[p.Skill] {
+			continue
 		}
+		if p.RequiresBackend && !cfg.Linear.Enabled {
+			continue
+		}
+		phases = append(phases, map[string]string{
+			"name":        p.Name,
+			"description": p.Description,
+			"skill":       p.Skill,
+		})
 	}
 
 	// Custom fields
