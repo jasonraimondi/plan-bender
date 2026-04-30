@@ -16,8 +16,9 @@ The user provides one or more issue references:
 
 - file path: `{{.plans_dir}}auth/issues/1-setup-middleware.yaml`
 - shorthand: `auth#1` (project slug + issue ID)
+- slug only (e.g. `auth`): run `{{.commands.next}} {slug}` to auto-pick the next ready issue
 
-If none provided, ask: "Which issue(s) should I work on?"
+If none provided, ask: "Which issue should I work on? (issue ref, or a plan slug to auto-pick via `{{.commands.next}}`)"
 
 ## Workflow states
 
@@ -106,6 +107,8 @@ Once implementation is complete and tests pass:
 1. Push the branch with `-u`
 2. Create a PR with the issue reference in the title and body
 3. Include a concise test plan in the PR body
+
+**Skip this step when invoked under `bender-implement-prd` integration mode** — the parent merges all issue branches into a single feature branch and opens one combined PR. In that mode: commit on the assigned branch only; do not push, do not open a PR.
 
 ### 8. Update issue YAML
 

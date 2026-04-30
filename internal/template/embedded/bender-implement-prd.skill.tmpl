@@ -1,6 +1,6 @@
 ---
 name: bender-implement-prd
-description: Work through a PRD's issues in dependency order using YAML workflow states, AFK/HITL routing, and proper status tracking.
+description: Work through a PRD's issues in dependency order using YAML workflow states, AFK/HITL routing, and proper status tracking. Defaults to parallel git worktrees merged into one feature branch.
 {{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
 {{end}}
@@ -8,7 +8,7 @@ allowed-tools: Bash(linear:*), Bash(jq:*)
 
 # Work on PRD
 
-Work through a PRD's implementation issues in dependency order.
+Work through a PRD's issues in dependency order. Default execution model: one integration feature branch, with parallel git worktrees for independent AFK issues, merged back and cleaned up at the end.
 
 ## Input
 
@@ -30,36 +30,103 @@ Read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issu
 
 If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
-### 2. Pick the next issue
+### 2. Set up the integration branch
 
-Run `{{.commands.next}} {slug}` to get the recommended next issue. The command
-returns JSON with these fields:
+All work for this PRD lands on **one** feature branch. Never commit issue work directly to the default branch.
+
+- branch: `<user>/<project-slug>` (e.g., `jason/auth`)
+- create off the repo's default branch (`main` or `master`) if missing; otherwise reuse
+- per-issue branches root here and merge back here
+- a single combined PR is opened from this branch at the end
+
+### 3. Discover the ready batch
+
+Use `{{.commands.next}} {slug}` as the source of truth for what to pick up. It returns JSON:
 
 - `issue` — the chosen issue, or `null` if no candidate is ready
 - `reason` — why it was picked (status, priority, flags)
 - `was_blocked` — true when the issue had `status: blocked` but its blockers are now done|canceled. Set status to `todo` before starting.
-- `requires_human` — true when only HITL candidates remain. Surface the issue to the user instead of auto-starting.
-- `all_done` — true when every issue is `done` or `canceled`. Skip to §4.
+- `requires_human` — true when only HITL candidates remain. Surface to the user instead of auto-starting.
+- `all_done` — true when every issue is `done` or `canceled`. Skip to §6.
 - `blocked_count` — count of issues still truly blocked (informational).
 - `skipped[]` — every issue not chosen, each with a one-line reason.
 
-Use the returned `issue` field directly — do not re-derive ordering from YAML.
-The resolver already applies status, priority, dependency, label, and assignee
-rules. Loop: pick → implement → repeat until `issue` is null.
+Trust the resolver's ordering — never re-derive it from YAML.
 
-### 3. Work through issues
+To assemble a **parallel batch**: call `{{.commands.next}} {slug}` to confirm at least one ready candidate, then enumerate every other ready issue by reading the YAML files (status `todo` or stale-blocked, all `blocked_by` in done|canceled, AFK only). The resolver picks one at a time; the batch is the set we'll dispatch concurrently.
 
-Process issues in dependency order using the `bender-implement-issue` workflow.
+### 4. Dispatch the batch
 
-**AFK issues**: proceed automatically, then move to the next ready issue.
+An issue is **parallelizable** when:
 
-**HITL issues**: stop and explain the specific decision or input needed. Wait for the user's response.
+- AFK (not HITL)
+- not flagged `headed: true` (browser sessions don't parallelize cleanly)
+- its step targets do not overlap another batched issue's targets (best-effort scan of `target` fields — when in doubt, sequence them)
 
-**Blocked issues**: set `status: blocked` in the YAML, record the reason in `notes`, move to the next ready issue. Once the blocker clears, set `status: todo` before resuming.
+#### Parallel worktrees (2+ parallelizable issues)
 
-### 4. Status report
+For each parallelizable issue, prepare a worktree off the integration branch:
 
-After all ready issues are processed, print a summary. Use `{{.commands.context}} {slug}` to get current issue counts per track.
+```bash
+git branch <user>/<slug>/<id>-<issue-slug> <user>/<slug>
+git worktree add ../<repo>-wt/<id>-<issue-slug> <user>/<slug>/<id>-<issue-slug>
+```
+
+Then in **a single message**, spawn one Agent (Task tool) per issue so they run concurrently. Every sub-agent prompt MUST include:
+
+- the literal word **`ultrathink`** to request deeper reasoning
+- working directory: the worktree path
+- "follow the `bender-implement-issue` skill for `{slug}#{id}`"
+- "be **idiomatic** to the language and framework of the modules touched — apply the relevant language skills (e.g. `golang-pro`, `typescript-advanced-types`, `best-practices-svelte5`, `rust-best-practices`)"
+- "commit on the assigned branch only — do **not** push, do **not** open a PR; the parent integrates and opens one combined PR"
+
+Wait for every sub-agent to complete. Then on the main checkout:
+
+```bash
+git checkout <user>/<slug>
+git merge --no-ff <issue-branch>   # for each completed branch, dependency-stable order
+```
+
+Re-run lint and the test suite on the integration branch after the merges land. Resolve conflicts by issue intent.
+
+If a sub-agent failed (tests red, blocked, surfaced a problem): mark that issue `status: blocked` with the reason in `notes`, leave its branch un-merged, continue with the rest.
+
+Clean up worktrees:
+
+```bash
+git worktree remove ../<repo>-wt/<id>-<issue-slug>   # each merged or abandoned worktree
+git worktree prune
+```
+
+Verify with `git worktree list` that only the main worktree remains.
+
+#### Sequential (single ready issue, or none parallelizable)
+
+Invoke `bender-implement-issue` directly on the integration branch. Same constraints — idiomatic, no per-issue PR; the parent opens the combined PR.
+
+#### HITL / Blocked
+
+- **HITL**: stop, explain the specific decision or input needed, wait for the user.
+- **Blocked**: set `status: blocked`, record the reason in `notes`, move on. Once the blocker clears, set `status: todo` before resuming.
+
+### 5. Loop
+
+After the batch integrates, return to §3. Newly-completed issues unblock downstream work. Stop when `{{.commands.next}} {slug}` reports `all_done: true` or only HITL/blocked remain.
+
+### 6. Open the combined PR
+
+```bash
+git push -u origin <user>/<slug>
+```
+
+Open one PR off `<user>/<slug>` to the default branch. Title: the PRD title. Body:
+
+- one bullet per issue (id, title, key acceptance)
+- aggregated test plan from each issue's verification
+
+### 7. Status report
+
+Use `{{.commands.context}} {slug}` to get current issue counts per track.
 
 ```text
 PRD: <project name>
@@ -69,7 +136,7 @@ Blocked:     <count> (<issue IDs>)
 QA:          <count>
 Remaining:   <count> (<issue list>)
 Points done: <sum> / <total>
-PRs:         <list of PR URLs>
+PR:          <integration PR URL>
 
 Track coverage:
 {{range .tracks}}

@@ -288,3 +288,38 @@ func TestWorkflowStatesJoin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, strings.Join(ctx["workflow_states"].([]string), " → "))
 }
+
+func TestImplementPrdTemplate_BakesParallelWorktreeFlow(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	require.NoError(t, err)
+
+	// Integration branch + worktree + cleanup are now first-class.
+	assert.Contains(t, out, "integration branch")
+	assert.Contains(t, out, "git worktree add")
+	assert.Contains(t, out, "git worktree remove")
+	assert.Contains(t, out, "git merge --no-ff")
+
+	// Sub-agent constraints the user kept rewriting by hand.
+	assert.Contains(t, out, "ultrathink")
+	assert.Contains(t, out, "idiomatic")
+
+	// Single combined PR — no per-issue PRs from sub-agents.
+	assert.Contains(t, out, "one combined PR")
+}
+
+func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "plan-bender-agent next")
+	assert.Contains(t, out, "bender-implement-prd")
+	assert.Contains(t, out, "do not push")
+}
