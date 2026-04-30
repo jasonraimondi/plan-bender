@@ -42,6 +42,8 @@ func NewGenerateCmd() *cobra.Command {
 				return err
 			}
 
+			warnForkedNextTemplates(root, cmd.ErrOrStderr())
+
 			count, err := symlinkSkills(root, cfg)
 			if err != nil {
 				return err
@@ -92,4 +94,27 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 
 	fmt.Fprintf(out, "%d skills generated\n", count)
 	return count, nil
+}
+
+// warnForkedNextTemplates writes a stderr warning for each forked copy of a
+// template that the upstream now delegates to `pba next`. Users with stale
+// forks should re-fork to pick up the new behavior.
+func warnForkedNextTemplates(root string, stderr io.Writer) {
+	overrideDir := filepath.Join(root, ".plan-bender", "templates")
+	entries, err := os.ReadDir(overrideDir)
+	if err != nil {
+		return
+	}
+	watched := map[string]bool{
+		"bender-implement-prd.skill.tmpl": true,
+		"bender-orchestrator.skill.tmpl":  true,
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if watched[e.Name()] {
+			fmt.Fprintf(stderr, "warning: forked template %s found in .plan-bender/templates/; upstream now uses `pba next` — re-fork to pick up the new behavior\n", e.Name())
+		}
+	}
 }

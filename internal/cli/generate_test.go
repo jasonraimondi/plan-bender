@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,4 +99,97 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(ocData), "AskUserQuestionTool")
 	assert.Contains(t, string(ocData), "Ask the user directly in conversation")
+}
+
+func TestGenerateCmd_NoForkedNextTemplates_NoWarning(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	assert.NotContains(t, stderr.String(), "warning:")
+}
+
+func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "bender-implement-prd.skill.tmpl"),
+		[]byte("---\nname: x\n---\nbody"),
+		0o644,
+	))
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.Contains(t, out, "pba next")
+	assert.Contains(t, out, "re-fork")
+	assert.NotContains(t, out, "bender-orchestrator.skill.tmpl")
+}
+
+func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "bender-orchestrator.skill.tmpl"),
+		[]byte("---\nname: x\n---\nbody"),
+		0o644,
+	))
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, out, "pba next")
+	assert.Contains(t, out, "re-fork")
+	assert.NotContains(t, out, "bender-implement-prd.skill.tmpl")
+}
+
+func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	for _, name := range []string{"bender-implement-prd.skill.tmpl", "bender-orchestrator.skill.tmpl"} {
+		require.NoError(t, os.WriteFile(
+			filepath.Join(overrideDir, name),
+			[]byte("---\nname: x\n---\nbody"),
+			0o644,
+		))
+	}
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Equal(t, 2, strings.Count(out, "warning:"), "expected exactly two warning lines")
 }
