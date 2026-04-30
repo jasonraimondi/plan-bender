@@ -77,3 +77,12 @@ func TestSkillRequiresBackend(t *testing.T) {
 	assert.False(t, SkillRequiresBackend("bender-write-prd"))
 	assert.False(t, SkillRequiresBackend("does-not-exist"))
 }
+
+func TestBuildContext_CommandsIncludesNext(t *testing.T) {
+	cfg := config.Defaults()
+	agent := config.ResolvedAgent{Name: "claude-code"}
+	ctx := BuildContext(cfg, agent)
+	cmds, ok := ctx["commands"].(map[string]string)
+	assert.True(t, ok, "commands should be map[string]string")
+	assert.Equal(t, "plan-bender-agent next", cmds["next"])
+}

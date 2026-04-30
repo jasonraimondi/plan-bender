@@ -10,6 +10,7 @@ var defaultCommands = map[string]string{
 	"sync_push":   "plan-bender-agent sync linear push",
 	"sync_pull":   "plan-bender-agent sync linear pull",
 	"archive":     "plan-bender-agent archive",
+	"next":        "plan-bender-agent next",
 }
 
 var defaultTrackDescriptions = map[string]string{

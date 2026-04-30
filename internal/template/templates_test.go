@@ -35,6 +35,7 @@ func fixtureContext() map[string]any {
 			"sync_push":   "plan-bender-agent sync linear push",
 			"sync_pull":   "plan-bender-agent sync linear pull",
 			"archive":     "plan-bender-agent archive",
+			"next":        "plan-bender-agent next",
 		},
 	}
 }
@@ -254,6 +255,28 @@ func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent sync linear push")
 	assert.Contains(t, out, "plan-bender-agent sync linear pull")
+}
+
+func TestImplementPrdTemplate_CallsNextResolver(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender-agent next")
+	assert.NotContains(t, out, "Build the execution queue")
+	assert.NotContains(t, out, "Routing rules:")
+}
+
+func TestOrchestratorTemplate_SuggestsNextResolver(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("orchestrator", tmpls["bender-orchestrator.skill.tmpl"], ctx)
+	require.NoError(t, err)
+	assert.Contains(t, out, "plan-bender-agent next")
 }
 
 func TestWorkflowStatesJoin(t *testing.T) {
