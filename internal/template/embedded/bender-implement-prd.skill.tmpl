@@ -30,37 +30,22 @@ Read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issu
 
 If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
-### 2. Build the execution queue
+### 2. Pick the next issue
 
-Build the queue from YAML fields, not prose:
+Run `{{.commands.next}} {slug}` to get the recommended next issue. The command
+returns JSON with these fields:
 
-- `blocked_by` dependencies
-- `status`
-- `assignee`
-- `priority`
-- `labels` (AFK / HITL)
-- `points`
-- `track`
+- `issue` — the chosen issue, or `null` if no candidate is ready
+- `reason` — why it was picked (status, priority, flags)
+- `was_blocked` — true when the issue had `status: blocked` but its blockers are now done|canceled. Set status to `todo` before starting.
+- `requires_human` — true when only HITL candidates remain. Surface the issue to the user instead of auto-starting.
+- `all_done` — true when every issue is `done` or `canceled`. Skip to §4.
+- `blocked_count` — count of issues still truly blocked (informational).
+- `skipped[]` — every issue not chosen, each with a one-line reason.
 
-Routing rules:
-
-- determine agent routing from labels: **AFK** (autonomous) and **HITL** (needs human)
-- prefer issues already in **todo**
-- do not auto-pick issues in **blocked** unless the blocker is clearly resolved
-- if none are in todo, choose the highest-priority unblocked **AFK** issue in **backlog**, move it to todo, then start it
-- if a previously blocked issue becomes unblocked, move it to **todo** before resuming
-- skip issues assigned to someone else unless the user says to take them
-- read `blocked_by` fields — do not parse prose for dependency info
-
-Present the plan as a numbered list showing:
-
-- issue ID, title, and track
-- current status
-- routing label (AFK / HITL)
-- tdd / headed flags
-- blockers
-- points
-- why it is next
+Use the returned `issue` field directly — do not re-derive ordering from YAML.
+The resolver already applies status, priority, dependency, label, and assignee
+rules. Loop: pick → implement → repeat until `issue` is null.
 
 ### 3. Work through issues
 

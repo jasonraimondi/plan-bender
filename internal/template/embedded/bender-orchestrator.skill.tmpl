@@ -38,6 +38,5 @@ Offer these actions:
 1. If no plans exist, suggest starting with **Interview** or **Write a PRD**.
 2. If plans exist, show their status and suggest the next logical action based on plan state:
    - `draft` → Review PRD or PRD to Issues
-   - `active` with todo/backlog issues → Implement PRD
-   - `active` with all done → Archive
+   - `active` → run `{{.commands.next}} {slug}` to see what to pick up. If `issue` is non-null, suggest **Implement PRD**. If `all_done` is true, suggest **Archive**.
 3. Let the user choose. After completing an action, return to the menu.

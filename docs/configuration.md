@@ -125,8 +125,10 @@ Templates receive a context map built from your config:
 | `validate` | `plan-bender-agent validate` |
 | `write_prd` | `plan-bender-agent write-prd` |
 | `write_issue` | `plan-bender-agent write-issue` |
-| `sync` | `plan-bender-agent sync` |
+| `sync_push` | `plan-bender-agent sync linear push` |
+| `sync_pull` | `plan-bender-agent sync linear pull` |
 | `archive` | `plan-bender-agent archive` |
+| `next` | `plan-bender-agent next` |
 
 Use `{{.commands.write_prd}}` in templates instead of hardcoding binary names.
 
