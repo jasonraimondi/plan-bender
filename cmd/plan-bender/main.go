@@ -92,6 +92,7 @@ func rootCmd() *cobra.Command {
 		cli.NewSelfUpdateCmd(version),
 		cli.NewCompletionCmd(),
 		cli.NewDocsCmd(),
+		cli.NewNextCmd(),
 	)
 
 	return root

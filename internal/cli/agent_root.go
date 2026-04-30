@@ -46,6 +46,9 @@ func NewAgentRootCmd(version string) *cobra.Command {
 	syncCmd := NewSyncCmd()
 	applySlugCompletionToLeaves(syncCmd, slugComplete)
 
+	nextCmd := NewNextCmd()
+	nextCmd.ValidArgsFunction = slugComplete
+
 	root.AddCommand(
 		validateCmd,
 		NewContextCmd(),
@@ -53,6 +56,7 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		writeIssueCmd,
 		syncCmd,
 		archiveCmd,
+		nextCmd,
 	)
 
 	return root
