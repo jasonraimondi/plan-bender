@@ -13,6 +13,7 @@
 | `pb sync linear pull <slug>` | Pull Linear state into local YAML |
 | `pb doctor` | Verify installation health |
 | `pb self-update` | Update to latest release |
+| `pb next <slug>` | Show recommended next issue (formatted text) |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
 | `pb docs` | Open GitHub repo in browser |
 | `pb docs --print` | Print repo URL without opening |
@@ -31,6 +32,7 @@ All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero e
 | `plan-bender-agent context` | Summary of all plans |
 | `plan-bender-agent context <slug>` | Full dump — PRD, issues, dependency graph, stats |
 | `plan-bender-agent validate <slug>` | Structured validation errors |
+| `plan-bender-agent next <slug>` | Recommended next issue (JSON) |
 | `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write PRD |
 | `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write issue |
 | `plan-bender-agent sync linear push <slug>` | Push local issues to Linear |
