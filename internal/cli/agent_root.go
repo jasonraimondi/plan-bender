@@ -11,6 +11,14 @@ type contextKey string
 
 const agentJSONOutputKey contextKey = "agentJSONOutput"
 
+// MarkAgentMode tags cmd's context so isAgentMode returns true. Call from a
+// caller's PersistentPreRunE when wrapping NewAgentRootCmd, since cobra
+// silently drops the root's PersistentPreRun when a caller installs their own.
+func MarkAgentMode(cmd *cobra.Command) {
+	ctx := context.WithValue(cmd.Context(), agentJSONOutputKey, true)
+	cmd.SetContext(ctx)
+}
+
 // NewAgentRootCmd creates the root command for the plan-bender-agent binary.
 // All output is JSON. Errors are written as {"error": "...", "code": "..."} to stdout.
 func NewAgentRootCmd(version string) *cobra.Command {
@@ -21,8 +29,7 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			ctx := context.WithValue(cmd.Context(), agentJSONOutputKey, true)
-			cmd.SetContext(ctx)
+			MarkAgentMode(cmd)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("unknown command; run with --help for usage")

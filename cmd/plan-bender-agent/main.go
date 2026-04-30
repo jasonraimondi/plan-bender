@@ -15,6 +15,8 @@ func main() {
 	root := cli.NewAgentRootCmd(version)
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		cli.MarkAgentMode(cmd)
+
 		wd, err := os.Getwd()
 		if err != nil {
 			return cli.NewAgentError("failed to get working directory: "+err.Error(), cli.ErrConfigError)
