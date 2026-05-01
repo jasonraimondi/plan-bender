@@ -56,6 +56,11 @@ pipeline:
                                #   default branch and merges issue branches there.
                                # direct: dispatch merges issue branches straight into
                                #   the default branch — no integration branch.
+  subprocess_timeout: 30m      # Per-subprocess cap on each `claude --print` invocation.
+                               # Go duration string ("30m", "2h"). A hung sub-agent
+                               # otherwise blocks the dispatch loop forever. Also caps
+                               # the lifetime of `before_issue` / `after_issue` hooks.
+                               # Validated at config load.
 
 hooks:                         # Shell strings run by `pba dispatch` around its lifecycle
   before_issue: ""             # Runs in the worktree dir before each subprocess.
@@ -63,6 +68,7 @@ hooks:                         # Shell strings run by `pba dispatch` around its 
   after_issue: ""              # Runs in the worktree dir after each subprocess (any outcome).
                                # Failures are logged but do not change issue status.
   after_batch: ""              # Runs in the repo root after merge-back. Non-fatal.
+                               # Hook lifetime is bounded by pipeline.subprocess_timeout.
 
 issue_schema:
   custom_fields: []            # Add required fields to every issue
