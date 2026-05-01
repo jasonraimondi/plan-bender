@@ -99,6 +99,8 @@ func rootCmd() *cobra.Command {
 		cli.NewCompleteCmd(),
 		cli.NewWorktreeCmd(),
 		cli.NewDispatchCmd(),
+		cli.NewStatusCmd(),
+		cli.NewRetryCmd(),
 	)
 
 	return root
