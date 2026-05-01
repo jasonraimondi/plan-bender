@@ -40,6 +40,26 @@ type Dispatcher struct {
 	// gitMu serializes git plumbing operations on Root. Concurrent
 	// `git worktree add` invocations deadlock on git's internal locks.
 	gitMu sync.Mutex
+
+	// outOnce + outWriter memoize the synchronized writer wrapping d.Out so
+	// every goroutine streaming sub-agent output shares one mutex.
+	outOnce   sync.Once
+	outWriter io.Writer
+}
+
+// lockedWriter serializes Write calls so concurrent goroutines streaming
+// sub-agent stdout don't interleave at the byte level. POSIX guarantees
+// write() atomicity only up to PIPE_BUF (4KB), well below stream-json line
+// sizes that embed tool outputs.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (lw *lockedWriter) Write(p []byte) (int, error) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	return lw.w.Write(p)
 }
 
 func (d *Dispatcher) plansDir() string {
@@ -53,10 +73,14 @@ func (d *Dispatcher) plansDir() string {
 }
 
 func (d *Dispatcher) out() io.Writer {
-	if d.Out == nil {
-		return os.Stdout
-	}
-	return d.Out
+	d.outOnce.Do(func() {
+		base := d.Out
+		if base == nil {
+			base = os.Stdout
+		}
+		d.outWriter = &lockedWriter{w: base}
+	})
+	return d.outWriter
 }
 
 func (d *Dispatcher) strategy() string {
