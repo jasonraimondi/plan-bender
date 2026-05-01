@@ -30,9 +30,12 @@ func NewPlanStore(root string, fsys fs.FS, write WriteFunc, mkdir MkdirFunc) *Pl
 	return &PlanStore{root: root, fsys: fsys, write: write, mkdir: mkdir}
 }
 
-// NewProdPlanStore creates a PlanStore wired with production I/O (os filesystem, atomic writes).
+// NewProdPlanStore creates a PlanStore wired with production I/O: an os
+// filesystem reader, atomic temp+rename writes serialized by a flock on the
+// plans dir (so concurrent sub-agents reaching plansDir via a symlink can't
+// lose updates), and recursive mkdir.
 func NewProdPlanStore(plansDir string) *PlanStore {
-	return NewPlanStore(plansDir, prodFS(plansDir), AtomicWrite, prodMkdir)
+	return NewPlanStore(plansDir, prodFS(plansDir), lockedAtomicWrite(plansDir), prodMkdir)
 }
 
 // ReadPrd reads and parses a PRD YAML file.
