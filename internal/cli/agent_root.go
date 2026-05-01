@@ -56,6 +56,15 @@ func NewAgentRootCmd(version string) *cobra.Command {
 	nextCmd := NewNextCmd()
 	nextCmd.ValidArgsFunction = slugComplete
 
+	completeCmd := NewCompleteCmd()
+	completeCmd.ValidArgsFunction = slugComplete
+
+	worktreeCmd := NewWorktreeCmd()
+	applySlugCompletionToLeaves(worktreeCmd, slugComplete)
+
+	dispatchCmd := NewDispatchCmd()
+	dispatchCmd.ValidArgsFunction = slugComplete
+
 	root.AddCommand(
 		validateCmd,
 		NewContextCmd(),
@@ -64,6 +73,9 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		syncCmd,
 		archiveCmd,
 		nextCmd,
+		completeCmd,
+		worktreeCmd,
+		dispatchCmd,
 	)
 
 	return root

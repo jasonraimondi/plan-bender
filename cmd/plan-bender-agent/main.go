@@ -29,6 +29,9 @@ func main() {
 	}
 
 	if err := cli.ExecuteAgent(root); err != nil {
+		if cli.IsHITLOnly(err) {
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }

@@ -106,3 +106,51 @@ Yes, in principle. Plan-bender writes the YAML plan; the dispatcher in `bender-i
 ## Bottom line
 
 The single biggest improvement plan-bender could make, based on sandcastle's example, is to **stop encoding orchestration mechanics in markdown and start encoding them in `pba` subcommands behind typed Go interfaces.** Worktree creation, agent dispatch, completion detection, and lifecycle hooks are all currently prose in `bender-implement-prd.skill.tmpl`. Sandcastle treats each of those as a first-class abstraction with adapters and tests. The skill prompts shrink to "run `pba dispatch <slug>` and follow its output," which is more reliable across agents, observable from outside the LLM context, and unit-testable. The opinionated planning layer — the part that's actually plan-bender's product — stays exactly as it is.
+
+---
+
+## Phased roadmap
+
+### Phase 1 — Dispatch infrastructure + config polish
+*Move orchestration mechanics from prose into Go. The skill prompts shrink to `pba` calls; dispatch becomes testable and cross-agent.*
+
+| Feature | What it is | Why now |
+|---|---|---|
+| `pba worktree create/gc` | First-class worktree management: branch naming, path return, cleanup on failure | LLM-driven `git worktree add` is brittle; this is the foundation Phase 1 depends on |
+| `pba dispatch <slug>` | Reads resolver, creates worktrees, spawns parallel Task agents, blocks until complete | Replaces 80-line bash-in-markdown in `bender-implement-prd`; enables everything below |
+| Completion sentinel | Sub-agent emits `<pba:complete>` (or calls `pba complete <slug> <id>`); dispatcher detects and flips status | Removes reliance on agent memory for status updates |
+| Lifecycle hooks | `hooks: { before_issue, after_issue, before_pr }` in `.plan-bender.yaml` | Cheap; high value for any project with a build step |
+| Branch strategy enum | `pipeline.branch_strategy: integration \| direct` config field | Config-only change; no code complexity; solo devs skip integration-branch ceremony |
+
+**Exit criteria**: `bender-implement-prd` skill body reduced to calling `pba dispatch`; all worktree and branch logic removed from markdown.
+
+---
+
+### Phase 2 — Observability
+*Dependent on Phase 1 (dispatch must be a real process before we can observe it).*
+
+| Feature | What it is |
+|---|---|
+| `pba watch <slug>` | Tail live iteration logs from running parallel dispatch |
+| Iteration timeout | Kill a stuck Task agent after N minutes (configurable); surface error to user |
+
+---
+
+### Phase 3 — Sandbox isolation
+*Standalone PRD. Significant scope; optional, opt-in, doesn't change default behavior.*
+
+| Feature | What it is |
+|---|---|
+| `SandboxProvider` interface | Go adapter: `none` (default) \| `docker` \| `podman` |
+| `pba run-issue --sandbox docker` | Wraps the worktree in a container for unattended AFK runs |
+| Session capture | Copy Claude session JSONLs after each iteration for resumability |
+
+---
+
+### Not doing (rationale)
+
+| Idea | Reason skipped |
+|---|---|
+| Depend on sandcastle npm package | Language mismatch; heavy Node+Docker runtime dep for a Go binary |
+| LLM-derived dep graph (sandcastle planner pattern) | Plan-bender's deterministic Go resolver is strictly better |
+| Pluggable `AgentProvider` interface | Superseded by `pba dispatch` — cross-agent dispatch becomes the adapter layer |

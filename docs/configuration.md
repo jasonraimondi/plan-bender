@@ -51,6 +51,18 @@ workflow_states:
 
 pipeline:
   skip: []                     # Skill names to exclude, e.g. [bender-interview-me]
+  branch_strategy: integration # integration | direct
+                               # integration: dispatch creates <user>/<slug> off the
+                               #   default branch and merges issue branches there.
+                               # direct: dispatch merges issue branches straight into
+                               #   the default branch — no integration branch.
+
+hooks:                         # Shell strings run by `pba dispatch` around its lifecycle
+  before_issue: ""             # Runs in the worktree dir before each subprocess.
+                               # Non-zero exit blocks the issue and skips the subprocess.
+  after_issue: ""              # Runs in the worktree dir after each subprocess (any outcome).
+                               # Failures are logged but do not change issue status.
+  after_batch: ""              # Runs in the repo root after merge-back. Non-fatal.
 
 issue_schema:
   custom_fields: []            # Add required fields to every issue
@@ -129,6 +141,8 @@ Templates receive a context map built from your config:
 | `sync_pull` | `plan-bender-agent sync linear pull` |
 | `archive` | `plan-bender-agent archive` |
 | `next` | `plan-bender-agent next` |
+| `dispatch` | `plan-bender-agent dispatch` |
+| `complete` | `plan-bender-agent complete` |
 
 Use `{{.commands.write_prd}}` in templates instead of hardcoding binary names.
 

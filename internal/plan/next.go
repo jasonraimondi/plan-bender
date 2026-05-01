@@ -41,6 +41,38 @@ type candidate struct {
 	wasBlocked bool
 }
 
+// ReadyAFK returns every AFK-labeled issue that has no open blockers and is in
+// a non-terminal status (not done, canceled, or in-review). This is the parallel
+// batch input for Dispatcher.RunBatch — order is by issue ID for stability.
+func ReadyAFK(issues []schema.IssueYaml) []schema.IssueYaml {
+	byID := make(map[int]*schema.IssueYaml, len(issues))
+	for i := range issues {
+		byID[issues[i].ID] = &issues[i]
+	}
+
+	var ready []schema.IssueYaml
+	for i := range issues {
+		iss := issues[i]
+		switch iss.Status {
+		case statusDone, statusCanceled, statusBlocked, "in-review":
+			continue
+		}
+		if iss.Assignee != nil && *iss.Assignee != "" {
+			continue
+		}
+		if !hasLabel(iss.Labels, "AFK") {
+			continue
+		}
+		if len(openBlockers(iss.BlockedBy, byID)) > 0 {
+			continue
+		}
+		ready = append(ready, iss)
+	}
+
+	sort.SliceStable(ready, func(i, j int) bool { return ready[i].ID < ready[j].ID })
+	return ready
+}
+
 // Resolve picks the single recommended next issue from a plan's issues.
 // Pure read — no I/O, no mutation. See PRD next-issue-resolver for ordering rules.
 func Resolve(issues []schema.IssueYaml) Result {

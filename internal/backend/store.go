@@ -30,8 +30,19 @@ func NewPlanStore(root string, fsys fs.FS, write WriteFunc, mkdir MkdirFunc) *Pl
 	return &PlanStore{root: root, fsys: fsys, write: write, mkdir: mkdir}
 }
 
-// NewProdPlanStore creates a PlanStore wired with production I/O (os filesystem, atomic writes).
+// NewProdPlanStore creates a PlanStore wired with production I/O: an os
+// filesystem reader, atomic temp+rename writes serialized by a flock on the
+// plans dir (so concurrent sub-agents reaching plansDir via a symlink can't
+// lose updates), and recursive mkdir.
 func NewProdPlanStore(plansDir string) *PlanStore {
+	return NewPlanStore(plansDir, prodFS(plansDir), lockedAtomicWrite(plansDir), prodMkdir)
+}
+
+// NewUnlockedPlanStore returns a prod-style PlanStore that does NOT take the
+// plans-dir flock on each write. Use this only inside a held LockPlanDir
+// region — composing a load-modify-write under one outer lock — to avoid
+// deadlocking against the per-write lock in NewProdPlanStore.
+func NewUnlockedPlanStore(plansDir string) *PlanStore {
 	return NewPlanStore(plansDir, prodFS(plansDir), AtomicWrite, prodMkdir)
 }
 

@@ -36,13 +36,32 @@ func merge(base Config, layer PartialConfig) Config {
 		out.ManageGitignore = *layer.ManageGitignore
 	}
 	if layer.Pipeline != nil {
-		out.Pipeline.Skip = layer.Pipeline.Skip
+		if layer.Pipeline.Skip != nil {
+			out.Pipeline.Skip = layer.Pipeline.Skip
+		}
+		if layer.Pipeline.BranchStrategy != "" {
+			out.Pipeline.BranchStrategy = layer.Pipeline.BranchStrategy
+		}
+		if layer.Pipeline.SubprocessTimeout != "" {
+			out.Pipeline.SubprocessTimeout = layer.Pipeline.SubprocessTimeout
+		}
 	}
 	if layer.IssueSchema != nil {
 		out.IssueSchema.CustomFields = layer.IssueSchema.CustomFields
 	}
 	if layer.Linear != nil {
 		mergeLinear(&out.Linear, layer.Linear)
+	}
+	if layer.Hooks != nil {
+		if layer.Hooks.BeforeIssue != "" {
+			out.Hooks.BeforeIssue = layer.Hooks.BeforeIssue
+		}
+		if layer.Hooks.AfterIssue != "" {
+			out.Hooks.AfterIssue = layer.Hooks.AfterIssue
+		}
+		if layer.Hooks.AfterBatch != "" {
+			out.Hooks.AfterBatch = layer.Hooks.AfterBatch
+		}
 	}
 	if layer.ReviewWithUser != nil {
 		out.ReviewWithUser = layer.ReviewWithUser

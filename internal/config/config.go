@@ -2,10 +2,28 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 	"gopkg.in/yaml.v3"
 )
+
+// defaultSubprocessTimeout is the cap applied when PipelineConfig.SubprocessTimeout is empty.
+const defaultSubprocessTimeout = 30 * time.Minute
+
+// ResolvedSubprocessTimeout returns the parsed timeout, falling back to
+// defaultSubprocessTimeout when unset. validate() rejects unparseable values
+// at Load time, so this method does not return an error.
+func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
+	if p.SubprocessTimeout == "" {
+		return defaultSubprocessTimeout
+	}
+	d, err := time.ParseDuration(p.SubprocessTimeout)
+	if err != nil || d <= 0 {
+		return defaultSubprocessTimeout
+	}
+	return d
+}
 
 // CustomFieldDef defines a custom field on issue YAML.
 type CustomFieldDef struct {
@@ -24,9 +42,21 @@ type LinearConfig struct {
 	StatusMap map[string]string `yaml:"status_map,omitempty"`
 }
 
-// PipelineConfig controls which pipeline steps to skip.
+// PipelineConfig controls which pipeline steps to skip and how dispatch branches issues.
 type PipelineConfig struct {
-	Skip []string `yaml:"skip,omitempty"`
+	Skip           []string `yaml:"skip,omitempty"`
+	BranchStrategy string   `yaml:"branch_strategy,omitempty"`
+	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
+	// otherwise blocks dispatch indefinitely. Stored as a Go duration string
+	// ("30m", "2h"); empty means use defaultSubprocessTimeout.
+	SubprocessTimeout string `yaml:"subprocess_timeout,omitempty"`
+}
+
+// HooksConfig declares shell hooks invoked around dispatch lifecycle events.
+type HooksConfig struct {
+	BeforeIssue string `yaml:"before_issue,omitempty"`
+	AfterIssue  string `yaml:"after_issue,omitempty"`
+	AfterBatch  string `yaml:"after_batch,omitempty"`
 }
 
 // IssueSchemaConfig controls custom fields on issues.
@@ -95,6 +125,7 @@ type Config struct {
 	Pipeline        PipelineConfig    `yaml:"pipeline"`
 	IssueSchema     IssueSchemaConfig `yaml:"issue_schema"`
 	Linear          LinearConfig      `yaml:"linear"`
+	Hooks           HooksConfig       `yaml:"hooks"`
 	UpdateCheck     bool              `yaml:"update_check"`
 	ManageGitignore bool              `yaml:"manage_gitignore"`
 	ReviewWithUser  []string          `yaml:"review_with_user"`
@@ -110,6 +141,7 @@ type PartialConfig struct {
 	Pipeline        *PipelineConfig        `yaml:"pipeline,omitempty"`
 	IssueSchema     *IssueSchemaConfig     `yaml:"issue_schema,omitempty"`
 	Linear          *LinearConfig          `yaml:"linear,omitempty"`
+	Hooks           *HooksConfig           `yaml:"hooks,omitempty"`
 	UpdateCheck     *bool                  `yaml:"update_check,omitempty"`
 	ManageGitignore *bool                  `yaml:"manage_gitignore,omitempty"`
 	ReviewWithUser  []string               `yaml:"review_with_user,omitempty"`

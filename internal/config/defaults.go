@@ -30,7 +30,7 @@ func Defaults() Config {
 			Scope:            ac.Scope,
 			GitignorePattern: ac.GitignorePattern,
 		}},
-		Pipeline:        PipelineConfig{Skip: []string{}},
+		Pipeline:        PipelineConfig{Skip: []string{}, BranchStrategy: "integration"},
 		IssueSchema:     IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:          LinearConfig{},
 		UpdateCheck:     true,
