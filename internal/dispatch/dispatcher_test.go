@@ -338,6 +338,59 @@ func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	assert.Contains(t, *alpha.Notes, "building prompt", "block reason should reference the failure")
 }
 
+// TestDispatcher_MergeBackRestoresParentHEAD asserts the parent repo's HEAD
+// returns to its starting branch after a successful dispatch, instead of
+// silently leaving the user on the integration branch.
+func TestDispatcher_MergeBackRestoresParentHEAD(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	installSkillFile(t, fix.root)
+
+	body := fmt.Sprintf(`prompt="$5"
+case "$prompt" in
+  *"slug: alpha"*)
+    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+    exit 0
+    ;;
+esac
+exit 1
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	headBefore, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+
+	d := newDispatcher(fix)
+	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
+
+	headAfter, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(string(headBefore)), strings.TrimSpace(string(headAfter)),
+		"parent HEAD must be restored after dispatch")
+}
+
+// TestDispatcher_DirtyParentRefuses asserts MergeBack bails before touching
+// HEAD if the parent repo has uncommitted tracked-file changes.
+func TestDispatcher_DirtyParentRefuses(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	installSkillFile(t, fix.root)
+
+	body := fmt.Sprintf(`prompt="$5"
+sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+exit 0
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	// Modify a tracked file (README.md was committed in setup).
+	require.NoError(t, os.WriteFile(filepath.Join(fix.root, "README.md"), []byte("# repo\nlocal edits\n"), 0o644))
+
+	d := newDispatcher(fix)
+	err := timeBoxRun(t, d, "demo", 10*time.Second)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "uncommitted changes")
+}
+
 // quiet a couple of vet/staticcheck unused imports on environments where we
 // trim them — left in for explicit signaling.
 var _ = strings.HasPrefix

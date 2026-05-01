@@ -174,7 +174,33 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // MergeBack merges every successful branch into integrationBranch in dependency
 // order, flips merged issues to status=done, marks merge conflicts as blocked,
 // and finally cleans up the worktrees.
-func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBranch string) error {
+//
+// To avoid silently leaving the user's working tree on the integration branch,
+// MergeBack captures the parent's HEAD before checkout and restores it on exit.
+// It refuses to run if the parent has uncommitted changes (the checkout would
+// either fail or leak changes onto the integration branch).
+func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBranch string) (err error) {
+	dirty, dirtyErr := worktreeDirty(d.Root)
+	if dirtyErr != nil {
+		return fmt.Errorf("checking parent worktree state: %w", dirtyErr)
+	}
+	if dirty {
+		return fmt.Errorf("refusing to merge: parent repo at %s has uncommitted changes; commit or stash before dispatch", d.Root)
+	}
+
+	origHEAD, err := captureHEAD(d.Root)
+	if err != nil {
+		return fmt.Errorf("capturing parent HEAD: %w", err)
+	}
+	defer func() {
+		if restoreErr := restoreHEAD(d.Root, origHEAD); restoreErr != nil {
+			fmt.Fprintf(d.out(), "warning: failed to restore parent HEAD to %q: %v\n", origHEAD, restoreErr)
+			if err == nil {
+				err = fmt.Errorf("restoring parent HEAD to %q: %w", origHEAD, restoreErr)
+			}
+		}
+	}()
+
 	if err := runGit(d.Root, "checkout", integrationBranch); err != nil {
 		return fmt.Errorf("checking out %s: %w", integrationBranch, err)
 	}
@@ -204,6 +230,44 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 		}
 	}
 	return nil
+}
+
+// captureHEAD returns the current branch name (e.g. "main") if HEAD is on a
+// branch, or the commit SHA if detached.
+func captureHEAD(root string) (string, error) {
+	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD").Output(); err == nil {
+		ref := strings.TrimSpace(string(out))
+		if ref != "" {
+			return ref, nil
+		}
+	}
+	out, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func restoreHEAD(root, ref string) error {
+	if ref == "" {
+		return nil
+	}
+	return runGit(root, "checkout", ref)
+}
+
+// worktreeDirty returns true if the parent repo has tracked-file modifications
+// that `git checkout` would refuse to carry or carry silently. Untracked files
+// (e.g. gitignored .plan-bender/ caches) are ignored — `git checkout` doesn't
+// move them.
+func worktreeDirty(root string) (bool, error) {
+	cmd := exec.Command("git", "-C", root, "diff-index", "--quiet", "HEAD", "--")
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return true, nil
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func (d *Dispatcher) markIssueDone(store *backend.PlanStore, slug string, id int) error {
