@@ -143,6 +143,14 @@ func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr s
 // can return it directly, plus any write error so the caller can surface it
 // (rather than letting the dispatch loop see a "still todo" file and retry).
 func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, reason string) (SubResult, error) {
+	res.Success = false
+
+	release, err := backend.LockPlanDir(plansDir)
+	if err != nil {
+		return res, fmt.Errorf("locking plans dir to mark issue #%d blocked: %w", issue.ID, err)
+	}
+	defer release()
+
 	current, err := loadIssue(plansDir, slug, issue.ID)
 	if err != nil {
 		current = &issue
@@ -157,9 +165,7 @@ func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, r
 		current.Notes = &merged
 	}
 
-	store := backend.NewProdPlanStore(plansDir)
-	res.Success = false
-	if writeErr := store.WriteIssue(slug, current); writeErr != nil {
+	if writeErr := backend.NewUnlockedPlanStore(plansDir).WriteIssue(slug, current); writeErr != nil {
 		return res, fmt.Errorf("writing blocked status for issue #%d: %w", issue.ID, writeErr)
 	}
 	return res, nil

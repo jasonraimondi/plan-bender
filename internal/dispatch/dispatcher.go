@@ -292,7 +292,13 @@ func (d *Dispatcher) markIssueDone(store *backend.PlanStore, slug string, id int
 // rather than silently leaving the on-disk status mismatched with the
 // dispatcher's view (which would cause the next outer-loop tick to re-pick a
 // "still todo" issue and retry forever).
-func (d *Dispatcher) markIssueBlocked(store *backend.PlanStore, slug string, id int, reason string) error {
+func (d *Dispatcher) markIssueBlocked(_ *backend.PlanStore, slug string, id int, reason string) error {
+	release, err := backend.LockPlanDir(d.plansDir())
+	if err != nil {
+		return fmt.Errorf("locking plans dir to mark issue #%d blocked: %w", id, err)
+	}
+	defer release()
+
 	issue, err := loadIssue(d.plansDir(), slug, id)
 	if err != nil {
 		return fmt.Errorf("loading issue #%d to mark blocked: %w", id, err)
@@ -305,7 +311,7 @@ func (d *Dispatcher) markIssueBlocked(store *backend.PlanStore, slug string, id 
 		merged := *issue.Notes + "\n\n" + reason
 		issue.Notes = &merged
 	}
-	if err := store.WriteIssue(slug, issue); err != nil {
+	if err := backend.NewUnlockedPlanStore(d.plansDir()).WriteIssue(slug, issue); err != nil {
 		return fmt.Errorf("writing blocked status for issue #%d: %w", id, err)
 	}
 	return nil

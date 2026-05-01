@@ -38,6 +38,14 @@ func NewProdPlanStore(plansDir string) *PlanStore {
 	return NewPlanStore(plansDir, prodFS(plansDir), lockedAtomicWrite(plansDir), prodMkdir)
 }
 
+// NewUnlockedPlanStore returns a prod-style PlanStore that does NOT take the
+// plans-dir flock on each write. Use this only inside a held LockPlanDir
+// region — composing a load-modify-write under one outer lock — to avoid
+// deadlocking against the per-write lock in NewProdPlanStore.
+func NewUnlockedPlanStore(plansDir string) *PlanStore {
+	return NewPlanStore(plansDir, prodFS(plansDir), AtomicWrite, prodMkdir)
+}
+
 // ReadPrd reads and parses a PRD YAML file.
 func (s *PlanStore) ReadPrd(slug string) (*schema.PrdYaml, error) {
 	path := filepath.Join(slug, "prd.yaml")
