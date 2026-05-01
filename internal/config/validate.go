@@ -28,6 +28,13 @@ func validate(cfg *Config) error {
 		}
 	}
 
+	if cfg.Pipeline.BranchStrategy != "" && cfg.Pipeline.BranchStrategy != "integration" && cfg.Pipeline.BranchStrategy != "direct" {
+		errs = append(errs, FieldError{
+			Field:   "pipeline.branch_strategy",
+			Message: fmt.Sprintf("must be 'integration' or 'direct', got %q", cfg.Pipeline.BranchStrategy),
+		})
+	}
+
 	if cfg.Linear.Enabled {
 		if cfg.Linear.APIKey == "" {
 			errs = append(errs, FieldError{Field: "linear.api_key", Message: "required when linear is enabled"})

@@ -164,3 +164,44 @@ func TestMerge_DefaultsImmutable(t *testing.T) {
 	_ = merge(base, PartialConfig{MaxPoints: ptr(99)})
 	assert.Equal(t, before, Defaults())
 }
+
+func TestMerge_HooksAcrossLayers(t *testing.T) {
+	base := Defaults()
+	layer1 := PartialConfig{Hooks: &HooksConfig{BeforeIssue: "go mod tidy"}}
+	layer2 := PartialConfig{Hooks: &HooksConfig{AfterBatch: "make ci"}}
+	result := merge(merge(base, layer1), layer2)
+	assert.Equal(t, "go mod tidy", result.Hooks.BeforeIssue)
+	assert.Equal(t, "make ci", result.Hooks.AfterBatch)
+	assert.Equal(t, "", result.Hooks.AfterIssue)
+}
+
+func TestMerge_HooksOverrideKeepsOtherFields(t *testing.T) {
+	base := Defaults()
+	base.Hooks.BeforeIssue = "echo before"
+	base.Hooks.AfterIssue = "echo after"
+	result := merge(base, PartialConfig{Hooks: &HooksConfig{BeforeIssue: "echo new"}})
+	assert.Equal(t, "echo new", result.Hooks.BeforeIssue)
+	assert.Equal(t, "echo after", result.Hooks.AfterIssue)
+}
+
+func TestMerge_BranchStrategyDefault(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.Equal(t, "integration", result.Pipeline.BranchStrategy)
+}
+
+func TestMerge_BranchStrategyOverride(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{Pipeline: &PipelineConfig{BranchStrategy: "direct"}})
+	assert.Equal(t, "direct", result.Pipeline.BranchStrategy)
+	// existing skip preserved
+	assert.Equal(t, []string{}, result.Pipeline.Skip)
+}
+
+func TestMerge_PipelineSkipPreservesBranchStrategy(t *testing.T) {
+	base := Defaults()
+	base.Pipeline.BranchStrategy = "direct"
+	result := merge(base, PartialConfig{Pipeline: &PipelineConfig{Skip: []string{"lint"}}})
+	assert.Equal(t, "direct", result.Pipeline.BranchStrategy)
+	assert.Equal(t, []string{"lint"}, result.Pipeline.Skip)
+}

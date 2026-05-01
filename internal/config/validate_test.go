@@ -41,6 +41,21 @@ func TestValidate_LinearEnabledRequiresAPIKeyAndTeam(t *testing.T) {
 	assertFieldError(t, err, "linear.team")
 }
 
+func TestValidate_BranchStrategyInvalid(t *testing.T) {
+	cfg := Defaults()
+	cfg.Pipeline.BranchStrategy = "wild"
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "pipeline.branch_strategy")
+}
+
+func TestValidate_BranchStrategyDirectPasses(t *testing.T) {
+	cfg := Defaults()
+	cfg.Pipeline.BranchStrategy = "direct"
+	err := validate(&cfg)
+	assert.NoError(t, err)
+}
+
 func TestValidate_LinearEnabledWithCredsPasses(t *testing.T) {
 	cfg := Defaults()
 	cfg.Linear.Enabled = true
