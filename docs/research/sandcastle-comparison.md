@@ -154,3 +154,44 @@ The single biggest improvement plan-bender could make, based on sandcastle's exa
 | Depend on sandcastle npm package | Language mismatch; heavy Node+Docker runtime dep for a Go binary |
 | LLM-derived dep graph (sandcastle planner pattern) | Plan-bender's deterministic Go resolver is strictly better |
 | Pluggable `AgentProvider` interface | Superseded by `pba dispatch` — cross-agent dispatch becomes the adapter layer |
+
+---
+
+## Progress (as of 2026-05-01)
+
+Phase 1 shipped in [PR #10](https://github.com/jasonraimondi/plan-bender/pull/10) (merged 2026-05-01, +3147/-97, 37 files). Phase 1 exit criteria met: `bender-implement-prd` collapsed from ~80 lines of bash-in-markdown to a single `pba dispatch {slug}` call; all worktree/branch logic moved out of templates.
+
+### Phase 1 — done
+
+| Feature | Status | Landed as |
+|---|---|---|
+| `pba worktree create/gc` | ✅ done | `internal/worktree` package; `pba/pb worktree` subcommands; JSON in agent mode. GC preserves unmerged branches via merged-set whitelist + `branch -d` reachability guard. Worktree path namespaced by plan slug to prevent cross-plan collisions. |
+| `pba dispatch <slug>` | ✅ done | `internal/dispatch.Dispatcher.Run` loops Resolve → ReadyAFK → RunBatch → MergeBack until all-done or HITL-only. Parallel goroutines per AFK issue, git plumbing serialized under a mutex, integration branch + per-issue branches with `--` separator (avoids `refs/heads/foo/bar` colliding with `refs/heads/foo/bar/baz`). Exit codes: 0 all-done, 2 HITL-only, 1 other. |
+| Completion sentinel | ✅ done | `pba complete <slug> <id>` flips to `in-review` and emits `<pba:complete issue-id="N"/>`; refuses `done`/`canceled`. `bender-implement-issue` step 8 ends with this call. |
+| Lifecycle hooks | ✅ done | `hooks.before_issue` / `hooks.after_issue` / `hooks.after_batch` in `.plan-bender.yaml`. `before_issue` failure blocks the issue with hook stderr in notes; `after_*` failures log only. Hook lifetime bounded by ctx (10-minute default cap). Note: shipped as `after_batch` rather than the PRD's `before_pr`. |
+| Branch strategy enum | ✅ done | `pipeline.branch_strategy: integration \| direct`. Validated at config load. |
+
+### Phase 1 — extras not in original PRD
+
+- **`pipeline.subprocess_timeout`** (Go duration string, default `30m`) — kills hung `claude` invocations so the dispatch loop can't bind forever. Covers the Phase 2 "iteration timeout" line item.
+- **flock on plans dir** — `internal/backend/lock.go` serializes plan writes across concurrent sub-agents reaching plansDir through worktree symlinks (kernel resolves to same inode, all callers contend on same lock). `markBlocked` read-modify-write wrapped in same lock to avoid lost updates.
+- **Locked-writer for sub-agent stdout** — POSIX only guarantees `write()` atomicity up to PIPE_BUF (4KB); stream-json events with embedded tool output exceed that and were interleaving. `lockedWriter` wraps `d.Out` once and is shared across goroutines.
+- **Bounded line reader** — switched subprocess/hook readers from `bufio.Scanner` (4MB/1MB caps) to `bufio.Reader` so large stream-json events don't truncate.
+- **Dirty-repo guard before MergeBack** — captures parent HEAD up front, refuses on dirty `diff-index`, defer-restores on exit. Successful dispatch no longer silently strands the user on the integration branch.
+- **`--verbose` for `claude --print --output-format=stream-json`** — without it every subprocess exited non-zero and the loop went to `stuck`.
+- **`linkPlansDir` refuses to clobber non-symlinks** — gates `RemoveAll` on the symlink bit so a real directory at dst survives.
+
+### Phase 2 — partial
+
+| Feature | Status |
+|---|---|
+| `pba watch <slug>` | ❌ not started |
+| Iteration timeout | ✅ done (shipped as `pipeline.subprocess_timeout` in Phase 1) |
+
+### Phase 3 — not started
+
+| Feature | Status |
+|---|---|
+| `SandboxProvider` interface | ❌ not started |
+| `pba run-issue --sandbox docker` | ❌ not started |
+| Session capture | ❌ not started |
