@@ -40,7 +40,7 @@ func TestCreate_DeterministicBranchAndPath(t *testing.T) {
 	require.Equal(t, "tester/auth--1-setup-middleware", res.Branch)
 	parent, err := filepath.EvalSymlinks(filepath.Dir(root))
 	require.NoError(t, err)
-	expectedPath := filepath.Join(parent, "repo-wt", "1-setup-middleware")
+	expectedPath := filepath.Join(parent, "repo-wt", "auth", "1-setup-middleware")
 	require.Equal(t, expectedPath, res.Path)
 
 	info, err := os.Stat(res.Path)

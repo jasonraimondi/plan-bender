@@ -69,7 +69,7 @@ func TestWorktreeCreate_AgentModeJSON(t *testing.T) {
 	var got map[string]string
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &got))
 	assert.Equal(t, "tester/auth--7-middleware", got["branch"])
-	assert.Contains(t, got["path"], "repo-wt/7-middleware")
+	assert.Contains(t, got["path"], "repo-wt/auth/7-middleware")
 
 	_, err := os.Stat(got["path"])
 	assert.NoError(t, err)

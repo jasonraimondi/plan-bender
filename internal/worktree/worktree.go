@@ -38,7 +38,7 @@ func Create(root, slug string, issueID int, issueSlug, baseRef string) (Worktree
 	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
 		parent = resolved
 	}
-	path := filepath.Join(parent, repoName+"-wt", fmt.Sprintf("%d-%s", issueID, issueSlug))
+	path := filepath.Join(parent, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
 
 	if err := runGit(root, "branch", branch, baseRef); err != nil {
 		return WorktreeResult{}, fmt.Errorf("creating branch %q off %q: %w", branch, baseRef, err)
