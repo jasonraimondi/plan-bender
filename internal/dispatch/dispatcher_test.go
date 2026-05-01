@@ -316,6 +316,28 @@ exit 1
 	assert.Equal(t, "done", beta.Status)
 }
 
+// TestDispatcher_BuildPromptFailureMarksBlocked asserts that an early failure
+// in runOne (here: no SKILL.md installed → BuildPrompt fails) flips the issue
+// to blocked instead of leaving it in todo. Without this, the next outer-loop
+// iteration would re-pick the issue and dispatch would spin forever.
+func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	// Note: deliberately NOT calling installSkillFile so BuildPrompt fails.
+
+	installClaudeStub(t, "exit 0\n")
+
+	d := newDispatcher(fix)
+	err := timeBoxRun(t, d, "demo", 10*time.Second)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stuck", "loop must terminate, not retry forever")
+
+	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "blocked", alpha.Status, "early-failure issue must be marked blocked")
+	require.NotNil(t, alpha.Notes)
+	assert.Contains(t, *alpha.Notes, "building prompt", "block reason should reference the failure")
+}
+
 // quiet a couple of vet/staticcheck unused imports on environments where we
 // trim them — left in for explicit signaling.
 var _ = strings.HasPrefix

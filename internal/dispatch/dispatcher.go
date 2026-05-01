@@ -128,21 +128,26 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 }
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir string) SubResult {
+	store := backend.NewProdPlanStore(d.plansDir())
+
 	d.gitMu.Lock()
 	wt, err := worktree.Create(d.Root, slug, issue.ID, issue.Slug)
 	d.gitMu.Unlock()
 	if err != nil {
-		return SubResult{IssueID: issue.ID, Err: fmt.Errorf("creating worktree: %w", err)}
+		reason := fmt.Sprintf("creating worktree: %v", err)
+		d.markIssueBlocked(store, slug, issue.ID, reason)
+		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
 	if err := linkPlansDir(d.Root, wt.Path); err != nil {
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: fmt.Errorf("linking plans dir: %w", err)}
+		reason := fmt.Sprintf("linking plans dir: %v", err)
+		d.markIssueBlocked(store, slug, issue.ID, reason)
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			store := backend.NewProdPlanStore(d.plansDir())
 			d.markIssueBlocked(store, slug, issue.ID, reason)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
@@ -150,7 +155,9 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: fmt.Errorf("building prompt: %w", err)}
+		reason := fmt.Sprintf("building prompt: %v", err)
+		d.markIssueBlocked(store, slug, issue.ID, reason)
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	res := RunSubprocess(ctx, slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
