@@ -116,13 +116,18 @@ func RunSubprocess(
 		return res
 	}
 
-	reason := buildFailureReason(waitErr, postStatus, stderrText)
+	reason := buildFailureReason(ctx, waitErr, postStatus, stderrText)
 	res.Err = errors.New(reason)
 	return mark(res, reason)
 }
 
-func buildFailureReason(waitErr error, postStatus, stderr string) string {
+func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr string) string {
+	timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
 	switch {
+	case timedOut && stderr != "":
+		return fmt.Sprintf("subprocess timed out: %v\n%s", waitErr, stderr)
+	case timedOut:
+		return fmt.Sprintf("subprocess timed out: %v", waitErr)
 	case waitErr != nil && stderr != "":
 		return fmt.Sprintf("subprocess failed: %v\n%s", waitErr, stderr)
 	case waitErr != nil:

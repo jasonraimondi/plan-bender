@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 )
@@ -33,6 +34,20 @@ func validate(cfg *Config) error {
 			Field:   "pipeline.branch_strategy",
 			Message: fmt.Sprintf("must be 'integration' or 'direct', got %q", cfg.Pipeline.BranchStrategy),
 		})
+	}
+
+	if cfg.Pipeline.SubprocessTimeout != "" {
+		if d, err := time.ParseDuration(cfg.Pipeline.SubprocessTimeout); err != nil {
+			errs = append(errs, FieldError{
+				Field:   "pipeline.subprocess_timeout",
+				Message: fmt.Sprintf("must be a Go duration string (e.g. \"30m\"), got %q: %v", cfg.Pipeline.SubprocessTimeout, err),
+			})
+		} else if d <= 0 {
+			errs = append(errs, FieldError{
+				Field:   "pipeline.subprocess_timeout",
+				Message: fmt.Sprintf("must be positive, got %q", cfg.Pipeline.SubprocessTimeout),
+			})
+		}
 	}
 
 	if cfg.Linear.Enabled {

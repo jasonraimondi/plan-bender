@@ -2,10 +2,28 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 	"gopkg.in/yaml.v3"
 )
+
+// defaultSubprocessTimeout is the cap applied when PipelineConfig.SubprocessTimeout is empty.
+const defaultSubprocessTimeout = 30 * time.Minute
+
+// ResolvedSubprocessTimeout returns the parsed timeout, falling back to
+// defaultSubprocessTimeout when unset. validate() rejects unparseable values
+// at Load time, so this method does not return an error.
+func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
+	if p.SubprocessTimeout == "" {
+		return defaultSubprocessTimeout
+	}
+	d, err := time.ParseDuration(p.SubprocessTimeout)
+	if err != nil || d <= 0 {
+		return defaultSubprocessTimeout
+	}
+	return d
+}
 
 // CustomFieldDef defines a custom field on issue YAML.
 type CustomFieldDef struct {
@@ -28,6 +46,10 @@ type LinearConfig struct {
 type PipelineConfig struct {
 	Skip           []string `yaml:"skip,omitempty"`
 	BranchStrategy string   `yaml:"branch_strategy,omitempty"`
+	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
+	// otherwise blocks dispatch indefinitely. Stored as a Go duration string
+	// ("30m", "2h"); empty means use defaultSubprocessTimeout.
+	SubprocessTimeout string `yaml:"subprocess_timeout,omitempty"`
 }
 
 // HooksConfig declares shell hooks invoked around dispatch lifecycle events.
