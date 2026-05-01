@@ -313,7 +313,7 @@ func TestSetup_ManageGitignoreFalsePreservesExistingGitignore(t *testing.T) {
 func TestEnsureGitignoreForAgents_SkipsUserOnlyAgents(t *testing.T) {
 	dir := t.TempDir()
 
-	ensureGitignoreForAgents(dir, nil)
+	require.NoError(t, ensureGitignoreForAgents(dir, nil))
 
 	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	require.NoError(t, err)
@@ -335,6 +335,24 @@ func TestMergeYAMLFile_CreatesNewFile(t *testing.T) {
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "enabled: true")
+}
+
+func TestMergeYAMLFile_RejectsMalformedYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.yaml")
+
+	// Unbalanced bracket: yaml.Unmarshal returns an error on this input.
+	require.NoError(t, os.WriteFile(path, []byte("linear: [unterminated\n"), 0o644))
+
+	err := mergeYAMLFile(path, map[string]any{
+		"linear": map[string]any{"enabled": true},
+	})
+	require.Error(t, err, "must surface parse failure rather than silently overwriting user config")
+
+	// Original file content must be preserved when parse fails.
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "linear: [unterminated\n", string(data))
 }
 
 func TestMergeYAMLFile_PreservesExistingKeys(t *testing.T) {

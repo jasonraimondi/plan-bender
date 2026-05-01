@@ -234,7 +234,7 @@ func TestEnsureIntegrationBranch_DirectStrategyUsesDefault(t *testing.T) {
 	cfg.Pipeline.BranchStrategy = "direct"
 	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir}
 
-	branch, err := d.ensureIntegrationBranch("demo")
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "main", branch)
 }
@@ -243,7 +243,7 @@ func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *tes
 	fix := setupDispatch(t)
 	d := newDispatcher(fix) // defaults branch_strategy = integration
 
-	branch, err := d.ensureIntegrationBranch("demo")
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "tester/demo", branch)
 
@@ -251,6 +251,41 @@ func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *tes
 	out, err := exec.Command("git", "-C", fix.root, "branch", "--list", "tester/demo").Output()
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "tester/demo")
+}
+
+// TestDefaultBranch_RejectsDetachedHEAD ensures defaultBranch errors out instead
+// of returning the literal "HEAD" when the repo is in detached state and has no
+// main/master and no origin/HEAD — otherwise downstream `git branch user/slug
+// HEAD` would create a branch literally named off "HEAD", or worse, succeed
+// silently and leave the integration branch named "HEAD".
+func TestDefaultBranch_RejectsDetachedHEAD(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+
+	for _, args := range [][]string{
+		{"init", "--initial-branch=feature-only"},
+		{"config", "user.email", "tester@example.com"},
+		{"config", "user.name", "Test User"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# repo\n"), 0o644))
+	for _, args := range [][]string{
+		{"add", "README.md"},
+		{"commit", "-m", "init"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	// Detach HEAD on the only commit.
+	out, err := exec.Command("git", "-C", root, "checkout", "--detach", "HEAD").CombinedOutput()
+	require.NoError(t, err, "detach: %s", string(out))
+
+	branch, err := defaultBranch(context.Background(), root)
+	require.Error(t, err, "must reject detached HEAD instead of returning literal \"HEAD\"")
+	assert.NotEqual(t, "HEAD", branch)
 }
 
 func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {

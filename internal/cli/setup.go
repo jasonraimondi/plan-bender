@@ -111,7 +111,9 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	}
 
 	if cfg.ManageGitignore {
-		ensureGitignoreForAgents(root, cfg.Agents)
+		if err := ensureGitignoreForAgents(root, cfg.Agents); err != nil {
+			return fmt.Errorf("updating .gitignore: %w", err)
+		}
 	}
 
 	// 5. Output summary
@@ -218,8 +220,16 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 func mergeYAMLFile(path string, updates map[string]any) error {
 	raw := make(map[string]any)
 	data, err := os.ReadFile(path)
-	if err == nil {
-		_ = yaml.Unmarshal(data, &raw)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+	if err == nil && len(data) > 0 {
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parsing existing %s: %w", path, err)
+		}
+		if raw == nil {
+			raw = make(map[string]any)
+		}
 	}
 
 	for k, v := range updates {
@@ -313,7 +323,7 @@ func expandHome(path string) (string, error) {
 }
 
 // ensureGitignoreForAgents writes registry-driven gitignore patterns for project-scoped agents.
-func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) {
+func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) error {
 	entries := []string{".plan-bender/", ".plan-bender.local.yaml"}
 
 	for _, agent := range agts {
@@ -326,7 +336,10 @@ func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) {
 	}
 
 	gitignorePath := filepath.Join(root, ".gitignore")
-	existing, _ := os.ReadFile(gitignorePath)
+	existing, err := os.ReadFile(gitignorePath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", gitignorePath, err)
+	}
 	content := string(existing)
 
 	var toAdd []string
@@ -337,12 +350,15 @@ func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) {
 	}
 
 	if len(toAdd) == 0 {
-		return
+		return nil
 	}
 
 	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
 		content += "\n"
 	}
 	content += strings.Join(toAdd, "\n") + "\n"
-	os.WriteFile(gitignorePath, []byte(content), 0o644)
+	if err := os.WriteFile(gitignorePath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", gitignorePath, err)
+	}
+	return nil
 }

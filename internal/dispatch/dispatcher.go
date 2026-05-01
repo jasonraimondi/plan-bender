@@ -94,7 +94,7 @@ func (d *Dispatcher) strategy() string {
 // Run executes the full dispatch loop until all_done or HITL-only.
 // Returns ErrHITLOnly when only human-input issues remain.
 func (d *Dispatcher) Run(ctx context.Context, slug string) error {
-	integrationBranch, err := d.ensureIntegrationBranch(slug)
+	integrationBranch, err := d.ensureIntegrationBranch(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("setting up integration branch: %w", err)
 	}
@@ -155,7 +155,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	store := backend.NewProdPlanStore(d.plansDir())
 
 	d.gitMu.Lock()
-	wt, err := worktree.Create(d.Root, slug, issue.ID, issue.Slug, integrationBranch)
+	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
@@ -214,7 +214,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		return nil
 	}
 
-	dirty, dirtyErr := worktreeDirty(d.Root)
+	dirty, dirtyErr := worktreeDirty(ctx, d.Root)
 	if dirtyErr != nil {
 		return fmt.Errorf("checking parent worktree state: %w", dirtyErr)
 	}
@@ -222,12 +222,14 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		return fmt.Errorf("refusing to merge: parent repo at %s has uncommitted changes; commit or stash before dispatch", d.Root)
 	}
 
-	origHEAD, err := captureHEAD(d.Root)
+	origHEAD, err := captureHEAD(ctx, d.Root)
 	if err != nil {
 		return fmt.Errorf("capturing parent HEAD: %w", err)
 	}
 	defer func() {
-		if restoreErr := restoreHEAD(d.Root, origHEAD); restoreErr != nil {
+		// Use a fresh context so a canceled parent ctx (Ctrl-C) still gets the
+		// user's branch restored rather than leaving them on integration.
+		if restoreErr := restoreHEAD(context.Background(), d.Root, origHEAD); restoreErr != nil {
 			fmt.Fprintf(d.out(), "warning: failed to restore parent HEAD to %q: %v\n", origHEAD, restoreErr)
 			if err == nil {
 				err = fmt.Errorf("restoring parent HEAD to %q: %w", origHEAD, restoreErr)
@@ -235,7 +237,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		}
 	}()
 
-	if err := runGit(d.Root, "checkout", integrationBranch); err != nil {
+	if err := runGit(ctx, d.Root, "checkout", integrationBranch); err != nil {
 		return fmt.Errorf("checking out %s: %w", integrationBranch, err)
 	}
 
@@ -246,9 +248,9 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 	// hold the only copy of committed work and must be preserved.
 	merged := make(map[string]bool, len(successful))
 	for _, r := range successful {
-		mergeOut, mergeErr := runGitOutput(d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
+		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
-			_ = runGit(d.Root, "merge", "--abort")
+			_ = runGit(ctx, d.Root, "merge", "--abort")
 			d.markBlockedAndWarn(store, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
@@ -258,7 +260,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		}
 	}
 
-	if _, err := worktree.GC(d.Root, slug, merged, d.out()); err != nil {
+	if _, err := worktree.GC(ctx, d.Root, slug, merged, d.out()); err != nil {
 		return fmt.Errorf("worktree gc: %w", err)
 	}
 
@@ -272,35 +274,36 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 
 // captureHEAD returns the current branch name (e.g. "main") if HEAD is on a
 // branch, or the commit SHA if detached.
-func captureHEAD(root string) (string, error) {
-	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD").Output(); err == nil {
+func captureHEAD(ctx context.Context, root string) (string, error) {
+	if out, err := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD").Output(); err == nil {
 		ref := strings.TrimSpace(string(out))
 		if ref != "" {
 			return ref, nil
 		}
 	}
-	out, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "HEAD").Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
-func restoreHEAD(root, ref string) error {
+func restoreHEAD(ctx context.Context, root, ref string) error {
 	if ref == "" {
 		return nil
 	}
-	return runGit(root, "checkout", ref)
+	return runGit(ctx, root, "checkout", ref)
 }
 
 // worktreeDirty returns true if the parent repo has tracked-file modifications
 // that `git checkout` would refuse to carry or carry silently. Untracked files
 // (e.g. gitignored .plan-bender/ caches) are ignored — `git checkout` doesn't
 // move them.
-func worktreeDirty(root string) (bool, error) {
-	cmd := exec.Command("git", "-C", root, "diff-index", "--quiet", "HEAD", "--")
+func worktreeDirty(ctx context.Context, root string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff-index", "--quiet", "HEAD", "--")
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			return true, nil
 		}
 		return false, err
@@ -465,8 +468,8 @@ func (d *Dispatcher) printHITLSummary(issues []schema.IssueYaml) {
 
 // ensureIntegrationBranch returns the branch name dispatch will merge into.
 // "direct" → repo default branch, "integration" → user/<slug> created off default if missing.
-func (d *Dispatcher) ensureIntegrationBranch(slug string) (string, error) {
-	defaultBranch, err := defaultBranch(d.Root)
+func (d *Dispatcher) ensureIntegrationBranch(ctx context.Context, slug string) (string, error) {
+	defaultBranch, err := defaultBranch(ctx, d.Root)
 	if err != nil {
 		return "", err
 	}
@@ -475,48 +478,57 @@ func (d *Dispatcher) ensureIntegrationBranch(slug string) (string, error) {
 		return defaultBranch, nil
 	}
 
-	user, err := gitUser(d.Root)
+	user, err := gitUser(ctx, d.Root)
 	if err != nil {
 		return "", err
 	}
 	branch := fmt.Sprintf("%s/%s", user, slug)
 
-	exists, err := branchExists(d.Root, branch)
+	exists, err := branchExists(ctx, d.Root, branch)
 	if err != nil {
 		return "", err
 	}
 	if !exists {
-		if err := runGit(d.Root, "branch", branch, defaultBranch); err != nil {
+		if err := runGit(ctx, d.Root, "branch", branch, defaultBranch); err != nil {
 			return "", fmt.Errorf("creating integration branch %q: %w", branch, err)
 		}
 	}
 	return branch, nil
 }
 
-func defaultBranch(root string) (string, error) {
-	if out, err := exec.Command("git", "-C", root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").Output(); err == nil {
+func defaultBranch(ctx context.Context, root string) (string, error) {
+	if out, err := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").Output(); err == nil {
 		ref := strings.TrimSpace(string(out))
 		if strings.HasPrefix(ref, "origin/") {
 			return strings.TrimPrefix(ref, "origin/"), nil
 		}
 	}
 	for _, name := range []string{"main", "master"} {
-		ok, _ := branchExists(root, name)
+		ok, _ := branchExists(ctx, root, name)
 		if ok {
 			return name, nil
 		}
 	}
-	out, err := exec.Command("git", "-C", root, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	// Final fallback: current branch. `rev-parse --abbrev-ref HEAD` returns the
+	// literal "HEAD" when detached, which would be propagated as a branch name
+	// and explode at `git branch <user>/<slug> HEAD`. Use `symbolic-ref` instead;
+	// it errors cleanly in detached state.
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "HEAD").Output()
 	if err != nil {
-		return "", fmt.Errorf("determining default branch: %w", err)
+		return "", fmt.Errorf("determining default branch (HEAD detached or no branches): %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("determining default branch: empty HEAD ref")
+	}
+	return branch, nil
 }
 
-func branchExists(root, name string) (bool, error) {
-	cmd := exec.Command("git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+func branchExists(ctx context.Context, root, name string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			return false, nil
 		}
 		return false, err
@@ -524,40 +536,40 @@ func branchExists(root, name string) (bool, error) {
 	return true, nil
 }
 
-func gitUser(root string) (string, error) {
-	if email, err := gitConfig(root, "user.email"); err == nil && email != "" {
+func gitUser(ctx context.Context, root string) (string, error) {
+	if email, err := gitConfig(ctx, root, "user.email"); err == nil && email != "" {
 		if at := strings.IndexByte(email, '@'); at > 0 {
 			return email[:at], nil
 		}
 		return email, nil
 	}
-	name, err := gitConfig(root, "user.name")
+	name, err := gitConfig(ctx, root, "user.name")
 	if err != nil {
 		return "", err
 	}
 	return strings.Join(strings.Fields(name), "-"), nil
 }
 
-func gitConfig(root, key string) (string, error) {
-	out, err := exec.Command("git", "-C", root, "config", key).Output()
+func gitConfig(ctx context.Context, root, key string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "config", key).Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
-func runGit(dir string, args ...string) error {
+func runGit(ctx context.Context, dir string, args ...string) error {
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "git", full...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-func runGitOutput(dir string, args ...string) (string, error) {
+func runGitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "git", full...).CombinedOutput()
 	return string(out), err
 }
 
