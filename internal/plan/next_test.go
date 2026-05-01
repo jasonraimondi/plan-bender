@@ -255,3 +255,67 @@ func TestResolve_HITLSkippedReasonWhenAFKWins(t *testing.T) {
 	}
 	assert.Contains(t, hitlReason, "HITL")
 }
+
+func TestReadyAFK_ReturnsAllUnblockedAFKIssues(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "todo", "high"),
+		mkIssue(2, "todo", "medium"),
+		mkIssue(3, "todo", "low", withBlockedBy(1)),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 2)
+	assert.Equal(t, 1, ready[0].ID)
+	assert.Equal(t, 2, ready[1].ID)
+}
+
+func TestReadyAFK_ExcludesHITLEvenWhenUnblocked(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "todo", "high"),
+		mkIssue(2, "todo", "high", withLabels("HITL")),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 1)
+	assert.Equal(t, 1, ready[0].ID)
+}
+
+func TestReadyAFK_ExcludesTerminalAndInReviewAndBlocked(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "done", "high"),
+		mkIssue(2, "canceled", "high"),
+		mkIssue(3, "in-review", "high"),
+		mkIssue(4, "blocked", "high"),
+		mkIssue(5, "todo", "high"),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 1)
+	assert.Equal(t, 5, ready[0].ID)
+}
+
+func TestReadyAFK_AllDoneReturnsEmpty(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "done", "high"),
+		mkIssue(2, "done", "low"),
+	}
+	ready := ReadyAFK(issues)
+	assert.Empty(t, ready)
+}
+
+func TestReadyAFK_BlockerDoneUnblocks(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "done", "high"),
+		mkIssue(2, "todo", "high", withBlockedBy(1)),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 1)
+	assert.Equal(t, 2, ready[0].ID)
+}
+
+func TestReadyAFK_AssignedIssueExcluded(t *testing.T) {
+	issues := []schema.IssueYaml{
+		mkIssue(1, "todo", "high", withAssignee("alice")),
+		mkIssue(2, "todo", "high"),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 1)
+	assert.Equal(t, 2, ready[0].ID)
+}

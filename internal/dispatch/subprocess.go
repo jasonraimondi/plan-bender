@@ -47,6 +47,11 @@ func RunSubprocess(
 
 	cmd := exec.CommandContext(ctx, "claude", "--print", "--output-format", "stream-json", "-p", prompt)
 	cmd.Dir = worktreePath
+	devNull, _ := os.Open(os.DevNull)
+	if devNull != nil {
+		cmd.Stdin = devNull
+		defer devNull.Close()
+	}
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf

@@ -36,7 +36,7 @@ func TestCreate_DeterministicBranchAndPath(t *testing.T) {
 	res, err := Create(root, "auth", 1, "setup-middleware")
 	require.NoError(t, err)
 
-	require.Equal(t, "tester/auth/1-setup-middleware", res.Branch)
+	require.Equal(t, "tester/auth--1-setup-middleware", res.Branch)
 	parent, err := filepath.EvalSymlinks(filepath.Dir(root))
 	require.NoError(t, err)
 	expectedPath := filepath.Join(parent, "repo-wt", "1-setup-middleware")
@@ -95,8 +95,8 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 	// branches deleted
 	out, err := exec.Command("git", "-C", root, "branch", "--list").Output()
 	require.NoError(t, err)
-	require.NotContains(t, string(out), "tester/auth/")
-	require.Contains(t, string(out), "tester/billing/")
+	require.NotContains(t, string(out), "tester/auth--")
+	require.Contains(t, string(out), "tester/billing--")
 }
 
 func TestGC_NoMatchesReturnsEmpty(t *testing.T) {

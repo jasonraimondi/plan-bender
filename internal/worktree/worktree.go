@@ -22,7 +22,9 @@ func Create(root, slug string, issueID int, issueSlug string) (WorktreeResult, e
 		return WorktreeResult{}, err
 	}
 
-	branch := fmt.Sprintf("%s/%s/%d-%s", user, slug, issueID, issueSlug)
+	// Use "--" between the project slug and the issue id-slug to avoid a git
+	// ref-hierarchy clash with the integration branch named {user}/{slug}.
+	branch := fmt.Sprintf("%s/%s--%d-%s", user, slug, issueID, issueSlug)
 	repoName := filepath.Base(root)
 	parent := filepath.Dir(root)
 	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
@@ -47,7 +49,7 @@ func GC(root, slug string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	prefix := fmt.Sprintf("%s/%s/", user, slug)
+	prefix := fmt.Sprintf("%s/%s--", user, slug)
 
 	entries, err := listWorktrees(root)
 	if err != nil {
