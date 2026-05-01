@@ -124,7 +124,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("running batch: %w", err)
 		}
 
-		if err := d.MergeBack(slug, results, integrationBranch); err != nil {
+		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
 			return fmt.Errorf("merging batch: %w", err)
 		}
 	}
@@ -170,7 +170,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
-		if stderr, err := RunHook(hook, wt.Path, d.out()); err != nil {
+		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
 			d.markBlockedAndWarn(store, slug, issue.ID, reason)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
@@ -190,7 +190,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {
-		if _, err := RunHook(hook, wt.Path, d.out()); err != nil {
+		if _, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			fmt.Fprintf(d.out(), "warning: after_issue hook failed for issue #%d: %v\n", issue.ID, err)
 		}
 	}
@@ -205,7 +205,15 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // MergeBack captures the parent's HEAD before checkout and restores it on exit.
 // It refuses to run if the parent has uncommitted changes (the checkout would
 // either fail or leak changes onto the integration branch).
-func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBranch string) (err error) {
+func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
+	successful := successfulInDepOrder(results, d.plansDir(), slug)
+	if len(successful) == 0 {
+		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
+		// doesn't surface an error that masks the real (all-failed) cause. GC
+		// also short-circuits because no branch is in `merged`.
+		return nil
+	}
+
 	dirty, dirtyErr := worktreeDirty(d.Root)
 	if dirtyErr != nil {
 		return fmt.Errorf("checking parent worktree state: %w", dirtyErr)
@@ -231,7 +239,6 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 		return fmt.Errorf("checking out %s: %w", integrationBranch, err)
 	}
 
-	successful := successfulInDepOrder(results, d.plansDir(), slug)
 	store := backend.NewProdPlanStore(d.plansDir())
 
 	// Track which branches were successfully merged into integration; only those
@@ -256,7 +263,7 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 	}
 
 	if hook := d.Config.Hooks.AfterBatch; hook != "" {
-		if _, err := RunHook(hook, d.Root, d.out()); err != nil {
+		if _, err := RunHook(ctx, hook, d.Root, d.out()); err != nil {
 			fmt.Fprintf(d.out(), "warning: after_batch hook failed: %v\n", err)
 		}
 	}

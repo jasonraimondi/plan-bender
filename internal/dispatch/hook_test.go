@@ -17,7 +17,7 @@ import (
 
 func TestRunHook_EmptyCmdIsNoOp(t *testing.T) {
 	var out bytes.Buffer
-	stderr, err := RunHook("", t.TempDir(), &out)
+	stderr, err := RunHook(context.Background(), "", t.TempDir(), &out)
 	require.NoError(t, err)
 	assert.Empty(t, stderr)
 	assert.Empty(t, out.String())
@@ -25,7 +25,7 @@ func TestRunHook_EmptyCmdIsNoOp(t *testing.T) {
 
 func TestRunHook_SuccessStreamsPrefixedOutput(t *testing.T) {
 	var out bytes.Buffer
-	stderr, err := RunHook(`echo line1; echo line2`, t.TempDir(), &out)
+	stderr, err := RunHook(context.Background(), `echo line1; echo line2`, t.TempDir(), &out)
 	require.NoError(t, err)
 	assert.Empty(t, stderr)
 	got := out.String()
@@ -35,7 +35,7 @@ func TestRunHook_SuccessStreamsPrefixedOutput(t *testing.T) {
 
 func TestRunHook_FailureCapturesStderr(t *testing.T) {
 	var out bytes.Buffer
-	stderr, err := RunHook(`echo boom >&2; exit 1`, t.TempDir(), &out)
+	stderr, err := RunHook(context.Background(), `echo boom >&2; exit 1`, t.TempDir(), &out)
 	require.Error(t, err)
 	assert.Contains(t, stderr, "boom")
 	assert.Contains(t, err.Error(), "boom")
@@ -45,7 +45,7 @@ func TestRunHook_RunsInProvidedDir(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "marker"), []byte("ok\n"), 0o644))
 	var out bytes.Buffer
-	_, err := RunHook(`cat marker`, dir, &out)
+	_, err := RunHook(context.Background(), `cat marker`, dir, &out)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "[hook] ok")
 }

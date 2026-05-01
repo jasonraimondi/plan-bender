@@ -3,18 +3,30 @@ package dispatch
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
+
+// hookDefaultTimeout caps any RunHook call whose ctx carries no deadline. A
+// runaway before_issue hook (`./forever.sh`) would otherwise pin the dispatcher
+// indefinitely.
+const hookDefaultTimeout = 10 * time.Minute
 
 // RunHook executes cmd via `sh -c` with Cmd.Dir=dir, streams stdout to outWriter
 // prefixed with "[hook] ", captures stderr, and returns the captured stderr +
 // any error. An empty cmd is a no-op (no process spawned).
-func RunHook(cmd, dir string, outWriter io.Writer) (string, error) {
+//
+// ctx bounds the hook lifetime. If ctx has no deadline, RunHook applies
+// hookDefaultTimeout. A timeout is reported as a context.DeadlineExceeded
+// wrapped in the returned error.
+func RunHook(ctx context.Context, cmd, dir string, outWriter io.Writer) (string, error) {
 	if cmd == "" {
 		return "", nil
 	}
@@ -22,7 +34,13 @@ func RunHook(cmd, dir string, outWriter io.Writer) (string, error) {
 		outWriter = os.Stdout
 	}
 
-	c := exec.Command("sh", "-c", cmd)
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, hookDefaultTimeout)
+		defer cancel()
+	}
+
+	c := exec.CommandContext(ctx, "sh", "-c", cmd)
 	c.Dir = dir
 	devNull, _ := os.Open(os.DevNull)
 	if devNull != nil {
@@ -57,6 +75,9 @@ func RunHook(cmd, dir string, outWriter io.Writer) (string, error) {
 
 	stderr := strings.TrimRight(stderrBuf.String(), "\n")
 	if waitErr != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return stderr, fmt.Errorf("hook %q timed out: %w (stderr: %s)", cmd, ctx.Err(), stderr)
+		}
 		return stderr, fmt.Errorf("hook %q exited non-zero: %w (stderr: %s)", cmd, waitErr, stderr)
 	}
 	return stderr, nil
