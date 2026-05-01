@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -34,7 +35,7 @@ func initRepo(t *testing.T) string {
 func TestCreate_DeterministicBranchAndPath(t *testing.T) {
 	root := initRepo(t)
 
-	res, err := Create(root, "auth", 1, "setup-middleware", "")
+	res, err := Create(context.Background(), root, "auth", 1, "setup-middleware", "")
 	require.NoError(t, err)
 
 	require.Equal(t, "tester/auth--1-setup-middleware", res.Branch)
@@ -70,7 +71,7 @@ func TestCreate_BranchesOffSuppliedBaseRef(t *testing.T) {
 		require.NoError(t, err, "git %v: %s", args, string(out))
 	}
 
-	res, err := Create(root, "auth", 1, "alpha", "integration")
+	res, err := Create(context.Background(), root, "auth", 1, "alpha", "integration")
 	require.NoError(t, err)
 
 	// New branch's tip must equal integration's tip, NOT main's.
@@ -88,12 +89,12 @@ func TestCreate_BranchesOffSuppliedBaseRef(t *testing.T) {
 func TestCreate_CleansUpBranchOnWorktreeFailure(t *testing.T) {
 	root := initRepo(t)
 
-	res, err := Create(root, "auth", 1, "setup", "")
+	res, err := Create(context.Background(), root, "auth", 1, "setup", "")
 	require.NoError(t, err)
 
 	// Second Create with same id collides on path; branch must be cleaned up
 	// so the repo doesn't accumulate orphan branches.
-	_, err = Create(root, "auth", 1, "setup", "")
+	_, err = Create(context.Background(), root, "auth", 1, "setup", "")
 	require.Error(t, err)
 
 	out, err := exec.Command("git", "-C", root, "branch", "--list", res.Branch).Output()
@@ -105,15 +106,15 @@ func TestCreate_CleansUpBranchOnWorktreeFailure(t *testing.T) {
 func TestGC_RemovesMatchingSlug(t *testing.T) {
 	root := initRepo(t)
 
-	a, err := Create(root, "auth", 1, "alpha", "")
+	a, err := Create(context.Background(), root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
-	b, err := Create(root, "auth", 2, "beta", "")
+	b, err := Create(context.Background(), root, "auth", 2, "beta", "")
 	require.NoError(t, err)
-	c, err := Create(root, "billing", 1, "charge", "")
+	c, err := Create(context.Background(), root, "billing", 1, "charge", "")
 	require.NoError(t, err)
 
 	safe := map[string]bool{a.Branch: true, b.Branch: true}
-	removed, err := GC(root, "auth", safe, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", safe, io.Discard)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{a.Path, b.Path}, removed)
 
@@ -136,7 +137,7 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 func TestGC_NoMatchesReturnsEmpty(t *testing.T) {
 	root := initRepo(t)
 
-	removed, err := GC(root, "ghost", nil, io.Discard)
+	removed, err := GC(context.Background(), root, "ghost", nil, io.Discard)
 	require.NoError(t, err)
 	require.Empty(t, removed)
 }
@@ -147,10 +148,10 @@ func TestGC_NoMatchesReturnsEmpty(t *testing.T) {
 func TestGC_EmptySafeSetPreservesAll(t *testing.T) {
 	root := initRepo(t)
 
-	a, err := Create(root, "auth", 1, "alpha", "")
+	a, err := Create(context.Background(), root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
 
-	removed, err := GC(root, "auth", map[string]bool{}, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", map[string]bool{}, io.Discard)
 	require.NoError(t, err)
 	require.Empty(t, removed)
 
@@ -168,7 +169,7 @@ func TestGC_EmptySafeSetPreservesAll(t *testing.T) {
 func TestGC_PreservesUnmergedCommits(t *testing.T) {
 	root := initRepo(t)
 
-	a, err := Create(root, "auth", 1, "alpha", "")
+	a, err := Create(context.Background(), root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
 
 	// Make a commit on the worktree branch that's NOT in the parent's HEAD.
@@ -182,7 +183,7 @@ func TestGC_PreservesUnmergedCommits(t *testing.T) {
 	}
 
 	// Caller mistakenly marks it safe.
-	removed, err := GC(root, "auth", map[string]bool{a.Branch: true}, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", map[string]bool{a.Branch: true}, io.Discard)
 	require.NoError(t, err)
 	require.Empty(t, removed, "GC must not delete unmerged branch even if marked safe")
 
@@ -197,7 +198,7 @@ func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {
 	}
 	root := t.TempDir() // not a git repo
 
-	_, err := Create(root, "auth", 1, "x", "")
+	_, err := Create(context.Background(), root, "auth", 1, "x", "")
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "git") || strings.Contains(err.Error(), "user"))
 }

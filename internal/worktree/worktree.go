@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
@@ -20,8 +21,11 @@ type WorktreeResult struct {
 // branch off HEAD (used by the ad-hoc `pba worktree create` CLI); dispatchers
 // must pass the integration branch so issue commits root from a stable base
 // rather than wherever the user happened to run from.
-func Create(root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
-	user, err := gitUser(root)
+//
+// ctx cancels in-flight git plumbing so Ctrl-C during dispatch tears down
+// pending child processes instead of leaking them.
+func Create(ctx context.Context, root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
+	user, err := gitUser(ctx, root)
 	if err != nil {
 		return WorktreeResult{}, err
 	}
@@ -40,11 +44,11 @@ func Create(root, slug string, issueID int, issueSlug, baseRef string) (Worktree
 	}
 	path := filepath.Join(parent, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
 
-	if err := runGit(root, "branch", branch, baseRef); err != nil {
+	if err := runGit(ctx, root, "branch", branch, baseRef); err != nil {
 		return WorktreeResult{}, fmt.Errorf("creating branch %q off %q: %w", branch, baseRef, err)
 	}
-	if err := runGit(root, "worktree", "add", path, branch); err != nil {
-		_ = runGit(root, "branch", "-D", branch)
+	if err := runGit(ctx, root, "worktree", "add", path, branch); err != nil {
+		_ = runGit(ctx, root, "branch", "-D", branch)
 		return WorktreeResult{}, fmt.Errorf("creating worktree at %q: %w", path, err)
 	}
 	return WorktreeResult{Path: path, Branch: branch}, nil
@@ -62,17 +66,17 @@ func Create(root, slug string, issueID int, issueSlug, baseRef string) (Worktree
 //
 // Returns the list of paths actually removed. `out` receives one line per
 // preserved entry; pass io.Discard to silence.
-func GC(root, slug string, safe map[string]bool, out io.Writer) ([]string, error) {
+func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Writer) ([]string, error) {
 	if out == nil {
 		out = io.Discard
 	}
-	user, err := gitUser(root)
+	user, err := gitUser(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 	prefix := fmt.Sprintf("%s/%s--", user, slug)
 
-	entries, err := listWorktrees(root)
+	entries, err := listWorktrees(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +90,11 @@ func GC(root, slug string, safe map[string]bool, out io.Writer) ([]string, error
 			fmt.Fprintf(out, "preserving worktree %q (branch %q not in safe set; recover manually)\n", e.path, e.branch)
 			continue
 		}
-		if err := runGit(root, "worktree", "remove", e.path); err != nil {
+		if err := runGit(ctx, root, "worktree", "remove", e.path); err != nil {
 			fmt.Fprintf(out, "preserving worktree %q (uncommitted changes or removal failed): %v\n", e.path, err)
 			continue
 		}
-		if err := runGit(root, "branch", "-d", e.branch); err != nil {
+		if err := runGit(ctx, root, "branch", "-d", e.branch); err != nil {
 			fmt.Fprintf(out, "preserving branch %q (not merged from HEAD): %v\n", e.branch, err)
 			continue
 		}
@@ -104,8 +108,8 @@ type worktreeEntry struct {
 	branch string
 }
 
-func listWorktrees(root string) ([]worktreeEntry, error) {
-	cmd := exec.Command("git", "-C", root, "worktree", "list", "--porcelain")
+func listWorktrees(ctx context.Context, root string) ([]worktreeEntry, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("listing worktrees: %w", err)
@@ -140,14 +144,14 @@ func listWorktrees(root string) ([]worktreeEntry, error) {
 
 // gitUser returns a sane branch-safe username. Prefers user.email's local part
 // (typical handle) and falls back to user.name with whitespace squashed.
-func gitUser(root string) (string, error) {
-	if email, err := gitConfig(root, "user.email"); err == nil && email != "" {
+func gitUser(ctx context.Context, root string) (string, error) {
+	if email, err := gitConfig(ctx, root, "user.email"); err == nil && email != "" {
 		if at := strings.IndexByte(email, '@'); at > 0 {
 			return email[:at], nil
 		}
 		return email, nil
 	}
-	name, err := gitConfig(root, "user.name")
+	name, err := gitConfig(ctx, root, "user.name")
 	if err != nil {
 		return "", fmt.Errorf("git user not configured: %w", err)
 	}
@@ -157,17 +161,17 @@ func gitUser(root string) (string, error) {
 	return strings.Join(strings.Fields(name), "-"), nil
 }
 
-func gitConfig(root, key string) (string, error) {
-	out, err := exec.Command("git", "-C", root, "config", key).Output()
+func gitConfig(ctx context.Context, root, key string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "config", key).Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
-func runGit(dir string, args ...string) error {
+func runGit(ctx context.Context, dir string, args ...string) error {
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "git", full...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}

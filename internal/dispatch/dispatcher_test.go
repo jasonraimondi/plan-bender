@@ -234,7 +234,7 @@ func TestEnsureIntegrationBranch_DirectStrategyUsesDefault(t *testing.T) {
 	cfg.Pipeline.BranchStrategy = "direct"
 	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir}
 
-	branch, err := d.ensureIntegrationBranch("demo")
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "main", branch)
 }
@@ -243,7 +243,7 @@ func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *tes
 	fix := setupDispatch(t)
 	d := newDispatcher(fix) // defaults branch_strategy = integration
 
-	branch, err := d.ensureIntegrationBranch("demo")
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "tester/demo", branch)
 
