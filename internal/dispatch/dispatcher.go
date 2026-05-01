@@ -139,6 +139,15 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: fmt.Errorf("linking plans dir: %w", err)}
 	}
 
+	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
+		if stderr, err := RunHook(hook, wt.Path, d.out()); err != nil {
+			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
+			store := backend.NewProdPlanStore(d.plansDir())
+			d.markIssueBlocked(store, slug, issue.ID, reason)
+			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+		}
+	}
+
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: fmt.Errorf("building prompt: %w", err)}
@@ -146,6 +155,12 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	res := RunSubprocess(ctx, slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
 	res.Branch = wt.Branch
+
+	if hook := d.Config.Hooks.AfterIssue; hook != "" {
+		if _, err := RunHook(hook, wt.Path, d.out()); err != nil {
+			fmt.Fprintf(d.out(), "warning: after_issue hook failed for issue #%d: %v\n", issue.ID, err)
+		}
+	}
 	return res
 }
 
@@ -174,6 +189,12 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 
 	if _, err := worktree.GC(d.Root, slug); err != nil {
 		return fmt.Errorf("worktree gc: %w", err)
+	}
+
+	if hook := d.Config.Hooks.AfterBatch; hook != "" {
+		if _, err := RunHook(hook, d.Root, d.out()); err != nil {
+			fmt.Fprintf(d.out(), "warning: after_batch hook failed: %v\n", err)
+		}
 	}
 	return nil
 }
