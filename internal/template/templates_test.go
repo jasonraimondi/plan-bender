@@ -36,6 +36,8 @@ func fixtureContext() map[string]any {
 			"sync_pull":   "plan-bender-agent sync linear pull",
 			"archive":     "plan-bender-agent archive",
 			"next":        "plan-bender-agent next",
+			"dispatch":    "plan-bender-agent dispatch",
+			"complete":    "plan-bender-agent complete",
 		},
 	}
 }
@@ -257,14 +259,14 @@ func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 	assert.Contains(t, out, "plan-bender-agent sync linear pull")
 }
 
-func TestImplementPrdTemplate_CallsNextResolver(t *testing.T) {
+func TestImplementPrdTemplate_NoLongerHandRollsExecutionQueue(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
 	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
 	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender-agent next")
+	// Resolver/queue logic moved into Go (dispatch). Prose must not re-derive it.
 	assert.NotContains(t, out, "Build the execution queue")
 	assert.NotContains(t, out, "Routing rules:")
 }
@@ -289,7 +291,7 @@ func TestWorkflowStatesJoin(t *testing.T) {
 	assert.Contains(t, out, strings.Join(ctx["workflow_states"].([]string), " → "))
 }
 
-func TestImplementPrdTemplate_BakesParallelWorktreeFlow(t *testing.T) {
+func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
@@ -297,18 +299,17 @@ func TestImplementPrdTemplate_BakesParallelWorktreeFlow(t *testing.T) {
 	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
 	require.NoError(t, err)
 
-	// Integration branch + worktree + cleanup are now first-class.
-	assert.Contains(t, out, "integration branch")
-	assert.Contains(t, out, "git worktree add")
-	assert.Contains(t, out, "git worktree remove")
-	assert.Contains(t, out, "git merge --no-ff")
+	// Skill body is now one dispatch call instead of inline worktree prose.
+	assert.Contains(t, out, "plan-bender-agent dispatch")
 
-	// Sub-agent constraints the user kept rewriting by hand.
-	assert.Contains(t, out, "ultrathink")
-	assert.Contains(t, out, "idiomatic")
+	// All parallel-worktree and merge-back prose lives in Go now.
+	assert.NotContains(t, out, "git worktree add")
+	assert.NotContains(t, out, "git worktree remove")
+	assert.NotContains(t, out, "git merge --no-ff")
+	assert.NotContains(t, out, "ultrathink")
 
-	// Single combined PR — no per-issue PRs from sub-agents.
-	assert.Contains(t, out, "one combined PR")
+	// Combined PR section (§6) is preserved for the human to land the work.
+	assert.Contains(t, out, "Open the combined PR")
 }
 
 func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T) {
@@ -322,4 +323,15 @@ func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T)
 	assert.Contains(t, out, "plan-bender-agent next")
 	assert.Contains(t, out, "bender-implement-prd")
 	assert.Contains(t, out, "do not push")
+}
+
+func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "plan-bender-agent complete")
 }

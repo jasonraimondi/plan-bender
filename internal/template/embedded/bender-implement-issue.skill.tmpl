@@ -124,6 +124,8 @@ Update the issue file:
 - if the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section)
 {{- end}}
 
+Then call `{{.commands.complete}} {slug} {id}` to signal completion. This emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back.
+
 ### 9. Next issue
 
 If there are more issues, proceed to the next one.

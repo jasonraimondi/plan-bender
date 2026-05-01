@@ -30,88 +30,17 @@ Read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issu
 
 If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
-### 2. Set up the integration branch
+### 2. Run dispatch
 
-All work for this PRD lands on **one** feature branch. Never commit issue work directly to the default branch.
+Run `{{.commands.dispatch}} {slug}` and wait for it to exit. Dispatch handles the full implementation loop: integration branch setup, parallel worktrees per AFK issue, sub-agent spawning, prefixed log streaming, merge-back in dependency order, and worktree cleanup. The skill body's job is just to invoke it.
 
-- branch: `<user>/<project-slug>` (e.g., `jason/auth`)
-- create off the repo's default branch (`main` or `master`) if missing; otherwise reuse
-- per-issue branches root here and merge back here
-- a single combined PR is opened from this branch at the end
+Exit codes:
 
-### 3. Discover the ready batch
+- **0** — every issue is `done`. Proceed to §6.
+- **2** — only HITL issues remain. The HITL summary is on stdout — surface it to the user and stop.
+- **non-zero (other)** — dispatch is stuck (typically blocked issues with no AFK candidates ready). Inspect the output, mark issues, and re-run.
 
-Use `{{.commands.next}} {slug}` as the source of truth for what to pick up. It returns JSON:
-
-- `issue` — the chosen issue, or `null` if no candidate is ready
-- `reason` — why it was picked (status, priority, flags)
-- `was_blocked` — true when the issue had `status: blocked` but its blockers are now done|canceled. Set status to `todo` before starting.
-- `requires_human` — true when only HITL candidates remain. Surface to the user instead of auto-starting.
-- `all_done` — true when every issue is `done` or `canceled`. Skip to §6.
-- `blocked_count` — count of issues still truly blocked (informational).
-- `skipped[]` — every issue not chosen, each with a one-line reason.
-
-Trust the resolver's ordering — never re-derive it from YAML.
-
-To assemble a **parallel batch**: call `{{.commands.next}} {slug}` to confirm at least one ready candidate, then enumerate every other ready issue by reading the YAML files (status `todo` or stale-blocked, all `blocked_by` in done|canceled, AFK only). The resolver picks one at a time; the batch is the set we'll dispatch concurrently.
-
-### 4. Dispatch the batch
-
-An issue is **parallelizable** when:
-
-- AFK (not HITL)
-- not flagged `headed: true` (browser sessions don't parallelize cleanly)
-- its step targets do not overlap another batched issue's targets (best-effort scan of `target` fields — when in doubt, sequence them)
-
-#### Parallel worktrees (2+ parallelizable issues)
-
-For each parallelizable issue, prepare a worktree off the integration branch:
-
-```bash
-git branch <user>/<slug>/<id>-<issue-slug> <user>/<slug>
-git worktree add ../<repo>-wt/<id>-<issue-slug> <user>/<slug>/<id>-<issue-slug>
-```
-
-Then in **a single message**, spawn one Agent (Task tool) per issue so they run concurrently. Every sub-agent prompt MUST include:
-
-- the literal word **`ultrathink`** to request deeper reasoning
-- working directory: the worktree path
-- "follow the `bender-implement-issue` skill for `{slug}#{id}`"
-- "be **idiomatic** to the language and framework of the modules touched — apply the relevant language skills (e.g. `golang-pro`, `typescript-advanced-types`, `best-practices-svelte5`, `rust-best-practices`)"
-- "commit on the assigned branch only — do **not** push, do **not** open a PR; the parent integrates and opens one combined PR"
-
-Wait for every sub-agent to complete. Then on the main checkout:
-
-```bash
-git checkout <user>/<slug>
-git merge --no-ff <issue-branch>   # for each completed branch, dependency-stable order
-```
-
-Re-run lint and the test suite on the integration branch after the merges land. Resolve conflicts by issue intent.
-
-If a sub-agent failed (tests red, blocked, surfaced a problem): mark that issue `status: blocked` with the reason in `notes`, leave its branch un-merged, continue with the rest.
-
-Clean up worktrees:
-
-```bash
-git worktree remove ../<repo>-wt/<id>-<issue-slug>   # each merged or abandoned worktree
-git worktree prune
-```
-
-Verify with `git worktree list` that only the main worktree remains.
-
-#### Sequential (single ready issue, or none parallelizable)
-
-Invoke `bender-implement-issue` directly on the integration branch. Same constraints — idiomatic, no per-issue PR; the parent opens the combined PR.
-
-#### HITL / Blocked
-
-- **HITL**: stop, explain the specific decision or input needed, wait for the user.
-- **Blocked**: set `status: blocked`, record the reason in `notes`, move on. Once the blocker clears, set `status: todo` before resuming.
-
-### 5. Loop
-
-After the batch integrates, return to §3. Newly-completed issues unblock downstream work. Stop when `{{.commands.next}} {slug}` reports `all_done: true` or only HITL/blocked remain.
+Sub-agent stdout is streamed as `[issue-N] ...` so you can watch progress. Full per-issue logs land at `.plan-bender/logs/{slug}/{id}.log`.
 
 ### 6. Open the combined PR
 
