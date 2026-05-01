@@ -509,11 +509,19 @@ func defaultBranch(ctx context.Context, root string) (string, error) {
 			return name, nil
 		}
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	// Final fallback: current branch. `rev-parse --abbrev-ref HEAD` returns the
+	// literal "HEAD" when detached, which would be propagated as a branch name
+	// and explode at `git branch <user>/<slug> HEAD`. Use `symbolic-ref` instead;
+	// it errors cleanly in detached state.
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "HEAD").Output()
 	if err != nil {
-		return "", fmt.Errorf("determining default branch: %w", err)
+		return "", fmt.Errorf("determining default branch (HEAD detached or no branches): %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("determining default branch: empty HEAD ref")
+	}
+	return branch, nil
 }
 
 func branchExists(ctx context.Context, root, name string) (bool, error) {
