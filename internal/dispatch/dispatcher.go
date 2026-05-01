@@ -208,19 +208,24 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 	successful := successfulInDepOrder(results, d.plansDir(), slug)
 	store := backend.NewProdPlanStore(d.plansDir())
 
+	// Track which branches were successfully merged into integration; only those
+	// are safe for GC to delete. Branches whose merge conflicted (now blocked)
+	// hold the only copy of committed work and must be preserved.
+	merged := make(map[string]bool, len(successful))
 	for _, r := range successful {
-		mergeOut, err := runGitOutput(d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
-		if err != nil {
+		mergeOut, mergeErr := runGitOutput(d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
+		if mergeErr != nil {
 			_ = runGit(d.Root, "merge", "--abort")
 			d.markIssueBlocked(store, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
+		merged[r.Branch] = true
 		if err := d.markIssueDone(store, slug, r.IssueID); err != nil {
 			fmt.Fprintf(d.out(), "warning: failed to flip issue #%d to done: %v\n", r.IssueID, err)
 		}
 	}
 
-	if _, err := worktree.GC(d.Root, slug); err != nil {
+	if _, err := worktree.GC(d.Root, slug, merged, d.out()); err != nil {
 		return fmt.Errorf("worktree gc: %w", err)
 	}
 

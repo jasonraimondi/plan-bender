@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -111,7 +112,8 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 	c, err := Create(root, "billing", 1, "charge", "")
 	require.NoError(t, err)
 
-	removed, err := GC(root, "auth")
+	safe := map[string]bool{a.Branch: true, b.Branch: true}
+	removed, err := GC(root, "auth", safe, io.Discard)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{a.Path, b.Path}, removed)
 
@@ -134,9 +136,59 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 func TestGC_NoMatchesReturnsEmpty(t *testing.T) {
 	root := initRepo(t)
 
-	removed, err := GC(root, "ghost")
+	removed, err := GC(root, "ghost", nil, io.Discard)
 	require.NoError(t, err)
 	require.Empty(t, removed)
+}
+
+// TestGC_EmptySafeSetPreservesAll asserts that an explicit empty (non-nil)
+// safe set blocks every branch from being deleted. This is the dispatcher's
+// "no merges succeeded this batch" path — nothing should be GC'd.
+func TestGC_EmptySafeSetPreservesAll(t *testing.T) {
+	root := initRepo(t)
+
+	a, err := Create(root, "auth", 1, "alpha", "")
+	require.NoError(t, err)
+
+	removed, err := GC(root, "auth", map[string]bool{}, io.Discard)
+	require.NoError(t, err)
+	require.Empty(t, removed)
+
+	// Worktree and branch must still exist.
+	_, err = os.Stat(a.Path)
+	require.NoError(t, err)
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", a.Branch).Output()
+	require.NoError(t, err)
+	require.Contains(t, string(branchOut), a.Branch)
+}
+
+// TestGC_PreservesUnmergedCommits asserts that even if the caller marks a
+// branch safe, GC still uses `branch -d` (not `-D`), so a branch with commits
+// not reachable from HEAD survives — protecting against caller mistakes.
+func TestGC_PreservesUnmergedCommits(t *testing.T) {
+	root := initRepo(t)
+
+	a, err := Create(root, "auth", 1, "alpha", "")
+	require.NoError(t, err)
+
+	// Make a commit on the worktree branch that's NOT in the parent's HEAD.
+	require.NoError(t, os.WriteFile(filepath.Join(a.Path, "f.txt"), []byte("x"), 0o644))
+	for _, args := range [][]string{
+		{"-C", a.Path, "add", "f.txt"},
+		{"-C", a.Path, "commit", "-m", "wip"},
+	} {
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	// Caller mistakenly marks it safe.
+	removed, err := GC(root, "auth", map[string]bool{a.Branch: true}, io.Discard)
+	require.NoError(t, err)
+	require.Empty(t, removed, "GC must not delete unmerged branch even if marked safe")
+
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", a.Branch).Output()
+	require.NoError(t, err)
+	require.Contains(t, string(branchOut), a.Branch, "branch must survive")
 }
 
 func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {

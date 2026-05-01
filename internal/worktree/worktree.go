@@ -3,6 +3,7 @@ package worktree
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -49,9 +50,22 @@ func Create(root, slug string, issueID int, issueSlug, baseRef string) (Worktree
 	return WorktreeResult{Path: path, Branch: branch}, nil
 }
 
-// GC removes every plan-bender worktree whose branch matches {user}/{slug}/.
-// Returns the list of removed worktree paths.
-func GC(root, slug string) ([]string, error) {
+// GC removes plan-bender worktrees whose branch matches {user}/{slug}--.
+//
+// `safe` filters which branches GC may delete: pass an explicit set to allow
+// only those branches (e.g. branches confirmed merged into integration); pass
+// nil to consider every matching branch a candidate. Either way, GC uses the
+// non-forcing forms of `worktree remove` and `branch -d`, so a worktree with
+// uncommitted changes or a branch whose commits aren't reachable from current
+// HEAD is preserved with a warning. Caller is expected to invoke GC while HEAD
+// is on the integration branch so `branch -d`'s reachability check matches.
+//
+// Returns the list of paths actually removed. `out` receives one line per
+// preserved entry; pass io.Discard to silence.
+func GC(root, slug string, safe map[string]bool, out io.Writer) ([]string, error) {
+	if out == nil {
+		out = io.Discard
+	}
 	user, err := gitUser(root)
 	if err != nil {
 		return nil, err
@@ -68,10 +82,18 @@ func GC(root, slug string) ([]string, error) {
 		if !strings.HasPrefix(e.branch, prefix) {
 			continue
 		}
-		if err := runGit(root, "worktree", "remove", "--force", e.path); err != nil {
-			return removed, fmt.Errorf("removing worktree %q: %w", e.path, err)
+		if safe != nil && !safe[e.branch] {
+			fmt.Fprintf(out, "preserving worktree %q (branch %q not in safe set; recover manually)\n", e.path, e.branch)
+			continue
 		}
-		_ = runGit(root, "branch", "-D", e.branch)
+		if err := runGit(root, "worktree", "remove", e.path); err != nil {
+			fmt.Fprintf(out, "preserving worktree %q (uncommitted changes or removal failed): %v\n", e.path, err)
+			continue
+		}
+		if err := runGit(root, "branch", "-d", e.branch); err != nil {
+			fmt.Fprintf(out, "preserving branch %q (not merged from HEAD): %v\n", e.branch, err)
+			continue
+		}
 		removed = append(removed, e.path)
 	}
 	return removed, nil
