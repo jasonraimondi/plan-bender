@@ -94,6 +94,7 @@ func rootCmd() *cobra.Command {
 		cli.NewDocsCmd(),
 		cli.NewNextCmd(),
 		cli.NewCompleteCmd(),
+		cli.NewWorktreeCmd(),
 	)
 
 	return root
