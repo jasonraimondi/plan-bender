@@ -42,8 +42,10 @@ Skills are the primary interface — agent-side slash commands that drive the pi
 | `/bender-write-issue` | Create a single issue |
 | `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
-| `/bender-implement-prd` | Work all issues in dependency order |
+| `/bender-implement-prd` | Run `pba dispatch` to work all issues in dependency order |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
+
+`pba dispatch <slug>` is the autonomous loop behind `/bender-implement-prd`: it creates parallel worktrees, spawns `claude --print` per issue, merges successful branches in dependency order, and runs lifecycle hooks. See [docs/cli.md](docs/cli.md#dispatch-lifecycle).
 | `/bender-sync-linear` | Sync plan with Linear (Linear backend only) |
 
 ## Docs
