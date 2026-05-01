@@ -95,7 +95,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %d blocked", res.BlockedCount)
 		}
 
-		results, err := d.RunBatch(ctx, slug, batch)
+		results, err := d.RunBatch(ctx, slug, batch, integrationBranch)
 		if err != nil {
 			return fmt.Errorf("running batch: %w", err)
 		}
@@ -106,10 +106,10 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 }
 
-// RunBatch fans out one goroutine per issue, each creating a worktree,
-// rendering a prompt, and running a claude subprocess. Results come back via
-// a buffered channel and are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.IssueYaml) ([]SubResult, error) {
+// RunBatch fans out one goroutine per issue, each creating a worktree off
+// integrationBranch, rendering a prompt, and running a claude subprocess.
+// Results come back via a buffered channel and are returned in input order.
+func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.IssueYaml, integrationBranch string) ([]SubResult, error) {
 	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
 
 	results := make([]SubResult, len(issues))
@@ -119,7 +119,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 		wg.Add(1)
 		go func(idx int, issue schema.IssueYaml) {
 			defer wg.Done()
-			results[idx] = d.runOne(ctx, slug, issue, logDir)
+			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
 		}(i, issues[i])
 	}
 
@@ -127,11 +127,11 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 	return results, nil
 }
 
-func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir string) SubResult {
+func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir, integrationBranch string) SubResult {
 	store := backend.NewProdPlanStore(d.plansDir())
 
 	d.gitMu.Lock()
-	wt, err := worktree.Create(d.Root, slug, issue.ID, issue.Slug)
+	wt, err := worktree.Create(d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)

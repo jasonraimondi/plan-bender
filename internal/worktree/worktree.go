@@ -14,12 +14,19 @@ type WorktreeResult struct {
 	Branch string
 }
 
-// Create makes a new branch off HEAD and a git worktree at the canonical
-// {repo}-wt/{id}-{issueSlug} path next to the repo root.
-func Create(root, slug string, issueID int, issueSlug string) (WorktreeResult, error) {
+// Create makes a new branch off baseRef and a git worktree at the canonical
+// {repo}-wt/{id}-{issueSlug} path next to the repo root. Pass baseRef="" to
+// branch off HEAD (used by the ad-hoc `pba worktree create` CLI); dispatchers
+// must pass the integration branch so issue commits root from a stable base
+// rather than wherever the user happened to run from.
+func Create(root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
 	user, err := gitUser(root)
 	if err != nil {
 		return WorktreeResult{}, err
+	}
+
+	if baseRef == "" {
+		baseRef = "HEAD"
 	}
 
 	// Use "--" between the project slug and the issue id-slug to avoid a git
@@ -32,8 +39,8 @@ func Create(root, slug string, issueID int, issueSlug string) (WorktreeResult, e
 	}
 	path := filepath.Join(parent, repoName+"-wt", fmt.Sprintf("%d-%s", issueID, issueSlug))
 
-	if err := runGit(root, "branch", branch, "HEAD"); err != nil {
-		return WorktreeResult{}, fmt.Errorf("creating branch %q: %w", branch, err)
+	if err := runGit(root, "branch", branch, baseRef); err != nil {
+		return WorktreeResult{}, fmt.Errorf("creating branch %q off %q: %w", branch, baseRef, err)
 	}
 	if err := runGit(root, "worktree", "add", path, branch); err != nil {
 		_ = runGit(root, "branch", "-D", branch)

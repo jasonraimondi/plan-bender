@@ -33,7 +33,7 @@ func initRepo(t *testing.T) string {
 func TestCreate_DeterministicBranchAndPath(t *testing.T) {
 	root := initRepo(t)
 
-	res, err := Create(root, "auth", 1, "setup-middleware")
+	res, err := Create(root, "auth", 1, "setup-middleware", "")
 	require.NoError(t, err)
 
 	require.Equal(t, "tester/auth--1-setup-middleware", res.Branch)
@@ -52,15 +52,47 @@ func TestCreate_DeterministicBranchAndPath(t *testing.T) {
 	require.Contains(t, string(out), "branch refs/heads/"+res.Branch)
 }
 
+// TestCreate_BranchesOffSuppliedBaseRef asserts that the new branch points at
+// the caller-supplied baseRef rather than whatever HEAD happens to be. The
+// dispatcher relies on this to root issue branches off the integration branch
+// even when the user invoked `pba dispatch` from an unrelated branch.
+func TestCreate_BranchesOffSuppliedBaseRef(t *testing.T) {
+	root := initRepo(t)
+
+	// Create an integration branch with one extra commit on top of main.
+	for _, args := range [][]string{
+		{"-C", root, "checkout", "-b", "integration"},
+		{"-C", root, "commit", "--allow-empty", "-m", "integration commit"},
+		{"-C", root, "checkout", "main"},
+	} {
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	res, err := Create(root, "auth", 1, "alpha", "integration")
+	require.NoError(t, err)
+
+	// New branch's tip must equal integration's tip, NOT main's.
+	branchTip, err := exec.Command("git", "-C", root, "rev-parse", res.Branch).Output()
+	require.NoError(t, err)
+	integrationTip, err := exec.Command("git", "-C", root, "rev-parse", "integration").Output()
+	require.NoError(t, err)
+	mainTip, err := exec.Command("git", "-C", root, "rev-parse", "main").Output()
+	require.NoError(t, err)
+
+	require.Equal(t, strings.TrimSpace(string(integrationTip)), strings.TrimSpace(string(branchTip)))
+	require.NotEqual(t, strings.TrimSpace(string(mainTip)), strings.TrimSpace(string(branchTip)))
+}
+
 func TestCreate_CleansUpBranchOnWorktreeFailure(t *testing.T) {
 	root := initRepo(t)
 
-	res, err := Create(root, "auth", 1, "setup")
+	res, err := Create(root, "auth", 1, "setup", "")
 	require.NoError(t, err)
 
 	// Second Create with same id collides on path; branch must be cleaned up
 	// so the repo doesn't accumulate orphan branches.
-	_, err = Create(root, "auth", 1, "setup")
+	_, err = Create(root, "auth", 1, "setup", "")
 	require.Error(t, err)
 
 	out, err := exec.Command("git", "-C", root, "branch", "--list", res.Branch).Output()
@@ -72,11 +104,11 @@ func TestCreate_CleansUpBranchOnWorktreeFailure(t *testing.T) {
 func TestGC_RemovesMatchingSlug(t *testing.T) {
 	root := initRepo(t)
 
-	a, err := Create(root, "auth", 1, "alpha")
+	a, err := Create(root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
-	b, err := Create(root, "auth", 2, "beta")
+	b, err := Create(root, "auth", 2, "beta", "")
 	require.NoError(t, err)
-	c, err := Create(root, "billing", 1, "charge")
+	c, err := Create(root, "billing", 1, "charge", "")
 	require.NoError(t, err)
 
 	removed, err := GC(root, "auth")
@@ -113,7 +145,7 @@ func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {
 	}
 	root := t.TempDir() // not a git repo
 
-	_, err := Create(root, "auth", 1, "x")
+	_, err := Create(root, "auth", 1, "x", "")
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "git") || strings.Contains(err.Error(), "user"))
 }
