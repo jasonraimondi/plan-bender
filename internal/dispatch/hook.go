@@ -63,10 +63,15 @@ func RunHook(ctx context.Context, cmd, dir string, outWriter io.Writer) (string,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			fmt.Fprintln(outWriter, "[hook] "+scanner.Text())
+		reader := bufio.NewReader(stdout)
+		for {
+			line, err := reader.ReadString('\n')
+			if line != "" {
+				fmt.Fprintln(outWriter, "[hook] "+strings.TrimRight(line, "\n"))
+			}
+			if err != nil {
+				return
+			}
 		}
 	}()
 

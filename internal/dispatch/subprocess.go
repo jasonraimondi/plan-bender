@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,13 +85,20 @@ func RunSubprocess(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Fprintln(outWriter, prefix+line)
-			logBuf.WriteString(line)
-			logBuf.WriteByte('\n')
+		// bufio.Reader (not Scanner) so a single stream-json event embedding a
+		// large tool result can exceed any fixed buffer cap.
+		reader := bufio.NewReader(stdout)
+		for {
+			line, err := reader.ReadString('\n')
+			if line != "" {
+				stripped := strings.TrimRight(line, "\n")
+				fmt.Fprintln(outWriter, prefix+stripped)
+				logBuf.WriteString(stripped)
+				logBuf.WriteByte('\n')
+			}
+			if err != nil {
+				return
+			}
 		}
 	}()
 

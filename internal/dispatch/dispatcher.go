@@ -575,11 +575,15 @@ func linkPlansDir(parent, worktreePath string) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}
-		if _, err := os.Lstat(dst); err == nil {
-			_ = os.RemoveAll(dst)
+		if info, err := os.Lstat(dst); err == nil {
+			// Only nuke a pre-existing symlink. A real directory at dst is the
+			// user's data — refuse to clobber it; let Symlink fail with EEXIST.
+			if info.Mode()&os.ModeSymlink != 0 {
+				_ = os.Remove(dst)
+			}
 		}
 		if err := os.Symlink(src, dst); err != nil {
-			return err
+			return fmt.Errorf("symlinking %s -> %s: %w", dst, src, err)
 		}
 	}
 	return nil
