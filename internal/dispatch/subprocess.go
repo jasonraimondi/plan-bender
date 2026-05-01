@@ -45,6 +45,14 @@ func RunSubprocess(
 		outWriter = os.Stdout
 	}
 
+	mark := func(r SubResult, reason string) SubResult {
+		out, err := markBlocked(r, plansDir, slug, issue, reason)
+		if err != nil {
+			fmt.Fprintf(outWriter, "[issue-%d] warning: failed to persist blocked status: %v\n", issue.ID, err)
+		}
+		return out
+	}
+
 	cmd := exec.CommandContext(ctx, "claude", "--print", "--output-format", "stream-json", "-p", prompt)
 	cmd.Dir = worktreePath
 	devNull, _ := os.Open(os.DevNull)
@@ -58,7 +66,7 @@ func RunSubprocess(
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		res.Err = fmt.Errorf("attaching stdout pipe: %w", err)
-		return markBlocked(res, plansDir, slug, issue, res.Err.Error())
+		return mark(res, res.Err.Error())
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -67,7 +75,7 @@ func RunSubprocess(
 		} else {
 			res.Err = fmt.Errorf("starting claude: %w", err)
 		}
-		return markBlocked(res, plansDir, slug, issue, res.Err.Error())
+		return mark(res, res.Err.Error())
 	}
 
 	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
@@ -110,7 +118,7 @@ func RunSubprocess(
 
 	reason := buildFailureReason(waitErr, postStatus, stderrText)
 	res.Err = errors.New(reason)
-	return markBlocked(res, plansDir, slug, issue, reason)
+	return mark(res, reason)
 }
 
 func buildFailureReason(waitErr error, postStatus, stderr string) string {
@@ -126,7 +134,10 @@ func buildFailureReason(waitErr error, postStatus, stderr string) string {
 	}
 }
 
-func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, reason string) SubResult {
+// markBlocked persists the blocked status. Returns the SubResult so the caller
+// can return it directly, plus any write error so the caller can surface it
+// (rather than letting the dispatch loop see a "still todo" file and retry).
+func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, reason string) (SubResult, error) {
 	current, err := loadIssue(plansDir, slug, issue.ID)
 	if err != nil {
 		current = &issue
@@ -142,9 +153,11 @@ func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, r
 	}
 
 	store := backend.NewProdPlanStore(plansDir)
-	_ = store.WriteIssue(slug, current)
 	res.Success = false
-	return res
+	if writeErr := store.WriteIssue(slug, current); writeErr != nil {
+		return res, fmt.Errorf("writing blocked status for issue #%d: %w", issue.ID, writeErr)
+	}
+	return res, nil
 }
 
 func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {

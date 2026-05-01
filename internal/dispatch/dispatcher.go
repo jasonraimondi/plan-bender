@@ -135,20 +135,20 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markIssueBlocked(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(store, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
 	if err := linkPlansDir(d.Root, wt.Path); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markIssueBlocked(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(store, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markIssueBlocked(store, slug, issue.ID, reason)
+			d.markBlockedAndWarn(store, slug, issue.ID, reason)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
 	}
@@ -156,7 +156,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markIssueBlocked(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(store, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
@@ -216,7 +216,7 @@ func (d *Dispatcher) MergeBack(slug string, results []SubResult, integrationBran
 		mergeOut, mergeErr := runGitOutput(d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(d.Root, "merge", "--abort")
-			d.markIssueBlocked(store, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
+			d.markBlockedAndWarn(store, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
 		merged[r.Branch] = true
@@ -285,10 +285,15 @@ func (d *Dispatcher) markIssueDone(store *backend.PlanStore, slug string, id int
 	return store.WriteIssue(slug, issue)
 }
 
-func (d *Dispatcher) markIssueBlocked(store *backend.PlanStore, slug string, id int, reason string) {
+// markIssueBlocked flips the issue to status=blocked and appends reason to its
+// notes. Returns an error if the load or write fails so callers can surface it
+// rather than silently leaving the on-disk status mismatched with the
+// dispatcher's view (which would cause the next outer-loop tick to re-pick a
+// "still todo" issue and retry forever).
+func (d *Dispatcher) markIssueBlocked(store *backend.PlanStore, slug string, id int, reason string) error {
 	issue, err := loadIssue(d.plansDir(), slug, id)
 	if err != nil {
-		return
+		return fmt.Errorf("loading issue #%d to mark blocked: %w", id, err)
 	}
 	issue.Status = "blocked"
 	issue.Updated = time.Now().Format("2006-01-02")
@@ -298,7 +303,20 @@ func (d *Dispatcher) markIssueBlocked(store *backend.PlanStore, slug string, id 
 		merged := *issue.Notes + "\n\n" + reason
 		issue.Notes = &merged
 	}
-	_ = store.WriteIssue(slug, issue)
+	if err := store.WriteIssue(slug, issue); err != nil {
+		return fmt.Errorf("writing blocked status for issue #%d: %w", id, err)
+	}
+	return nil
+}
+
+// markBlockedAndWarn is the dispatch-side helper that surfaces markIssueBlocked
+// failures via stderr but still returns control to the caller. The caller is
+// already on a failure path; a warn-and-continue is preferable to bubbling the
+// error and masking the original cause.
+func (d *Dispatcher) markBlockedAndWarn(store *backend.PlanStore, slug string, id int, reason string) {
+	if err := d.markIssueBlocked(store, slug, id, reason); err != nil {
+		fmt.Fprintf(d.out(), "warning: %v (issue may re-dispatch on next loop)\n", err)
+	}
 }
 
 func successfulInDepOrder(results []SubResult, plansDir, slug string) []SubResult {
