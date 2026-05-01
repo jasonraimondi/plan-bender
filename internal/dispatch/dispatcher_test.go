@@ -166,7 +166,7 @@ func TestDispatcher_PartialFailureMergesSuccessOnly(t *testing.T) {
 	// the prompt embeds it via BuildPrompt.
 	plansDirAbs := fix.plansDir
 	body := fmt.Sprintf(`set -e
-prompt="$5"
+for prompt; do :; done
 case "$prompt" in
   *"slug: alpha"*)
     sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
@@ -204,7 +204,7 @@ func TestReadyAFK_DispatcherIntegration_RespectsDependencyOrder(t *testing.T) {
 	writeIssue(t, fix.plansDir, mkAFKIssue(2, "second", "todo", 1))
 	installSkillFile(t, fix.root)
 
-	body := fmt.Sprintf(`prompt="$5"
+	body := fmt.Sprintf(`for prompt; do :; done
 case "$prompt" in
   *"slug: first"*)
     sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-first.yaml"
@@ -291,7 +291,7 @@ func TestDispatcher_CompletesMultiIssueBatch(t *testing.T) {
 	writeIssue(t, fix.plansDir, mkAFKIssue(2, "beta", "todo"))
 	installSkillFile(t, fix.root)
 
-	body := fmt.Sprintf(`prompt="$5"
+	body := fmt.Sprintf(`for prompt; do :; done
 case "$prompt" in
   *"slug: alpha"*)
     sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
@@ -346,7 +346,7 @@ func TestDispatcher_MergeBackRestoresParentHEAD(t *testing.T) {
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
 
-	body := fmt.Sprintf(`prompt="$5"
+	body := fmt.Sprintf(`for prompt; do :; done
 case "$prompt" in
   *"slug: alpha"*)
     sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
@@ -376,7 +376,7 @@ func TestDispatcher_DirtyParentRefuses(t *testing.T) {
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
 
-	body := fmt.Sprintf(`prompt="$5"
+	body := fmt.Sprintf(`for prompt; do :; done
 sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
 exit 0
 `, fix.plansDir)

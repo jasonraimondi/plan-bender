@@ -53,7 +53,7 @@ func RunSubprocess(
 		return out
 	}
 
-	cmd := exec.CommandContext(ctx, "claude", "--print", "--output-format", "stream-json", "-p", prompt)
+	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json", "-p", prompt)
 	cmd.Dir = worktreePath
 	devNull, _ := os.Open(os.DevNull)
 	if devNull != nil {
