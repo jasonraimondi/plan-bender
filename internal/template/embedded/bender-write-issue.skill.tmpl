@@ -139,7 +139,7 @@ Allowed values: {{join ", " .enum_values}}
 {{end}}
 {{end}}
 
-{{if contains .review_with_user "bender-write-issue"}}
+{{if .review_with_user}}
 ### 5. Review with the user
 
 Present the drafted issue. Ask:
@@ -183,7 +183,7 @@ Rules:
 After writing the issue file, run `{{.commands.sync_push}} {slug}#{id}` to push the issue to the configured backend.
 {{end}}
 
-### {{if contains .review_with_user "bender-write-issue"}}7{{else}}6{{end}}. Hand off cleanly
+### {{if .review_with_user}}7{{else}}6{{end}}. Hand off cleanly
 
 After creation, share:
 

@@ -35,6 +35,6 @@ func Defaults() Config {
 		Linear:          LinearConfig{},
 		UpdateCheck:     true,
 		ManageGitignore: true,
-		ReviewWithUser:  []string{"bender-write-prd", "bender-write-issue"},
+		ReviewWithUser:  false,
 	}
 }

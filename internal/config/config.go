@@ -128,7 +128,7 @@ type Config struct {
 	Hooks           HooksConfig       `yaml:"hooks"`
 	UpdateCheck     bool              `yaml:"update_check"`
 	ManageGitignore bool              `yaml:"manage_gitignore"`
-	ReviewWithUser  []string          `yaml:"review_with_user"`
+	ReviewWithUser  bool              `yaml:"review_with_user"`
 }
 
 // PartialConfig is used for YAML layer loading — all fields optional.
@@ -144,5 +144,5 @@ type PartialConfig struct {
 	Hooks           *HooksConfig           `yaml:"hooks,omitempty"`
 	UpdateCheck     *bool                  `yaml:"update_check,omitempty"`
 	ManageGitignore *bool                  `yaml:"manage_gitignore,omitempty"`
-	ReviewWithUser  []string               `yaml:"review_with_user,omitempty"`
+	ReviewWithUser  *bool                  `yaml:"review_with_user,omitempty"`
 }

@@ -48,9 +48,7 @@ issue_schema:
   #   required: true
   #   enum_values: [frontend, backend, platform]
 
-review_with_user:              # Skills that include a user review step before writing
-  - bender-write-prd
-  - bender-write-issue
+review_with_user: false        # Insert a user review step before writing PRDs/issues
 
 update_check: true             # Check for new releases on pb commands
 

@@ -77,9 +77,7 @@ issue_schema:
   #   required: true
   #   enum_values: [frontend, backend, platform]
 
-review_with_user:              # Skills that include a user review step before writing
-  - bender-write-prd           # Set to [] to skip review steps entirely
-  - bender-write-issue
+review_with_user: false        # Insert a user review step before writing PRDs/issues
 
 update_check: true             # Check for new releases on pb commands
 
@@ -127,7 +125,7 @@ Templates receive a context map built from your config:
 | `workflow_states` | []string | `workflow_states` config |
 | `max_points` | int | `max_points` config |
 | `has_backend_sync` | bool | `linear.enabled` config |
-| `review_with_user` | []string | `review_with_user` config |
+| `review_with_user` | bool | `review_with_user` config |
 | `agent` | string | Current agent name |
 | `commands` | map | CLI command strings (see below) |
 | `custom_fields` | []map | `issue_schema.custom_fields` config |
@@ -158,4 +156,4 @@ Use `{{.commands.write_prd}}` in templates instead of hardcoding binary names.
 | --- | --- | --- |
 | `kebab` | `kebab(s string) string` | `{{"HelloWorld" \| kebab}}` → `hello-world` |
 | `join` | `join(sep string, items []string) string` | `{{join ", " .tracks}}` |
-| `contains` | `contains(list []string, item string) bool` | `{{if contains .review_with_user "bender-write-prd"}}` |
+| `contains` | `contains(list []string, item string) bool` | `{{if contains .tracks "intent"}}` |

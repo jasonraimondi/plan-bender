@@ -105,7 +105,7 @@ base_url: "http://localhost:3000"
 ```
 
 Keep it scannable. The PRD should support decomposition into issues — not be a dumping ground for every implementation detail.
-{{if contains .review_with_user "bender-write-prd"}}
+{{if .review_with_user}}
 
 ### 6. Review with the user
 
@@ -141,7 +141,7 @@ Rules:
 - do not include file paths or code snippets in the PRD
 - single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
 
-### {{if contains .review_with_user "bender-write-prd"}}8{{else}}7{{end}}. Hand off cleanly
+### {{if .review_with_user}}8{{else}}7{{end}}. Hand off cleanly
 
 After creation, share:
 
