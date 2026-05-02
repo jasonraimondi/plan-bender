@@ -202,7 +202,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
 	defer cancel()
-	res := RunSubprocess(subCtx, slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
+	res := RunSubprocess(subCtx, d.statusOwner(), slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {
