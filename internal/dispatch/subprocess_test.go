@@ -159,6 +159,33 @@ exit 0
 	assert.Contains(t, *post.Notes, "in-progress")
 }
 
+func TestRunSubprocess_UnreadablePostFileMarksFailure(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+
+	// Fake claude exits 0 but renders the issue file unreadable. Verdict must
+	// classify this as Unreadable rather than Success — the post-run state is
+	// unknown, not in-review.
+	body := `chmod 000 "` + issuePath + `"
+exit 0
+`
+	installFakeClaude(t, body)
+	t.Cleanup(func() { _ = os.Chmod(issuePath, 0o644) })
+
+	worktree := t.TempDir()
+	var out bytes.Buffer
+	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
+		"prompt", worktree, plansDir, "", &out)
+
+	require.False(t, res.Success)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "post-run issue file unreadable")
+	assert.Contains(t, res.Err.Error(), "permission denied")
+}
+
 func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")
