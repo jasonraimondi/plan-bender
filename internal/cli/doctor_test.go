@@ -149,7 +149,8 @@ func TestLinearCheck_Disabled(t *testing.T) {
 
 func TestGitignoreCheck_Managed(t *testing.T) {
 	dir := t.TempDir()
-	cfg := config.Defaults() // ManageGitignore is true
+	cfg := config.Defaults()
+	cfg.ManageGitignore = true
 
 	r := gitignoreCheck(dir, cfg)
 	assert.True(t, r.Pass)
@@ -159,8 +160,7 @@ func TestGitignoreCheck_Managed(t *testing.T) {
 
 func TestGitignoreCheck_UnmanagedLocalIgnored(t *testing.T) {
 	dir := t.TempDir()
-	cfg := config.Defaults()
-	cfg.ManageGitignore = false
+	cfg := config.Defaults() // ManageGitignore defaults to false
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".gitignore"),
@@ -177,7 +177,6 @@ func TestGitignoreCheck_UnmanagedLocalIgnored(t *testing.T) {
 func TestGitignoreCheck_UnmanagedLocalMissing(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
-	cfg.ManageGitignore = false
 
 	// .gitignore exists but does not contain .plan-bender.local.yaml
 	require.NoError(t, os.WriteFile(
@@ -194,7 +193,6 @@ func TestGitignoreCheck_UnmanagedLocalMissing(t *testing.T) {
 func TestGitignoreCheck_UnmanagedNoGitignoreFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
-	cfg.ManageGitignore = false
 
 	// No .gitignore at all — .plan-bender.local.yaml is certainly not gitignored
 	r := gitignoreCheck(dir, cfg)
@@ -226,8 +224,8 @@ func TestDoctorCmd_HealthySetup(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Write config
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("{}"), 0o644))
+	// Write config (manage_gitignore on so setup writes a .gitignore for the doctor check)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("manage_gitignore: true\n"), 0o644))
 
 	// Run setup to generate and symlink skills
 	setupCmd := NewSetupCmd("test")

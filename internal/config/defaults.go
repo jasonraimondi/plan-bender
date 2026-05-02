@@ -34,7 +34,7 @@ func Defaults() Config {
 		IssueSchema:     IssueSchemaConfig{CustomFields: []CustomFieldDef{}},
 		Linear:          LinearConfig{},
 		UpdateCheck:     true,
-		ManageGitignore: true,
+		ManageGitignore: false,
 		ReviewWithUser:  false,
 	}
 }

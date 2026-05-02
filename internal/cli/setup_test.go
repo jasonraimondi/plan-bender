@@ -255,7 +255,7 @@ func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("agents:\n  - claude-code\n"),
+		[]byte("manage_gitignore: true\nagents:\n  - claude-code\n"),
 		0o644,
 	))
 

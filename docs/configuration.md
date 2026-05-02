@@ -81,9 +81,9 @@ review_with_user: false        # Insert a user review step before writing PRDs/i
 
 update_check: true             # Check for new releases on pb commands
 
-manage_gitignore: true         # Let pb setup add .plan-bender/, .plan-bender.local.yaml,
-                               # and agent skill patterns to .gitignore. Set to false
-                               # if you manage .gitignore yourself (via template, CI, etc).
+manage_gitignore: false        # Set true to let pb setup add .plan-bender/, .plan-bender.local.yaml,
+                               # and agent skill patterns to .gitignore. Leave off if you
+                               # manage .gitignore yourself (via template, CI, etc).
                                # When off, pb doctor still warns if .plan-bender.local.yaml
                                # is not gitignored.
 

@@ -52,7 +52,7 @@ review_with_user: false        # Insert a user review step before writing PRDs/i
 
 update_check: true             # Check for new releases on pb commands
 
-manage_gitignore: true         # Let pb setup manage .gitignore entries
+manage_gitignore: false        # Set true to let pb setup manage .gitignore entries
 
 # Per-agent overrides (object form):
 # agents:
