@@ -54,13 +54,12 @@ func RunSubprocess(
 		return out
 	}
 
-	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json", "-p", prompt)
+	// Pass the prompt on stdin rather than `-p <prompt>`. The skill body begins
+	// with `---` (YAML frontmatter), and claude's flag parser rejects -p values
+	// that look like options.
+	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json")
 	cmd.Dir = worktreePath
-	devNull, _ := os.Open(os.DevNull)
-	if devNull != nil {
-		cmd.Stdin = devNull
-		defer devNull.Close()
-	}
+	cmd.Stdin = strings.NewReader(prompt)
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
@@ -131,6 +130,7 @@ func RunSubprocess(
 
 func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr string) string {
 	timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
+	stderr = truncateForNotes(stderr)
 	switch {
 	case timedOut && stderr != "":
 		return fmt.Sprintf("subprocess timed out: %v\n%s", waitErr, stderr)
@@ -145,6 +145,19 @@ func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr s
 	default:
 		return fmt.Sprintf("subprocess exited 0 but issue status is %q (expected in-review)", postStatus)
 	}
+}
+
+// stderrNotesLimit caps how much stderr we embed in an issue's notes on failure.
+// The full transcript still lands in the dispatch log file; the cap exists so
+// a verbose subprocess error (e.g. an entire skill body echoed back as an
+// "unknown option" message) cannot bloat the YAML.
+const stderrNotesLimit = 2048
+
+func truncateForNotes(s string) string {
+	if len(s) <= stderrNotesLimit {
+		return s
+	}
+	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
 // markBlocked persists the blocked status. Returns the SubResult so the caller
