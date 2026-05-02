@@ -17,6 +17,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 )
 
@@ -45,6 +46,21 @@ type Dispatcher struct {
 	// every goroutine streaming sub-agent output shares one mutex.
 	outOnce   sync.Once
 	outWriter io.Writer
+
+	// ownerOnce + owner memoize the status.Owner so every status write in a
+	// Run goes through the same lock-aware adapter without re-allocating.
+	ownerOnce sync.Once
+	owner     *status.Owner
+}
+
+// statusOwner returns the lazily-constructed status.Owner backed by the
+// production prodStatusStore wired to d.plansDir(). All status writes during
+// a Run flow through this single Owner.
+func (d *Dispatcher) statusOwner() *status.Owner {
+	d.ownerOnce.Do(func() {
+		d.owner = status.New(newProdStatusStore(d.plansDir()))
+	})
+	return d.owner
 }
 
 // lockedWriter serializes Write calls so concurrent goroutines streaming
@@ -255,8 +271,11 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 			continue
 		}
 		merged[r.Branch] = true
-		if err := d.markIssueDone(store, slug, r.IssueID); err != nil {
-			fmt.Fprintf(d.out(), "warning: failed to flip issue #%d to done: %v\n", r.IssueID, err)
+		if err := d.statusOwner().Transition(ctx, slug, r.IssueID, []status.Status{status.StatusInReview}, status.StatusDone, ""); err != nil {
+			if errors.Is(err, status.ErrAlreadyInState) {
+				continue
+			}
+			return fmt.Errorf("flipping issue #%d to done: %w", r.IssueID, err)
 		}
 	}
 
@@ -309,16 +328,6 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 		return false, err
 	}
 	return false, nil
-}
-
-func (d *Dispatcher) markIssueDone(store *backend.PlanStore, slug string, id int) error {
-	issue, err := loadIssue(d.plansDir(), slug, id)
-	if err != nil {
-		return err
-	}
-	issue.Status = "done"
-	issue.Updated = time.Now().Format("2006-01-02")
-	return store.WriteIssue(slug, issue)
 }
 
 // markIssueBlocked flips the issue to status=blocked and appends reason to its
