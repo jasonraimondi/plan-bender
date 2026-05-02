@@ -11,12 +11,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 )
 
@@ -45,6 +44,21 @@ type Dispatcher struct {
 	// every goroutine streaming sub-agent output shares one mutex.
 	outOnce   sync.Once
 	outWriter io.Writer
+
+	// ownerOnce + owner memoize the status.Owner so every status write in a
+	// Run goes through the same lock-aware adapter without re-allocating.
+	ownerOnce sync.Once
+	owner     *status.Owner
+}
+
+// statusOwner returns the lazily-constructed status.Owner backed by the
+// production prodStatusStore wired to d.plansDir(). All status writes during
+// a Run flow through this single Owner.
+func (d *Dispatcher) statusOwner() *status.Owner {
+	d.ownerOnce.Do(func() {
+		d.owner = status.New(newProdStatusStore(d.plansDir()))
+	})
+	return d.owner
 }
 
 // lockedWriter serializes Write calls so concurrent goroutines streaming
@@ -152,27 +166,25 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 }
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir, integrationBranch string) SubResult {
-	store := backend.NewProdPlanStore(d.plansDir())
-
 	d.gitMu.Lock()
 	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markBlockedAndWarn(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
 	if err := linkPlansDir(d.Root, wt.Path); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markBlockedAndWarn(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markBlockedAndWarn(store, slug, issue.ID, reason)
+			d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
 	}
@@ -180,13 +192,13 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markBlockedAndWarn(store, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
 	defer cancel()
-	res := RunSubprocess(subCtx, slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
+	res := RunSubprocess(subCtx, d.statusOwner(), slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {
@@ -241,8 +253,6 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		return fmt.Errorf("checking out %s: %w", integrationBranch, err)
 	}
 
-	store := backend.NewProdPlanStore(d.plansDir())
-
 	// Track which branches were successfully merged into integration; only those
 	// are safe for GC to delete. Branches whose merge conflicted (now blocked)
 	// hold the only copy of committed work and must be preserved.
@@ -251,12 +261,15 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, d.Root, "merge", "--abort")
-			d.markBlockedAndWarn(store, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
+			d.markBlockedAndWarn(ctx, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
 		merged[r.Branch] = true
-		if err := d.markIssueDone(store, slug, r.IssueID); err != nil {
-			fmt.Fprintf(d.out(), "warning: failed to flip issue #%d to done: %v\n", r.IssueID, err)
+		if err := d.statusOwner().Transition(ctx, slug, r.IssueID, []status.Status{status.StatusInReview}, status.StatusDone, ""); err != nil {
+			if errors.Is(err, status.ErrAlreadyInState) {
+				continue
+			}
+			return fmt.Errorf("flipping issue #%d to done: %w", r.IssueID, err)
 		}
 	}
 
@@ -311,54 +324,19 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 	return false, nil
 }
 
-func (d *Dispatcher) markIssueDone(store *backend.PlanStore, slug string, id int) error {
-	issue, err := loadIssue(d.plansDir(), slug, id)
-	if err != nil {
-		return err
+// markBlockedAndWarn flips the issue to blocked via the status owner and warns
+// to stderr if the transition fails. Callers are already on a failure path; a
+// warn-and-continue is preferable to bubbling the error and masking the
+// original cause. ErrAlreadyInState (issue already blocked) is silently
+// ignored — that's a no-op the operator doesn't need to see.
+func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string) {
+	err := d.statusOwner().Transition(ctx, slug, id,
+		[]status.Status{status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+		status.StatusBlocked, reason)
+	if err == nil || errors.Is(err, status.ErrAlreadyInState) {
+		return
 	}
-	issue.Status = "done"
-	issue.Updated = time.Now().Format("2006-01-02")
-	return store.WriteIssue(slug, issue)
-}
-
-// markIssueBlocked flips the issue to status=blocked and appends reason to its
-// notes. Returns an error if the load or write fails so callers can surface it
-// rather than silently leaving the on-disk status mismatched with the
-// dispatcher's view (which would cause the next outer-loop tick to re-pick a
-// "still todo" issue and retry forever).
-func (d *Dispatcher) markIssueBlocked(_ *backend.PlanStore, slug string, id int, reason string) error {
-	release, err := backend.LockPlanDir(d.plansDir())
-	if err != nil {
-		return fmt.Errorf("locking plans dir to mark issue #%d blocked: %w", id, err)
-	}
-	defer release()
-
-	issue, err := loadIssue(d.plansDir(), slug, id)
-	if err != nil {
-		return fmt.Errorf("loading issue #%d to mark blocked: %w", id, err)
-	}
-	issue.Status = "blocked"
-	issue.Updated = time.Now().Format("2006-01-02")
-	if issue.Notes == nil {
-		issue.Notes = &reason
-	} else {
-		merged := *issue.Notes + "\n\n" + reason
-		issue.Notes = &merged
-	}
-	if err := backend.NewUnlockedPlanStore(d.plansDir()).WriteIssue(slug, issue); err != nil {
-		return fmt.Errorf("writing blocked status for issue #%d: %w", id, err)
-	}
-	return nil
-}
-
-// markBlockedAndWarn is the dispatch-side helper that surfaces markIssueBlocked
-// failures via stderr but still returns control to the caller. The caller is
-// already on a failure path; a warn-and-continue is preferable to bubbling the
-// error and masking the original cause.
-func (d *Dispatcher) markBlockedAndWarn(store *backend.PlanStore, slug string, id int, reason string) {
-	if err := d.markIssueBlocked(store, slug, id, reason); err != nil {
-		fmt.Fprintf(d.out(), "warning: %v (issue may re-dispatch on next loop)\n", err)
-	}
+	fmt.Fprintf(d.out(), "warning: %v (issue may re-dispatch on next loop)\n", err)
 }
 
 func successfulInDepOrder(results []SubResult, plansDir, slug string) []SubResult {

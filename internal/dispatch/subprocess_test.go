@@ -13,7 +13,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
+
+func newTestOwner(plansDir string) *status.Owner {
+	return status.New(newProdStatusStore(plansDir))
+}
 
 const stubIssueYAML = `id: 5
 slug: ship-it
@@ -88,7 +93,7 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.True(t, res.Success, "expected success, got err: %v, out: %s", res.Err, out.String())
@@ -117,7 +122,7 @@ exit 1
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.False(t, res.Success)
@@ -144,7 +149,7 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.False(t, res.Success)
@@ -152,6 +157,33 @@ exit 0
 	assert.Equal(t, "blocked", post.Status)
 	require.NotNil(t, post.Notes)
 	assert.Contains(t, *post.Notes, "in-progress")
+}
+
+func TestRunSubprocess_UnreadablePostFileMarksFailure(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+
+	// Fake claude exits 0 but renders the issue file unreadable. Verdict must
+	// classify this as Unreadable rather than Success — the post-run state is
+	// unknown, not in-review.
+	body := `chmod 000 "` + issuePath + `"
+exit 0
+`
+	installFakeClaude(t, body)
+	t.Cleanup(func() { _ = os.Chmod(issuePath, 0o644) })
+
+	worktree := t.TempDir()
+	var out bytes.Buffer
+	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
+		"prompt", worktree, plansDir, "", &out)
+
+	require.False(t, res.Success)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "post-run issue file unreadable")
+	assert.Contains(t, res.Err.Error(), "permission denied")
 }
 
 func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
@@ -164,7 +196,7 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 
 	require.False(t, res.Success)
@@ -194,7 +226,7 @@ exit 0
 	var out bytes.Buffer
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	prompt := "---\nname: bender-implement-issue\n---\n\n# Implement\n\nDo the thing."
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		prompt, worktree, plansDir, "", &out)
 	require.True(t, res.Success, "expected success, got err: %v", res.Err)
 
@@ -222,7 +254,7 @@ exit 1
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 	require.False(t, res.Success)
 

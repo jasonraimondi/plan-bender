@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,7 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/dispatch"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 const retryIssueYAML = `id: 4
@@ -64,7 +70,7 @@ func loadRetryIssue(t *testing.T, dir string) schema.IssueYaml {
 	return issue
 }
 
-func TestRetry_FlipsBlockedToTodoAndClearsNotes(t *testing.T) {
+func TestRetry_FlipsBlockedToTodo(t *testing.T) {
 	dir := setupRetryPlan(t, "", true)
 
 	cmd := NewRetryCmd()
@@ -74,18 +80,19 @@ func TestRetry_FlipsBlockedToTodoAndClearsNotes(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	assert.Contains(t, out.String(), "blocked → todo")
-	assert.Contains(t, out.String(), "cleared notes")
 
 	issue := loadRetryIssue(t, dir)
 	assert.Equal(t, "todo", issue.Status)
-	assert.Nil(t, issue.Notes, "notes should be cleared")
+	require.NotNil(t, issue.Notes, "owner appends a structured note on transition")
+	assert.Contains(t, *issue.Notes, "blocked→todo: retry")
+	assert.Contains(t, *issue.Notes, "subprocess timed out after 30m", "prior failure context preserved")
 	assert.Equal(t, time.Now().Format("2006-01-02"), issue.Updated)
 }
 
 func TestRetry_RefusesNonBlocked(t *testing.T) {
-	for _, status := range []string{"todo", "in-progress", "in-review", "done", "canceled"} {
-		t.Run(status, func(t *testing.T) {
-			dir := setupRetryPlan(t, status, true)
+	for _, st := range []string{"in-progress", "in-review", "done", "canceled"} {
+		t.Run(st, func(t *testing.T) {
+			dir := setupRetryPlan(t, st, true)
 
 			cmd := NewRetryCmd()
 			cmd.SetArgs([]string{"ship", "4"})
@@ -94,13 +101,36 @@ func TestRetry_RefusesNonBlocked(t *testing.T) {
 			cmd.SetErr(&errOut)
 			err := cmd.Execute()
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "not blocked")
+
+			var agentErr *AgentError
+			require.ErrorAs(t, err, &agentErr)
+			assert.Equal(t, ErrValidationFailed, agentErr.Code)
+			assert.Contains(t, agentErr.Error(), st, "error message reports current state")
+			assert.Contains(t, agentErr.Error(), "not blocked")
 
 			issue := loadRetryIssue(t, dir)
-			assert.Equal(t, status, issue.Status, "status should not change on refusal")
-			require.NotNil(t, issue.Notes, "notes should not be cleared on refusal")
+			assert.Equal(t, st, issue.Status, "status should not change on refusal")
+			require.NotNil(t, issue.Notes, "notes should not change on refusal")
+			assert.Equal(t, "subprocess timed out after 30m", *issue.Notes)
 		})
 	}
+}
+
+func TestRetry_AlreadyTodoIsIdempotent(t *testing.T) {
+	dir := setupRetryPlan(t, "todo", true)
+
+	cmd := NewRetryCmd()
+	cmd.SetArgs([]string{"ship", "4"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute(), "already-todo is a no-op success")
+
+	assert.Contains(t, out.String(), "already todo")
+
+	issue := loadRetryIssue(t, dir)
+	assert.Equal(t, "todo", issue.Status)
+	require.NotNil(t, issue.Notes, "notes untouched on idempotent path")
+	assert.Equal(t, "subprocess timed out after 30m", *issue.Notes)
 }
 
 func TestRetry_UnknownIssue(t *testing.T) {
@@ -133,9 +163,69 @@ func TestRetry_AgentModeJSON(t *testing.T) {
 	assert.Equal(t, "ok", got["status"])
 	assert.EqualValues(t, 4, got["id"])
 	assert.Equal(t, "todo", got["new_status"])
-	assert.Equal(t, "subprocess timed out after 30m", got["cleared_notes"])
 
 	issue := loadRetryIssue(t, dir)
 	assert.Equal(t, "todo", issue.Status)
-	assert.Nil(t, issue.Notes)
+	require.NotNil(t, issue.Notes)
+	assert.Contains(t, *issue.Notes, "blocked→todo: retry")
+}
+
+// TestRetry_ConcurrentRaceSurfacesCASMismatch: run retry (blocked→todo) and a
+// competing transition (blocked→in-progress) on the same issue from two
+// goroutines. The plan-wide flock serializes them; the loser observes the new
+// state and surfaces a CAS mismatch.
+func TestRetry_ConcurrentRaceSurfacesCASMismatch(t *testing.T) {
+	dir := setupRetryPlan(t, "", true)
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+
+	var (
+		wg         sync.WaitGroup
+		retryErr   error
+		competeErr error
+	)
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		cmd := NewRetryCmd()
+		cmd.SetArgs([]string{"ship", "4"})
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		retryErr = cmd.Execute()
+	}()
+
+	go func() {
+		defer wg.Done()
+		owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+		competeErr = owner.Transition(context.Background(), "ship", 4,
+			[]status.Status{status.StatusBlocked}, status.StatusInProgress, "manual resume")
+	}()
+
+	wg.Wait()
+
+	winners := 0
+	casMismatches := 0
+	if retryErr == nil {
+		winners++
+	} else {
+		var agentErr *AgentError
+		require.ErrorAs(t, retryErr, &agentErr, "retry error must be AgentError")
+		assert.Equal(t, ErrValidationFailed, agentErr.Code)
+		assert.Contains(t, agentErr.Error(), "not blocked")
+		casMismatches++
+	}
+	if competeErr == nil {
+		winners++
+	} else {
+		var casErr *status.ErrCASMismatch
+		require.ErrorAs(t, competeErr, &casErr, "compete error must be CAS mismatch")
+		casMismatches++
+	}
+	assert.Equal(t, 1, winners, "exactly one transition wins")
+	assert.Equal(t, 1, casMismatches, "exactly one transition surfaces CAS mismatch")
+
+	final := loadRetryIssue(t, dir)
+	assert.Contains(t, []string{"todo", "in-progress"}, final.Status,
+		"final status reflects the winner")
 }
