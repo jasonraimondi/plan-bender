@@ -27,8 +27,10 @@ type SubResult struct {
 }
 
 // RunSubprocess executes one `claude --print` invocation in worktreePath, streams
-// its stdout to outWriter prefixed with [issue-N], and returns a SubResult based
-// on the post-run YAML status.
+// its stdout to outWriter prefixed with [issue-N], and routes the post-Wait
+// state through Verdict. On Success it returns SubResult with Success=true; on
+// any other Outcome it transitions the issue to blocked with Outcome.Reason()
+// and returns Success=false with Err carrying the reason.
 //
 // plansDir is the absolute path to the parent repo's plans dir. logDir receives
 // the full output transcript at logDir/{id}.log.
@@ -46,15 +48,16 @@ func RunSubprocess(
 		outWriter = os.Stdout
 	}
 
-	mark := func(r SubResult, reason string) SubResult {
-		r.Success = false
+	block := func(reason string) SubResult {
+		res.Success = false
+		res.Err = errors.New(reason)
 		err := owner.Transition(ctx, slug, issue.ID,
 			[]status.Status{status.StatusTodo, status.StatusInProgress, status.StatusInReview},
 			status.StatusBlocked, reason)
 		if err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 			fmt.Fprintf(outWriter, "[issue-%d] warning: failed to persist blocked status: %v\n", issue.ID, err)
 		}
-		return r
+		return res
 	}
 
 	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json", "-p", prompt)
@@ -69,17 +72,14 @@ func RunSubprocess(
 	cmd.Stderr = &stderrBuf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		res.Err = fmt.Errorf("attaching stdout pipe: %w", err)
-		return mark(res, res.Err.Error())
+		return block(fmt.Sprintf("attaching stdout pipe: %v", err))
 	}
 
 	if err := cmd.Start(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			res.Err = fmt.Errorf("claude binary not found in PATH; install claude or set PATH before dispatch")
-		} else {
-			res.Err = fmt.Errorf("starting claude: %w", err)
+			return block("claude binary not found in PATH; install claude or set PATH before dispatch")
 		}
-		return mark(res, res.Err.Error())
+		return block(fmt.Sprintf("starting claude: %v", err))
 	}
 
 	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
@@ -116,38 +116,22 @@ func RunSubprocess(
 		}
 	}
 
-	postIssue, readErr := loadIssue(plansDir, slug, issue.ID)
-	postStatus := ""
-	if readErr == nil {
-		postStatus = postIssue.Status
+	post, loadErr := loadIssue(plansDir, slug, issue.ID)
+
+	// Wrap waitErr with stderr so the persisted blocked-state note retains
+	// observability. %w preserves the unwrap chain so Verdict's errors.As
+	// against *exec.ExitError still recovers the exit code.
+	exitErr := waitErr
+	if exitErr != nil && strings.TrimSpace(stderrText) != "" {
+		exitErr = fmt.Errorf("%w\n%s", waitErr, strings.TrimSpace(stderrText))
 	}
 
-	if waitErr == nil && postStatus == "in-review" {
+	outcome := Verdict(exitErr, loadErr, post)
+	if outcome.IsSuccess() {
 		res.Success = true
 		return res
 	}
-
-	reason := buildFailureReason(ctx, waitErr, postStatus, stderrText)
-	res.Err = errors.New(reason)
-	return mark(res, reason)
-}
-
-func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr string) string {
-	timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
-	switch {
-	case timedOut && stderr != "":
-		return fmt.Sprintf("subprocess timed out: %v\n%s", waitErr, stderr)
-	case timedOut:
-		return fmt.Sprintf("subprocess timed out: %v", waitErr)
-	case waitErr != nil && stderr != "":
-		return fmt.Sprintf("subprocess failed: %v\n%s", waitErr, stderr)
-	case waitErr != nil:
-		return fmt.Sprintf("subprocess failed: %v", waitErr)
-	case postStatus == "":
-		return "subprocess exited 0 but issue file is unreadable; treating as failure"
-	default:
-		return fmt.Sprintf("subprocess exited 0 but issue status is %q (expected in-review)", postStatus)
-	}
+	return block(outcome.Reason())
 }
 
 func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {
