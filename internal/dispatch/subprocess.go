@@ -12,11 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 // SubResult is the outcome of a single sub-agent subprocess.
@@ -35,6 +34,7 @@ type SubResult struct {
 // the full output transcript at logDir/{id}.log.
 func RunSubprocess(
 	ctx context.Context,
+	owner *status.Owner,
 	slug string,
 	issue schema.IssueYaml,
 	prompt, worktreePath, plansDir, logDir string,
@@ -47,11 +47,14 @@ func RunSubprocess(
 	}
 
 	mark := func(r SubResult, reason string) SubResult {
-		out, err := markBlocked(r, plansDir, slug, issue, reason)
-		if err != nil {
+		r.Success = false
+		err := owner.Transition(ctx, slug, issue.ID,
+			[]status.Status{status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+			status.StatusBlocked, reason)
+		if err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 			fmt.Fprintf(outWriter, "[issue-%d] warning: failed to persist blocked status: %v\n", issue.ID, err)
 		}
-		return out
+		return r
 	}
 
 	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json", "-p", prompt)
@@ -145,38 +148,6 @@ func buildFailureReason(ctx context.Context, waitErr error, postStatus, stderr s
 	default:
 		return fmt.Sprintf("subprocess exited 0 but issue status is %q (expected in-review)", postStatus)
 	}
-}
-
-// markBlocked persists the blocked status. Returns the SubResult so the caller
-// can return it directly, plus any write error so the caller can surface it
-// (rather than letting the dispatch loop see a "still todo" file and retry).
-func markBlocked(res SubResult, plansDir, slug string, issue schema.IssueYaml, reason string) (SubResult, error) {
-	res.Success = false
-
-	release, err := backend.LockPlanDir(plansDir)
-	if err != nil {
-		return res, fmt.Errorf("locking plans dir to mark issue #%d blocked: %w", issue.ID, err)
-	}
-	defer release()
-
-	current, err := loadIssue(plansDir, slug, issue.ID)
-	if err != nil {
-		current = &issue
-	}
-
-	current.Status = "blocked"
-	current.Updated = time.Now().Format("2006-01-02")
-	if current.Notes == nil {
-		current.Notes = &reason
-	} else {
-		merged := *current.Notes + "\n\n" + reason
-		current.Notes = &merged
-	}
-
-	if writeErr := backend.NewUnlockedPlanStore(plansDir).WriteIssue(slug, current); writeErr != nil {
-		return res, fmt.Errorf("writing blocked status for issue #%d: %w", issue.ID, writeErr)
-	}
-	return res, nil
 }
 
 func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {

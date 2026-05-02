@@ -13,7 +13,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
+
+func newTestOwner(plansDir string) *status.Owner {
+	return status.New(newProdStatusStore(plansDir))
+}
 
 const stubIssueYAML = `id: 5
 slug: ship-it
@@ -88,7 +93,7 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.True(t, res.Success, "expected success, got err: %v, out: %s", res.Err, out.String())
@@ -117,7 +122,7 @@ exit 1
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.False(t, res.Success)
@@ -144,7 +149,7 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
 	require.False(t, res.Success)
@@ -164,7 +169,7 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), "ship", issue,
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 
 	require.False(t, res.Success)
