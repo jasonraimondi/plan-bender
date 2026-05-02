@@ -2,24 +2,26 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
-	"time"
+	"strings"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/dispatch"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/spf13/cobra"
 )
 
 // NewRetryCmd creates the `retry` command. Flips a blocked issue back to todo
-// and clears its notes so the dispatcher will re-pick it on the next run.
-// Refuses any non-blocked status to avoid clobbering live state.
+// under the plan-wide flock by delegating to status.Owner.Transition. The
+// from-set is intentionally narrow ([blocked] only); any other current state
+// surfaces as a CAS-mismatch error rather than silently overwriting live work.
 func NewRetryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retry <slug> <id>",
-		Short: "Reset a blocked issue to todo and clear its failure notes",
+		Short: "Reset a blocked issue to todo",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
@@ -34,58 +36,39 @@ func NewRetryCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			issues, err := plan.LoadIssues(cfg.PlansDir, slug)
-			if err != nil {
-				return NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
-			}
+			owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+			err = owner.Transition(cmd.Context(), slug, id,
+				[]status.Status{status.StatusBlocked}, status.StatusTodo, "retry")
 
-			var found *int
-			for i := range issues {
-				if issues[i].ID == id {
-					found = &i
-					break
-				}
-			}
-			if found == nil {
-				return NewAgentError(fmt.Sprintf("issue #%d not found in plan %q", id, slug), ErrPlanNotFound)
-			}
-
-			issue := issues[*found]
-			if issue.Status != "blocked" {
+			var casErr *status.ErrCASMismatch
+			switch {
+			case err == nil:
+				return emitRetryOK(cmd, slug, id, "issue #%d: blocked → todo")
+			case errors.Is(err, status.ErrAlreadyInState):
+				return emitRetryOK(cmd, slug, id, "issue #%d already todo; nothing to do")
+			case errors.As(err, &casErr):
 				return NewAgentError(
-					fmt.Sprintf("issue #%d is %s, not blocked; refusing to retry", id, issue.Status),
+					fmt.Sprintf("issue #%d is %s, not blocked; refusing to retry", id, casErr.Current),
 					ErrValidationFailed,
 				)
+			case strings.Contains(err.Error(), "not found in plan"):
+				return NewAgentError(err.Error(), ErrPlanNotFound)
+			default:
+				return NewAgentError("retry failed: "+err.Error(), ErrInternal)
 			}
-
-			previousNotes := ""
-			if issue.Notes != nil {
-				previousNotes = *issue.Notes
-			}
-
-			issue.Status = "todo"
-			issue.Notes = nil
-			issue.Updated = time.Now().Format("2006-01-02")
-
-			store := backend.NewProdPlanStore(cfg.PlansDir)
-			if err := store.WriteIssue(slug, &issue); err != nil {
-				return NewAgentError("writing issue: "+err.Error(), ErrInternal)
-			}
-
-			if isAgentMode(cmd) {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
-					"status":         "ok",
-					"id":             id,
-					"slug":           slug,
-					"new_status":     "todo",
-					"cleared_notes":  previousNotes,
-				})
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "issue #%d: blocked → todo\n", id)
-			if previousNotes != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), "cleared notes")
-			}
-			return nil
 		},
 	}
+}
+
+func emitRetryOK(cmd *cobra.Command, slug string, id int, humanFmt string) error {
+	if isAgentMode(cmd) {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+			"status":     "ok",
+			"id":         id,
+			"slug":       slug,
+			"new_status": "todo",
+		})
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), humanFmt+"\n", id)
+	return nil
 }

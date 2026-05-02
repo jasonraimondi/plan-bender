@@ -3,6 +3,7 @@ package dispatch
 import (
 	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 // prodStatusStore is the production wiring for internal/status.Store. It is
@@ -16,6 +17,15 @@ type prodStatusStore struct {
 
 func newProdStatusStore(plansDir string) *prodStatusStore {
 	return &prodStatusStore{plansDir: plansDir}
+}
+
+// NewProdStatusOwner returns a status.Owner backed by the production
+// flock + atomic-write adapter for plansDir. CLI commands that perform a
+// single transition (retry, complete) call this directly. Long-running
+// callers like Dispatcher memoize the Owner via Dispatcher.statusOwner to
+// avoid re-allocating per Run.
+func NewProdStatusOwner(plansDir string) *status.Owner {
+	return status.New(newProdStatusStore(plansDir))
 }
 
 func (s *prodStatusStore) Load(slug string) ([]schema.IssueYaml, error) {
