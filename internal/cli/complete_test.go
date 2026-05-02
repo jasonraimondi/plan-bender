@@ -54,6 +54,15 @@ func setupCompletePlan(t *testing.T, status string) string {
 	return dir
 }
 
+func loadCompleteIssue(t *testing.T, dir string) schema.IssueYaml {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "3-ship-it.yaml"))
+	require.NoError(t, err)
+	var issue schema.IssueYaml
+	require.NoError(t, yaml.Unmarshal(data, &issue))
+	return issue
+}
+
 func TestComplete_FlipsStatusAndEmitsSentinel(t *testing.T) {
 	dir := setupCompletePlan(t, "")
 
@@ -65,12 +74,70 @@ func TestComplete_FlipsStatusAndEmitsSentinel(t *testing.T) {
 
 	assert.Contains(t, out.String(), `<pba:complete issue-id="3"/>`)
 
-	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "3-ship-it.yaml"))
-	require.NoError(t, err)
-	var issue schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &issue))
+	issue := loadCompleteIssue(t, dir)
 	assert.Equal(t, "in-review", issue.Status)
 	assert.Equal(t, time.Now().Format("2006-01-02"), issue.Updated, "updated date should be today")
+}
+
+// TestComplete_AllowedFromStates exercises every allowed source state for the
+// transition (todo, in-progress, backlog) and asserts each lands in in-review.
+func TestComplete_AllowedFromStates(t *testing.T) {
+	for _, st := range []string{"todo", "in-progress", "backlog"} {
+		t.Run(st, func(t *testing.T) {
+			dir := setupCompletePlan(t, st)
+
+			cmd := NewCompleteCmd()
+			cmd.SetArgs([]string{"ship", "3"})
+			var out strings.Builder
+			cmd.SetOut(&out)
+			require.NoError(t, cmd.Execute())
+
+			assert.Contains(t, out.String(), `<pba:complete issue-id="3"/>`)
+			issue := loadCompleteIssue(t, dir)
+			assert.Equal(t, "in-review", issue.Status)
+		})
+	}
+}
+
+func TestComplete_IdempotentInReview(t *testing.T) {
+	dir := setupCompletePlan(t, "in-review")
+
+	cmd := NewCompleteCmd()
+	cmd.SetArgs([]string{"ship", "3"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute(), "re-completing an in-review issue is a no-op success")
+
+	assert.Contains(t, out.String(), `<pba:complete issue-id="3"/>`,
+		"sentinel must be emitted so dispatcher detects completion on retry")
+
+	issue := loadCompleteIssue(t, dir)
+	assert.Equal(t, "in-review", issue.Status)
+}
+
+func TestComplete_RejectsTerminalStates(t *testing.T) {
+	for _, st := range []string{"done", "canceled", "blocked"} {
+		t.Run(st, func(t *testing.T) {
+			dir := setupCompletePlan(t, st)
+
+			cmd := NewCompleteCmd()
+			cmd.SetArgs([]string{"ship", "3"})
+			var out, errOut strings.Builder
+			cmd.SetOut(&out)
+			cmd.SetErr(&errOut)
+			err := cmd.Execute()
+			require.Error(t, err)
+
+			var agentErr *AgentError
+			require.ErrorAs(t, err, &agentErr)
+			assert.Equal(t, ErrValidationFailed, agentErr.Code)
+			assert.Contains(t, agentErr.Error(), st, "error message reports current state")
+			assert.Contains(t, agentErr.Error(), "refusing to overwrite")
+
+			issue := loadCompleteIssue(t, dir)
+			assert.Equal(t, st, issue.Status, "status should not change on refusal")
+		})
+	}
 }
 
 func TestComplete_RejectsAlreadyDone(t *testing.T) {
