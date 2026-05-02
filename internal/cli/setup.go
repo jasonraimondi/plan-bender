@@ -71,11 +71,16 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		if _, localErr := os.Stat(localPath); localErr == nil {
 			localOnly = true
 		} else {
-			data, err := yaml.Marshal(config.StarterConfig())
-			if err != nil {
+			var buf strings.Builder
+			enc := yaml.NewEncoder(&buf)
+			enc.SetIndent(2)
+			if err := enc.Encode(config.StarterConfig()); err != nil {
 				return err
 			}
-			if err := backend.AtomicWrite(cfgPath, data, 0o644); err != nil {
+			if err := enc.Close(); err != nil {
+				return err
+			}
+			if err := backend.AtomicWrite(cfgPath, []byte(buf.String()), 0o644); err != nil {
 				return err
 			}
 			created = true

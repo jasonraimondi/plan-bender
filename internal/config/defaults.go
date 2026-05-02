@@ -6,11 +6,9 @@ import "github.com/jasonraimondi/plan-bender/internal/agents"
 // Only includes fields worth surfacing to the user; everything else falls back to Defaults().
 func StarterConfig() PartialConfig {
 	plansDir := "./.plan-bender/plans/"
-	maxPoints := 3
 	return PartialConfig{
-		PlansDir:  &plansDir,
-		MaxPoints: &maxPoints,
-		Agents:    map[string]*AgentEntry{"claude-code": {Enabled: true}},
+		PlansDir: &plansDir,
+		Agents:   map[string]*AgentEntry{"claude-code": {Enabled: true}},
 	}
 }
 

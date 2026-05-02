@@ -82,6 +82,29 @@ type AgentEntry struct {
 	Options AgentOptions
 }
 
+// MarshalYAML emits AgentEntry as a mapping {enabled, ...options} so written
+// configs read like the documented form. Empty Options would otherwise serialize
+// to a stray `options: {}` block.
+func (e AgentEntry) MarshalYAML() (any, error) {
+	out := map[string]any{"enabled": e.Enabled}
+	if e.Options.ProjectDir != nil {
+		out["project_dir"] = *e.Options.ProjectDir
+	}
+	if e.Options.UserDir != nil {
+		out["user_dir"] = *e.Options.UserDir
+	}
+	if e.Options.Scope != nil {
+		out["scope"] = *e.Options.Scope
+	}
+	if e.Options.GitignorePattern != nil {
+		out["gitignore_pattern"] = *e.Options.GitignorePattern
+	}
+	for k, v := range e.Options.Extra {
+		out[k] = v
+	}
+	return out, nil
+}
+
 // UnmarshalYAML implements a custom YAML unmarshaler that handles bool and object values.
 func (e *AgentEntry) UnmarshalYAML(value *yaml.Node) error {
 	switch value.Kind {
