@@ -204,6 +204,66 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	assert.Contains(t, res.Err.Error(), "claude")
 }
 
+func TestRunSubprocess_PromptDeliveredOnStdinNotArgs(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	// Fake claude writes its argv and stdin to side-channel files so the test
+	// can verify the prompt was streamed on stdin and is not present in argv.
+	// Then it flips the issue to in-review and exits 0.
+	captureDir := t.TempDir()
+	argsFile := filepath.Join(captureDir, "args.txt")
+	stdinFile := filepath.Join(captureDir, "stdin.txt")
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+	body := `printf '%s\n' "$@" > ` + argsFile + `
+cat > ` + stdinFile + `
+sed -i.bak 's/status: in-progress/status: in-review/' "` + issuePath + `"
+exit 0
+`
+	installFakeClaude(t, body)
+
+	worktree := t.TempDir()
+	var out bytes.Buffer
+	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	prompt := "---\nname: bender-implement-issue\n---\n\n# Implement\n\nDo the thing."
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
+		prompt, worktree, plansDir, "", &out)
+	require.True(t, res.Success, "expected success, got err: %v", res.Err)
+
+	args, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.NotContains(t, string(args), prompt, "prompt must not be passed as a CLI argument")
+	for _, line := range strings.Split(strings.TrimSpace(string(args)), "\n") {
+		assert.NotEqual(t, "-p", line, "the -p flag must not be used")
+	}
+
+	stdin, err := os.ReadFile(stdinFile)
+	require.NoError(t, err)
+	assert.Equal(t, prompt, string(stdin))
+}
+
+func TestRunSubprocess_LongStderrTruncatedInNotes(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	body := `head -c 10000 /dev/zero | tr '\0' 'x' >&2
+exit 1
+`
+	installFakeClaude(t, body)
+
+	worktree := t.TempDir()
+	var out bytes.Buffer
+	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
+		"prompt", worktree, plansDir, "", &out)
+	require.False(t, res.Success)
+
+	post := loadIssueFromDisk(t, plansDir, "ship", 5)
+	require.NotNil(t, post.Notes)
+	assert.Less(t, len(*post.Notes), 4096, "notes must not embed the full 10KB stderr")
+	assert.Contains(t, *post.Notes, "truncated")
+}
+
 func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {
 	worktree := t.TempDir()
 	skillDir := filepath.Join(worktree, ".claude", "skills", "bender-implement-issue")

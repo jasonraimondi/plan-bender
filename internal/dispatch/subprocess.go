@@ -60,13 +60,12 @@ func RunSubprocess(
 		return res
 	}
 
-	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json", "-p", prompt)
+	// Pass the prompt on stdin rather than `-p <prompt>`. The skill body begins
+	// with `---` (YAML frontmatter), and claude's flag parser rejects -p values
+	// that look like options.
+	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json")
 	cmd.Dir = worktreePath
-	devNull, _ := os.Open(os.DevNull)
-	if devNull != nil {
-		cmd.Stdin = devNull
-		defer devNull.Close()
-	}
+	cmd.Stdin = strings.NewReader(prompt)
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
@@ -120,10 +119,11 @@ func RunSubprocess(
 
 	// Wrap waitErr with stderr so the persisted blocked-state note retains
 	// observability. %w preserves the unwrap chain so Verdict's errors.As
-	// against *exec.ExitError still recovers the exit code.
+	// against *exec.ExitError still recovers the exit code. Cap the stderr
+	// portion so a verbose subprocess error cannot bloat the issue YAML.
 	exitErr := waitErr
 	if exitErr != nil && strings.TrimSpace(stderrText) != "" {
-		exitErr = fmt.Errorf("%w\n%s", waitErr, strings.TrimSpace(stderrText))
+		exitErr = fmt.Errorf("%w\n%s", waitErr, truncateForNotes(strings.TrimSpace(stderrText)))
 	}
 
 	outcome := Verdict(exitErr, loadErr, post)
@@ -132,6 +132,19 @@ func RunSubprocess(
 		return res
 	}
 	return block(outcome.Reason())
+}
+
+// stderrNotesLimit caps how much stderr we embed in an issue's notes on failure.
+// The full transcript still lands in the dispatch log file; the cap exists so
+// a verbose subprocess error (e.g. an entire skill body echoed back as an
+// "unknown option" message) cannot bloat the YAML.
+const stderrNotesLimit = 2048
+
+func truncateForNotes(s string) string {
+	if len(s) <= stderrNotesLimit {
+		return s
+	}
+	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
 func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {
