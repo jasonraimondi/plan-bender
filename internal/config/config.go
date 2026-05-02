@@ -82,11 +82,11 @@ type AgentEntry struct {
 	Options AgentOptions
 }
 
-// MarshalYAML emits AgentEntry as a mapping {enabled, ...options} so written
-// configs read like the documented form. Empty Options would otherwise serialize
-// to a stray `options: {}` block.
+// MarshalYAML emits AgentEntry as a scalar bool when no options are set, or a
+// mapping {enabled, ...options} when options exist. Keeps default configs
+// minimal (`agent-name: true`) while preserving the full form for overrides.
 func (e AgentEntry) MarshalYAML() (any, error) {
-	out := map[string]any{"enabled": e.Enabled}
+	out := map[string]any{}
 	if e.Options.ProjectDir != nil {
 		out["project_dir"] = *e.Options.ProjectDir
 	}
@@ -102,6 +102,10 @@ func (e AgentEntry) MarshalYAML() (any, error) {
 	for k, v := range e.Options.Extra {
 		out[k] = v
 	}
+	if len(out) == 0 {
+		return e.Enabled, nil
+	}
+	out["enabled"] = e.Enabled
 	return out, nil
 }
 

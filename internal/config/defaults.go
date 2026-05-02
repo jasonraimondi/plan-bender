@@ -8,7 +8,10 @@ func StarterConfig() PartialConfig {
 	plansDir := "./.plan-bender/plans/"
 	return PartialConfig{
 		PlansDir: &plansDir,
-		Agents:   map[string]*AgentEntry{"claude-code": {Enabled: true}},
+		Agents: map[string]*AgentEntry{
+			"claude-code": {Enabled: true},
+			"pi":          {Enabled: true},
+		},
 	}
 }
 

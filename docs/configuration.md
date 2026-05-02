@@ -17,9 +17,9 @@ What `pb setup` writes on first run:
 
 ```yaml
 plans_dir: ./.plan-bender/plans/
-max_points: 3
 agents:
-  - claude-code
+  claude-code: true
+  pi: true
 ```
 
 ## Kitchen sink
