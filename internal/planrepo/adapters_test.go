@@ -32,9 +32,10 @@ func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 
 	wantErr := errors.New("lock denied")
 	adapters := Adapters{
-		FS:    os.DirFS(plansDir),
-		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
-		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
+		FS:     os.DirFS(plansDir),
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Remove: prodRemove,
 		Lock: func(_ string) (func() error, error) {
 			return nil, wantErr
 		},
@@ -54,9 +55,10 @@ func TestNew_LockReleasedExactlyOnceOnClose(t *testing.T) {
 
 	var releases int
 	adapters := Adapters{
-		FS:    os.DirFS(plansDir),
-		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
-		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
+		FS:     os.DirFS(plansDir),
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Remove: prodRemove,
 		Lock: func(_ string) (func() error, error) {
 			return func() error { releases++; return nil }, nil
 		},
@@ -76,9 +78,10 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 
 	var releases int
 	adapters := Adapters{
-		FS:    os.DirFS(plansDir),
-		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
-		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
+		FS:     os.DirFS(plansDir),
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Remove: prodRemove,
 		Lock: func(_ string) (func() error, error) {
 			return func() error { releases++; return nil }, nil
 		},
@@ -88,6 +91,40 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 	_, err := repo.Open("missing")
 	require.Error(t, err)
 	assert.Equal(t, 1, releases, "lock must be released when load fails")
+}
+
+func TestNew_PanicsOnNilAdapter(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+
+	complete := func() Adapters {
+		return Adapters{
+			FS:     os.DirFS(plansDir),
+			Write:  func(string, []byte, fs.FileMode) error { return nil },
+			Mkdir:  func(string, fs.FileMode) error { return nil },
+			Lock:   func(string) (func() error, error) { return func() error { return nil }, nil },
+			Remove: func(string) error { return nil },
+		}
+	}
+
+	tests := []struct {
+		name string
+		mut  func(*Adapters)
+	}{
+		{"FS", func(a *Adapters) { a.FS = nil }},
+		{"Write", func(a *Adapters) { a.Write = nil }},
+		{"Mkdir", func(a *Adapters) { a.Mkdir = nil }},
+		{"Lock", func(a *Adapters) { a.Lock = nil }},
+		{"Remove", func(a *Adapters) { a.Remove = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := complete()
+			tt.mut(&a)
+			require.PanicsWithError(t, "planrepo.New: nil adapter: "+tt.name, func() {
+				New(plansDir, a)
+			})
+		})
+	}
 }
 
 func TestNewProd_HasAllProductionAdaptersWired(t *testing.T) {

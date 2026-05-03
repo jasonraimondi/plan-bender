@@ -218,7 +218,7 @@ func applyCommitPlan(adapters Adapters, plan commitPlan) error {
 			})
 		} else {
 			path := w.path
-			undos = append(undos, func() error { return os.Remove(path) })
+			undos = append(undos, func() error { return adapters.Remove(path) })
 		}
 	}
 
@@ -228,7 +228,7 @@ func applyCommitPlan(adapters Adapters, plan commitPlan) error {
 			// File already absent at preflight time; nothing to do.
 			continue
 		}
-		if err := os.Remove(r.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := adapters.Remove(r.path); err != nil {
 			removeErr := fmt.Errorf("remove %s: %w", r.path, err)
 			return errors.Join(append([]error{removeErr}, rollback()...)...)
 		}

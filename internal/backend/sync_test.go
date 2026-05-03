@@ -422,10 +422,11 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 // than aborting the whole run.
 func failingWritePlans(plansDir string) *planrepo.Plans {
 	return planrepo.New(plansDir, planrepo.Adapters{
-		FS:    os.DirFS(plansDir),
-		Write: func(string, []byte, os.FileMode) error { return fmt.Errorf("write failed") },
-		Mkdir: os.MkdirAll,
-		Lock:  planrepo.LockPlanDir,
+		FS:     os.DirFS(plansDir),
+		Write:  func(string, []byte, os.FileMode) error { return fmt.Errorf("write failed") },
+		Mkdir:  os.MkdirAll,
+		Lock:   planrepo.LockPlanDir,
+		Remove: func(string) error { return nil },
 	})
 }
 

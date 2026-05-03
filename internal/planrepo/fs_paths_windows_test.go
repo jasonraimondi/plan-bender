@@ -3,6 +3,7 @@
 package planrepo
 
 import (
+	"io/fs"
 	"testing"
 	"testing/fstest"
 
@@ -24,10 +25,16 @@ func TestLoadSnapshotUsesSlashSeparatedFSPaths(t *testing.T) {
 }
 
 func TestFindIssueProjectUsesSlashSeparatedFSPaths(t *testing.T) {
-	repo := New("", Adapters{FS: fstest.MapFS{
-		"alpha/issues/7-one.yaml": {Data: []byte(issueYAML(7, "one"))},
-		"beta/issues/8-two.yaml":  {Data: []byte(issueYAML(8, "two"))},
-	}})
+	repo := New("", Adapters{
+		FS: fstest.MapFS{
+			"alpha/issues/7-one.yaml": {Data: []byte(issueYAML(7, "one"))},
+			"beta/issues/8-two.yaml":  {Data: []byte(issueYAML(8, "two"))},
+		},
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Lock:   func(_ string) (func() error, error) { return func() error { return nil }, nil },
+		Remove: func(_ string) error { return nil },
+	})
 
 	slug, err := repo.FindIssueProject(7)
 	require.NoError(t, err)

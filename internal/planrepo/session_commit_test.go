@@ -299,7 +299,8 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 			writes = append(writes, path)
 			return AtomicWrite(path, data, perm)
 		},
-		Lock: LockPlanDir,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -402,8 +403,9 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -458,8 +460,9 @@ func TestCommit_RollbackErrorsJoinedWithOriginalError(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -501,8 +504,9 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -522,6 +526,51 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	// dir lands back at its pre-commit state.
 	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-fresh.yaml"))
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "create rollback must remove the new file")
+}
+
+func TestCommit_RollbackRemoveFailureSurfaces(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	// Create two new issues (2-foo, 3-bar). Sorted-by-ID write order is
+	// 2 then 3. The first write succeeds and queues an adapters.Remove undo
+	// for the just-created 2-foo.yaml. The second write fails, triggering
+	// rollback — which invokes the failing Remove. The returned error must
+	// surface BOTH the originating write failure and the Remove failure.
+	var writeCount int
+	failingWrite := func(path string, data []byte, perm fs.FileMode) error {
+		writeCount++
+		if writeCount == 2 {
+			return errors.New("forward write boom")
+		}
+		return AtomicWrite(path, data, perm)
+	}
+	failingRemove := func(_ string) error {
+		return errors.New("remove boom")
+	}
+
+	adapters := Adapters{
+		FS:     os.DirFS(plansDir),
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: failingRemove,
+	}
+	repo := New(plansDir, adapters)
+
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	require.NoError(t, sess.CreateIssue(validIssue(2, "foo")))
+	require.NoError(t, sess.CreateIssue(validIssue(3, "bar")))
+
+	err = sess.Commit(testCfg())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "forward write boom", "originating write error must be in the joined error")
+	assert.Contains(t, err.Error(), "remove boom", "rollback Remove failure must surface alongside the originating error")
 }
 
 // --- Lock lifetime ---

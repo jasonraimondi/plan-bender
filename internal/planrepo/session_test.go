@@ -179,23 +179,18 @@ func TestSession_AfterCloseRejectsAllOps(t *testing.T) {
 
 func TestClose_PropagatesReleaseError(t *testing.T) {
 	wantErr := errors.New("unlock blew up")
-	adapters := Adapters{
-		FS:    os.DirFS(t.TempDir()),
-		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
-		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func() error, error) {
-			return func() error { return wantErr }, nil
-		},
-	}
 	plansDir := t.TempDir()
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
 		"1-a.yaml": issueYAML(1, "a"),
 	})
 	repo := New(plansDir, Adapters{
-		FS:    os.DirFS(plansDir),
-		Write: adapters.Write,
-		Mkdir: adapters.Mkdir,
-		Lock:  adapters.Lock,
+		FS:     os.DirFS(plansDir),
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Remove: prodRemove,
+		Lock: func(_ string) (func() error, error) {
+			return func() error { return wantErr }, nil
+		},
 	})
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
