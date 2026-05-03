@@ -185,18 +185,26 @@ func applyCommitPlan(adapters Adapters, plan commitPlan) error {
 	type undo func() error
 	var undos []undo
 
-	rollback := func() {
-		// Reverse order so the most recent change is undone first.
+	// rollback runs the undos in reverse and returns any errors it
+	// collected so the caller can join them with the originating
+	// failure. Best-effort means we keep going past per-undo errors
+	// rather than stopping at the first one — but we still surface
+	// what failed instead of silently swallowing it.
+	rollback := func() []error {
+		var errs []error
 		for i := len(undos) - 1; i >= 0; i-- {
-			_ = undos[i]()
+			if err := undos[i](); err != nil {
+				errs = append(errs, fmt.Errorf("rollback step %d: %w", i, err))
+			}
 		}
+		return errs
 	}
 
 	for _, w := range plan.writes {
 		w := w
 		if err := adapters.Write(w.path, w.data, w.perm); err != nil {
-			rollback()
-			return fmt.Errorf("write %s: %w", w.path, err)
+			writeErr := fmt.Errorf("write %s: %w", w.path, err)
+			return errors.Join(append([]error{writeErr}, rollback()...)...)
 		}
 		if w.existed {
 			prev := w.prevData
@@ -218,8 +226,8 @@ func applyCommitPlan(adapters Adapters, plan commitPlan) error {
 			continue
 		}
 		if err := os.Remove(r.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			rollback()
-			return fmt.Errorf("remove %s: %w", r.path, err)
+			removeErr := fmt.Errorf("remove %s: %w", r.path, err)
+			return errors.Join(append([]error{removeErr}, rollback()...)...)
 		}
 		prev := r.prevData
 		path := r.path

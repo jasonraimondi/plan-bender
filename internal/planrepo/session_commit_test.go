@@ -385,6 +385,58 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	assert.Equal(t, originalB, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "2-b.yaml")), "issue 2 should be rolled back")
 }
 
+func TestCommit_RollbackErrorsJoinedWithOriginalError(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+		"2-b.yaml": issueYAML(2, "b"),
+	})
+
+	// PRD + 2 issues => 3 writes scheduled. The first write succeeds (and
+	// queues an undo). The second write fails, triggering rollback. The
+	// rollback then invokes the undo, which also fails. The returned error
+	// must surface BOTH the originating write failure and the undo failure
+	// so a partial rollback isn't silently dropped.
+	var writeCount int
+	failingWrite := func(path string, data []byte, perm fs.FileMode) error {
+		writeCount++
+		switch writeCount {
+		case 1:
+			return AtomicWrite(path, data, perm)
+		case 2:
+			return errors.New("forward write boom")
+		case 3:
+			return errors.New("undo write boom")
+		}
+		return AtomicWrite(path, data, perm)
+	}
+
+	adapters := Adapters{
+		FS:    os.DirFS(plansDir),
+		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
+		Write: failingWrite,
+		Lock:  LockPlanDir,
+	}
+	repo := New(plansDir, adapters)
+
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	prd := sess.Snapshot().PRD
+	prd.Updated = "2026-05-03"
+	require.NoError(t, sess.UpdatePrd(prd))
+	for _, iss := range sess.Snapshot().Issues {
+		iss.Status = "in-progress"
+		require.NoError(t, sess.UpdateIssue(iss))
+	}
+
+	err = sess.Commit(testCfg())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "forward write boom", "originating write error must be surfaced")
+	assert.Contains(t, err.Error(), "undo write boom", "undo failure must not be silently dropped")
+}
+
 func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
