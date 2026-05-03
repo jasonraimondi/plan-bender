@@ -57,7 +57,7 @@ func TestDispatcher_BeforeIssueHookFailureBlocksIssue(t *testing.T) {
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
 	// stub claude that would succeed if it ran — we'll prove it didn't.
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
 exit 0
 `, fix.plansDir))
 
@@ -81,7 +81,7 @@ func TestDispatcher_AfterIssueHookFailureLogsButContinues(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
 exit 0
 `, fix.plansDir))
 
@@ -104,7 +104,7 @@ func TestDispatcher_AfterBatchHookRuns(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
 exit 0
 `, fix.plansDir))
 

@@ -175,6 +175,24 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
+	// Atomic claim: stamp branch + flip to in-progress in the YAML through the
+	// canonical struct round-trip path. Without this the sub-agent's prompt
+	// still shows status: backlog/todo with branch: null, and the implement-issue
+	// skill instructs it to "set branch" by textual edit — Edit on a non-unique
+	// substring or a naive append produces duplicate `branch:` keys, which yaml.v3
+	// then rejects on every subsequent Load.
+	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
+		reason := fmt.Sprintf("claiming issue: %v", err)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+	}
+	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
+	// the post-claim state. Otherwise the sub-agent's prompt shows backlog/null
+	// and the skill body talks it into re-stamping the same fields by hand.
+	issue.Status = string(status.StatusInProgress)
+	branchCopy := wt.Branch
+	issue.Branch = &branchCopy
+
 	if err := linkPlansDir(d.Root, wt.Path); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
 		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)

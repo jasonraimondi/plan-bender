@@ -110,7 +110,10 @@ func (s *PlanStore) WritePrd(slug string, prd *schema.PrdYaml) error {
 	return s.write(filepath.Join(dir, "prd.yaml"), data, 0o644)
 }
 
-// WriteIssue writes an issue YAML file.
+// WriteIssue writes an issue YAML file. The marshaled bytes are re-parsed
+// before write so a regression that produces non-roundtripping YAML (e.g.
+// duplicate keys from a future custom MarshalYAML) fails loudly here instead
+// of corrupting the on-disk plan and breaking every subsequent Load.
 func (s *PlanStore) WriteIssue(slug string, issue *schema.IssueYaml) error {
 	dir := filepath.Join(s.root, slug, "issues")
 	if err := s.mkdir(dir, 0o755); err != nil {
@@ -121,6 +124,10 @@ func (s *PlanStore) WriteIssue(slug string, issue *schema.IssueYaml) error {
 	data, err := yaml.Marshal(issue)
 	if err != nil {
 		return fmt.Errorf("marshaling issue: %w", err)
+	}
+	var probe schema.IssueYaml
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return fmt.Errorf("issue %d-%s round-trip check: %w", issue.ID, issue.Slug, err)
 	}
 	return s.write(filepath.Join(dir, filename), data, 0o644)
 }

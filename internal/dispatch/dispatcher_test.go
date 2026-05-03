@@ -169,7 +169,7 @@ func TestDispatcher_PartialFailureMergesSuccessOnly(t *testing.T) {
 prompt=$(cat)
 case "$prompt" in
   *"slug: alpha"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
     echo '{"text":"alpha done"}'
     exit 0
     ;;
@@ -207,11 +207,11 @@ func TestReadyAFK_DispatcherIntegration_RespectsDependencyOrder(t *testing.T) {
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
   *"slug: first"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-first.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-first.yaml"
     exit 0
     ;;
   *"slug: second"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/2-second.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-second.yaml"
     exit 0
     ;;
 esac
@@ -329,11 +329,11 @@ func TestDispatcher_CompletesMultiIssueBatch(t *testing.T) {
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
   *"slug: alpha"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
     exit 0
     ;;
   *"slug: beta"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/2-beta.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-beta.yaml"
     exit 0
     ;;
 esac
@@ -349,6 +349,43 @@ exit 1
 	beta := loadIssueYAML(t, fix.plansDir, 2, "beta")
 	assert.Equal(t, "done", alpha.Status)
 	assert.Equal(t, "done", beta.Status)
+}
+
+// TestDispatcher_RunOneClaimsBeforeSubprocess asserts dispatch atomically claims
+// the issue (status=in-progress + branch stamped) BEFORE the sub-agent reads
+// the YAML. Without this the implement-issue skill prompts the agent to set
+// `branch:` and `status:` itself by textual edit, and a naive Edit produces
+// duplicate keys that yaml.v3 then rejects on every subsequent Load. The
+// regression we're guarding against is the v0.0.35 corruption where
+// `dispatch popar-py` left issue YAML files with two `branch:` keys.
+func TestDispatcher_RunOneClaimsBeforeSubprocess(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "backlog"))
+	installSkillFile(t, fix.root)
+
+	// Stub claude that asserts the prompt embeds in-progress + a non-null
+	// branch (proving Claim already ran), then flips the issue to in-review.
+	body := fmt.Sprintf(`prompt=$(cat)
+case "$prompt" in
+  *"status: in-progress"*) ;;
+  *) echo "expected status: in-progress in prompt, got:" >&2; echo "$prompt" >&2; exit 11 ;;
+esac
+case "$prompt" in
+  *"branch: tester/demo--1-alpha"*) ;;
+  *) echo "expected branch stamped in prompt" >&2; exit 12 ;;
+esac
+sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+exit 0
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	d := newDispatcher(fix)
+	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
+
+	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "done", alpha.Status)
+	require.NotNil(t, alpha.Branch, "Claim must stamp branch on the YAML")
+	assert.Equal(t, "tester/demo--1-alpha", *alpha.Branch)
 }
 
 // TestDispatcher_BuildPromptFailureMarksBlocked asserts that an early failure
@@ -384,7 +421,7 @@ func TestDispatcher_MergeBackRestoresParentHEAD(t *testing.T) {
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
   *"slug: alpha"*)
-    sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
     exit 0
     ;;
 esac
@@ -412,7 +449,7 @@ func TestDispatcher_DirtyParentRefuses(t *testing.T) {
 	installSkillFile(t, fix.root)
 
 	body := fmt.Sprintf(`prompt=$(cat)
-sed -i.bak 's/status: todo/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
 exit 0
 `, fix.plansDir)
 	installClaudeStub(t, body)

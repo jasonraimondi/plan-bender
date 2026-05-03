@@ -47,14 +47,13 @@ If assigned to someone else, ask before taking it.
 
 ### 2. Update status
 
-Update the YAML file:
+**Never** edit the YAML's `status:` or `branch:` fields by hand — yaml.v3 rejects duplicate keys, and a misplaced Edit silently produces them. Use CLI commands; they round-trip through the issue struct so the file always parses.
 
-- backlog → todo (when about to start)
-- blocked → todo (when blocker is cleared)
-- todo → in-progress (when implementation starts)
-- always update the `updated` date on status changes
+- worktree mode (you were spawned by `{{.commands.dispatch}}` or invoked `{{.commands.worktree_create}}`): the worktree creator already stamped `branch: <name>` and `status: in-progress`. Skip this step.
+- standalone, was `blocked`: run `{{.commands.retry}} {slug} {id}` to flip back to `todo`, then run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress`.
+- standalone, was `backlog`/`todo`: run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress` in one atomic step.
 {{- if .has_backend_sync}}
-- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section)
+- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section). The CLIs above only update the local YAML.
 {{- end}}
 
 ### 3. Branch setup
@@ -110,21 +109,17 @@ Once implementation is complete and tests pass:
 
 **Skip this step when invoked under `bender-implement-prd` integration mode** — the parent merges all issue branches into a single feature branch and opens one combined PR. In that mode: commit on the assigned branch only; do not push, do not open a PR.
 
-### 8. Update issue YAML
+### 8. Mark complete
 
-Update the issue file:
+Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review`, bumps `updated`, and emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back. **Never** edit `status:` by hand: yaml.v3 rejects duplicate keys and a naive Edit silently produces them.
 
-- set `branch` to the branch name
-- set `pr` to the PR URL
-- set `status: in-review`
-- after merge: `status: qa` if verification needed, or `status: done`
-- if blocked after starting: `status: blocked`, explain in `notes`
-- always update `updated` date
+If you opened a PR in step 7, set the `pr` field with Edit on the **exact** existing line (`pr: null`, etc.) so it replaces in place. Don't append a new `pr:` line.
+
+If blocked after starting, do not edit `status:` by hand — exit non-zero and let the parent dispatch flip the issue to blocked via its `Transition` call.
 {{- if .has_backend_sync}}
-- if the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section)
-{{- end}}
 
-Then call `{{.commands.complete}} {slug} {id}` to signal completion. This emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back.
+If the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local YAML.
+{{- end}}
 
 ### 9. Next issue
 
