@@ -74,6 +74,33 @@ func TestArchive_SucceedsWithForce(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestArchive_RenameFailureRemovesOrphanSummary(t *testing.T) {
+	issues := []schema.IssueYaml{
+		{ID: 1, Slug: "done-issue", Name: "Done", Status: "done", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
+	}
+	dir := setupPlanDir(t, "test", issues)
+	require.NoError(t, os.Chdir(dir))
+
+	// Pre-create the archive destination as a non-empty directory so
+	// os.Rename(planDir, dst) fails with ENOTEMPTY/EEXIST. This exercises
+	// the rename-failure cleanup path: summary.md was written to planDir
+	// and must be removed once we know the move can't complete.
+	archiveSlugDir := filepath.Join(dir, "plans", ".archive", "test")
+	require.NoError(t, os.MkdirAll(archiveSlugDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(archiveSlugDir, "blocker.txt"), []byte("x"), 0o644))
+
+	cmd := NewArchiveCmd()
+	cmd.SetArgs([]string{"test"})
+	cmd.SetOut(&strings.Builder{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "moving to archive")
+
+	// summary.md must not be left orphaned in planDir.
+	_, statErr := os.Stat(filepath.Join(dir, "plans", "test", "summary.md"))
+	assert.True(t, os.IsNotExist(statErr), "rename failure should remove the orphan summary.md, got stat err %v", statErr)
+}
+
 func TestArchive_AllDoneSucceeds(t *testing.T) {
 	issues := []schema.IssueYaml{
 		{ID: 1, Slug: "done-issue", Name: "Done", Status: "done", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},

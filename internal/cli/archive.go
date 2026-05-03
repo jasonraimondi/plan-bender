@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,21 +52,28 @@ func NewArchiveCmd() *cobra.Command {
 				}
 			}
 
-			// Generate summary
-			summary := buildSummary(slug, issues)
-			summaryPath := filepath.Join(planDir, "summary.md")
-			if err := os.WriteFile(summaryPath, []byte(summary), 0o644); err != nil {
-				return fmt.Errorf("writing summary: %w", err)
-			}
-
-			// Move to archive
+			// Ensure the archive parent dir exists before writing summary so a
+			// rename failure isn't preceded by an unrelated mkdir failure.
 			archiveDir := filepath.Join(cfg.PlansDir, ".archive")
 			if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 				return err
 			}
+
+			// Write summary atomically so a partial summary.md never lands on
+			// disk if the process is killed mid-write.
+			summary := buildSummary(slug, issues)
+			summaryPath := filepath.Join(planDir, "summary.md")
+			if err := planrepo.AtomicWrite(summaryPath, []byte(summary), 0o644); err != nil {
+				return fmt.Errorf("writing summary: %w", err)
+			}
+
+			// Move to archive. If the rename fails, the freshly-written
+			// summary.md is now orphaned in planDir — remove it so a retry
+			// doesn't see stale summary content from a prior failed attempt.
 			dst := filepath.Join(archiveDir, slug)
-			if err := os.Rename(planDir, dst); err != nil {
-				return fmt.Errorf("moving to archive: %w", err)
+			if renameErr := os.Rename(planDir, dst); renameErr != nil {
+				cleanupErr := os.Remove(summaryPath)
+				return errors.Join(fmt.Errorf("moving to archive: %w", renameErr), cleanupErr)
 			}
 
 			if isAgentMode(cmd) {
