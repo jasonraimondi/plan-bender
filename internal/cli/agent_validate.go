@@ -2,9 +2,9 @@ package cli
 
 import (
 	"encoding/json"
-	"os"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +17,7 @@ type agentValidationError struct {
 }
 
 type agentValidationResult struct {
-	Valid  bool                    `json:"valid"`
+	Valid  bool                   `json:"valid"`
 	Errors []agentValidationError `json:"errors"`
 }
 
@@ -35,8 +35,8 @@ func NewAgentValidateCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			fsys := os.DirFS(cfg.PlansDir)
-			planResult := schema.ValidatePlan(slug, cfg, fsys)
+			repo := planrepo.NewProd(cfg.PlansDir)
+			planResult := repo.Validate(slug, cfg)
 
 			out := transformValidationResult(planResult)
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
