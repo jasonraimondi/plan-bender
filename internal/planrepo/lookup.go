@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 )
@@ -36,7 +36,7 @@ func (p *Plans) FindIssueProject(id int) (string, error) {
 
 	prefix := fmt.Sprintf("%d-", id)
 	for _, slug := range slugs {
-		issuesDir := filepath.Join(slug, "issues")
+		issuesDir := path.Join(slug, "issues")
 		issueEntries, err := fs.ReadDir(p.adapters.FS, issuesDir)
 		if err != nil {
 			continue

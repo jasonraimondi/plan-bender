@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -50,14 +50,14 @@ func loadSnapshotWithFilenames(fsys fs.FS, slug string) (*Snapshot, map[int]stri
 }
 
 func loadPRD(fsys fs.FS, slug string) (*schema.PrdYaml, error) {
-	path := filepath.Join(slug, "prd.yaml")
-	data, err := fs.ReadFile(fsys, path)
+	prdPath := path.Join(slug, "prd.yaml")
+	data, err := fs.ReadFile(fsys, prdPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading prd %s: %w", path, err)
+		return nil, fmt.Errorf("reading prd %s: %w", prdPath, err)
 	}
 	var prd schema.PrdYaml
 	if err := strictUnmarshal(data, &prd); err != nil {
-		return nil, fmt.Errorf("parsing prd %s: %w", path, err)
+		return nil, fmt.Errorf("parsing prd %s: %w", prdPath, err)
 	}
 	return &prd, nil
 }
@@ -66,7 +66,7 @@ func loadPRD(fsys fs.FS, slug string) (*schema.PrdYaml, error) {
 // same order. Sessions need the filenames so a slug rename can replace the
 // original file rather than orphaning it.
 func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
-	issuesDir := filepath.Join(slug, "issues")
+	issuesDir := path.Join(slug, "issues")
 	entries, err := fs.ReadDir(fsys, issuesDir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing issues in %s: %w", issuesDir, err)
@@ -82,14 +82,14 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
 
 	issues := make([]schema.IssueYaml, 0, len(names))
 	for _, name := range names {
-		path := filepath.Join(issuesDir, name)
-		data, err := fs.ReadFile(fsys, path)
+		issuePath := path.Join(issuesDir, name)
+		data, err := fs.ReadFile(fsys, issuePath)
 		if err != nil {
-			return nil, nil, fmt.Errorf("reading issue %s: %w", path, err)
+			return nil, nil, fmt.Errorf("reading issue %s: %w", issuePath, err)
 		}
 		var issue schema.IssueYaml
 		if err := strictUnmarshal(data, &issue); err != nil {
-			return nil, nil, fmt.Errorf("parsing issue %s: %w", path, err)
+			return nil, nil, fmt.Errorf("parsing issue %s: %w", issuePath, err)
 		}
 		issues = append(issues, issue)
 	}
