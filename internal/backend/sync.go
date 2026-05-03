@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
@@ -19,11 +20,23 @@ func (e SyncError) Error() string {
 	return fmt.Sprintf("issue #%d: %v", e.IssueID, e.Err)
 }
 
+func (e SyncError) Unwrap() error {
+	return e.Err
+}
+
 // SyncResult reports the outcome of a push or pull operation.
 type SyncResult struct {
 	Created int
 	Updated int
 	Errors  []SyncError
+}
+
+func joinSyncErrors(errs []SyncError) error {
+	joined := make([]error, 0, len(errs))
+	for _, err := range errs {
+		joined = append(joined, err)
+	}
+	return errors.Join(joined...)
 }
 
 // SyncPush pushes local issues to the remote backend.
@@ -51,18 +64,24 @@ func SyncPush(ctx context.Context, plans *planrepo.Plans, be Backend, slug strin
 		return result, err
 	}
 
+	remoteAttempts := 0
+	remoteFailures := 0
 	for i := range issues {
 		issue := &issues[i]
 		if issue.LinearID != nil && *issue.LinearID != "" {
+			remoteAttempts++
 			if _, err := be.UpdateIssue(ctx, issue); err != nil {
+				remoteFailures++
 				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 				continue
 			}
 			result.Updated++
 			continue
 		}
+		remoteAttempts++
 		remote, err := be.CreateIssue(ctx, issue, projectID)
 		if err != nil {
+			remoteFailures++
 			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 			continue
 		}
@@ -73,6 +92,10 @@ func SyncPush(ctx context.Context, plans *planrepo.Plans, be Backend, slug strin
 			continue
 		}
 		result.Created++
+	}
+
+	if remoteAttempts > 0 && remoteFailures == remoteAttempts {
+		return result, fmt.Errorf("sync push failed for all %d remote issue attempts: %w", remoteAttempts, joinSyncErrors(result.Errors))
 	}
 
 	return result, nil

@@ -207,13 +207,64 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	assert.Nil(t, i2.LinearID)
 }
 
+func TestSyncPush_AllRemoteFailuresReturnsError(t *testing.T) {
+	t.Run("create", func(t *testing.T) {
+		prd := testPrd()
+		prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+		issues := []*schema.IssueYaml{testIssue(1), testIssue(2)}
+		issues[1].Slug = "issue-two"
+		fix := setupSyncTest(t, prd, issues)
+
+		be := &mockBackend{
+			createIssue: func(_ context.Context, _ *schema.IssueYaml, _ string) (RemoteIssue, error) {
+				return RemoteIssue{}, fmt.Errorf("remote down")
+			},
+		}
+
+		result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
+		require.Error(t, err)
+		assert.Equal(t, 0, result.Created)
+		assert.Equal(t, 0, result.Updated)
+		require.Len(t, result.Errors, 2)
+		assert.Contains(t, err.Error(), "sync push failed for all 2 remote issue attempts")
+		assert.Contains(t, err.Error(), "issue #1")
+		assert.Contains(t, err.Error(), "remote down")
+	})
+
+	t.Run("update", func(t *testing.T) {
+		prd := testPrd()
+		prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+		linID1, linID2 := "existing-1", "existing-2"
+		issues := []*schema.IssueYaml{testIssue(1), testIssue(2)}
+		issues[0].LinearID = &linID1
+		issues[1].Slug = "issue-two"
+		issues[1].LinearID = &linID2
+		fix := setupSyncTest(t, prd, issues)
+
+		be := &mockBackend{
+			updateIssue: func(_ context.Context, _ *schema.IssueYaml) (RemoteIssue, error) {
+				return RemoteIssue{}, fmt.Errorf("remote down")
+			},
+		}
+
+		result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
+		require.Error(t, err)
+		assert.Equal(t, 0, result.Created)
+		assert.Equal(t, 0, result.Updated)
+		require.Len(t, result.Errors, 2)
+		assert.Contains(t, err.Error(), "sync push failed for all 2 remote issue attempts")
+		assert.Contains(t, err.Error(), "issue #1")
+		assert.Contains(t, err.Error(), "remote down")
+	})
+}
+
 func TestSyncPush_Idempotent(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
 	linID := "existing-1"
 	issues := []*schema.IssueYaml{testIssue(1), testIssue(2)}
-	issues[0].LinearID = &linID // already synced
+	issues[0].LinearID = &linID  // already synced
 	issues[1].Slug = "issue-two" // not yet synced
 
 	fix := setupSyncTest(t, prd, issues)
