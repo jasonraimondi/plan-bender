@@ -14,9 +14,9 @@ func TestOpen_LoadsSnapshotWithDeterministicIssueOrder(t *testing.T) {
 	// Write issues in non-sorted insertion order with filenames that exercise
 	// numeric vs lexicographic sort. We expect lexicographic sort by filename.
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"10-tenth.yaml":  issueYAML(10, "tenth"),
-		"2-second.yaml":  issueYAML(2, "second"),
-		"1-first.yaml":   issueYAML(1, "first"),
+		"10-tenth.yaml":     issueYAML(10, "tenth"),
+		"2-second.yaml":     issueYAML(2, "second"),
+		"1-first.yaml":      issueYAML(1, "first"),
 		"20-twentieth.yaml": issueYAML(20, "twentieth"),
 	})
 
