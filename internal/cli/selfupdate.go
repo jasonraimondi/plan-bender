@@ -14,8 +14,7 @@ import (
 
 type selfUpdateCmd struct {
 	version             string
-	force               bool
-	checkForUpdate      func(currentVersion string, force bool) (latest string, isNewer bool, err error)
+	checkForUpdate      func(currentVersion string) (latest string, isNewer bool, err error)
 	detectInstallMethod func() (update.InstallMethod, error)
 	downloadAndReplace  func(version string) error
 	fetchReleaseNotes   func(version string) (string, error)
@@ -26,8 +25,8 @@ func NewSelfUpdateCmd(version string) *cobra.Command {
 	client := &http.Client{}
 	sc := &selfUpdateCmd{
 		version: version,
-		checkForUpdate: func(currentVersion string, force bool) (string, bool, error) {
-			return update.CheckForUpdate(currentVersion, client, force)
+		checkForUpdate: func(currentVersion string) (string, bool, error) {
+			return update.CheckForUpdate(currentVersion, client, true)
 		},
 		detectInstallMethod: func() (update.InstallMethod, error) {
 			return update.DetectCurrentInstallMethod()
@@ -45,8 +44,6 @@ func NewSelfUpdateCmd(version string) *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE:    sc.run,
 	}
-
-	cmd.Flags().BoolVar(&sc.force, "force", false, "bypass version cache and check GitHub directly")
 
 	selfUpdateRegistry[cmd] = sc
 	return cmd
@@ -68,7 +65,7 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	latest, isNewer, err := sc.checkForUpdate(sc.version, sc.force)
+	latest, isNewer, err := sc.checkForUpdate(sc.version)
 	if err != nil {
 		return fmt.Errorf("checking for update: %w", err)
 	}

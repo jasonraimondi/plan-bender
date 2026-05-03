@@ -27,7 +27,7 @@ func TestSelfUpdate_DevVersion(t *testing.T) {
 func TestSelfUpdate_AlreadyLatest(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.2.3")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", false, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -43,7 +43,7 @@ func TestSelfUpdate_AlreadyLatest(t *testing.T) {
 func TestSelfUpdate_NPMDetected(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -61,7 +61,7 @@ func TestSelfUpdate_NPMDetected(t *testing.T) {
 func TestSelfUpdate_DirectBinary_DownloadsAndReplaces(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -88,7 +88,7 @@ func TestSelfUpdate_DirectBinary_DownloadsAndReplaces(t *testing.T) {
 func TestSelfUpdate_DirectBinary_PrintsChangelog(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -111,7 +111,7 @@ func TestSelfUpdate_DirectBinary_PrintsChangelog(t *testing.T) {
 func TestSelfUpdate_DirectBinary_SkipsChangelogOnError(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -132,7 +132,7 @@ func TestSelfUpdate_DirectBinary_SkipsChangelogOnError(t *testing.T) {
 func TestSelfUpdate_DirectBinary_PermissionDenied(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
@@ -155,7 +155,7 @@ func TestSelfUpdate_DirectBinary_PermissionDenied(t *testing.T) {
 func TestSelfUpdate_DirectBinary_DownloadError(t *testing.T) {
 	cmd := NewSelfUpdateCmd("1.0.0")
 	sc := selfUpdateFromCmd(cmd)
-	sc.checkForUpdate = func(currentVersion string, force bool) (string, bool, error) {
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
 		return "1.2.3", true, nil
 	}
 	sc.detectInstallMethod = func() (update.InstallMethod, error) {
