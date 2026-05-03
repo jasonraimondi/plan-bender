@@ -2,6 +2,7 @@ package planrepo
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"sort"
 	"strings"
@@ -18,9 +19,9 @@ type PlanSummary struct {
 	Blocked int    `json:"blocked"`
 }
 
-// List returns best-effort summaries of all plans in plansDir. Plans whose
-// PRD or issues fail to parse are skipped, not surfaced as errors. Returns
-// an empty slice when plansDir does not exist.
+// List returns summaries of all plans in plansDir. Returns an empty slice
+// when plansDir does not exist. A plan whose PRD or issues fail to load makes
+// the listing fail so corrupt or half-written plans are visible to callers.
 //
 // Summaries are sorted by slug so output order is deterministic.
 func (p *Plans) List() ([]PlanSummary, error) {
@@ -39,7 +40,7 @@ func (p *Plans) List() ([]PlanSummary, error) {
 		}
 		snap, err := loadSnapshot(p.adapters.FS, e.Name())
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("loading plan %q: %w", e.Name(), err)
 		}
 		summaries = append(summaries, summarize(snap))
 	}

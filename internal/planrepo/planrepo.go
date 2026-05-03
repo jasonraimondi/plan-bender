@@ -1,6 +1,6 @@
 // Package planrepo is the session-oriented boundary for plan persistence.
 //
-// A Plans repository owns plansDir and exposes plan sessions and best-effort
+// A Plans repository owns plansDir and exposes plan sessions and plan
 // listing through one file contract path. Each PlanSession holds the plan
 // lock for its lifetime and exposes an immutable Snapshot of the on-disk
 // PRD and issues at open time.
