@@ -36,7 +36,10 @@ func NewAgentValidateCmd() *cobra.Command {
 			}
 
 			repo := planrepo.NewProd(cfg.PlansDir)
-			planResult := repo.Validate(slug, cfg)
+			planResult, err := repo.Validate(slug, cfg)
+			if err != nil {
+				return NewAgentError("opening plan "+slug+": "+err.Error(), ErrPlanNotFound)
+			}
 
 			out := transformValidationResult(planResult)
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)

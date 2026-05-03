@@ -18,20 +18,16 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 
 // Validate is a one-shot convenience that opens a session for slug, validates
 // the snapshot, and closes the session. Open failures (missing plan,
-// malformed YAML, lock contention) are surfaced as PRD errors in the returned
-// result so callers always receive a PlanValidationResult and never need to
-// distinguish "couldn't load" from "loaded but invalid" by error type.
-func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationResult {
+// malformed YAML, lock contention) are returned as the error so callers can
+// distinguish "couldn't load" from "loaded but invalid" — schema-level
+// findings populate the result and leave the error nil.
+func (p *Plans) Validate(slug string, cfg config.Config) (schema.PlanValidationResult, error) {
 	sess, err := p.Open(slug)
 	if err != nil {
-		return schema.PlanValidationResult{
-			PRD:    schema.ValidationResult{File: path.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
-			Issues: []schema.ValidationResult{},
-			Valid:  false,
-		}
+		return schema.PlanValidationResult{}, err
 	}
 	defer func() { _ = sess.Close() }()
-	return sess.Validate(cfg)
+	return sess.Validate(cfg), nil
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config) schema.PlanValidationResult {

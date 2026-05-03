@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -300,6 +301,35 @@ type CommitValidationError struct {
 	Result schema.PlanValidationResult
 }
 
+// commitValidationErrorMaxLen caps the formatted error message at a length
+// that is informative without spamming logs when many issues fail at once.
+const commitValidationErrorMaxLen = 500
+
 func (e *CommitValidationError) Error() string {
-	return fmt.Sprintf("commit preflight validation failed for plan %q", e.Result.PRD.File)
+	var msgs []string
+	for _, m := range e.Result.PRD.Errors {
+		msgs = append(msgs, fmt.Sprintf("prd %s: %s", e.Result.PRD.File, m))
+	}
+	for _, ir := range e.Result.Issues {
+		for _, m := range ir.Errors {
+			msgs = append(msgs, fmt.Sprintf("issue %s: %s", ir.File, m))
+		}
+	}
+	for _, m := range e.Result.CrossRef {
+		msgs = append(msgs, "cross-ref: "+m)
+	}
+	for _, m := range e.Result.Cycles {
+		msgs = append(msgs, "cycle: "+m)
+	}
+
+	header := fmt.Sprintf("commit preflight validation failed for plan %q", e.Result.PRD.File)
+	if len(msgs) == 0 {
+		return header
+	}
+	body := strings.Join(msgs, "; ")
+	full := header + ": " + body
+	if len(full) > commitValidationErrorMaxLen {
+		return full[:commitValidationErrorMaxLen-3] + "..."
+	}
+	return full
 }

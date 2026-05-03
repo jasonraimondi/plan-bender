@@ -573,6 +573,29 @@ func TestCommit_RollbackRemoveFailureSurfaces(t *testing.T) {
 	assert.Contains(t, err.Error(), "remove boom", "rollback Remove failure must surface alongside the originating error")
 }
 
+func TestCommitValidationError_ErrorContainsUnderlying(t *testing.T) {
+	err := &CommitValidationError{
+		Result: schema.PlanValidationResult{
+			PRD: schema.ValidationResult{
+				File:   "demo/prd.yaml",
+				Errors: []string{"missing required field: name"},
+			},
+			Issues: []schema.ValidationResult{
+				{File: "demo/issues/1-foo.yaml", Errors: []string{"unknown track 'made-up'"}},
+			},
+			CrossRef: []string{"issue 2 references missing use case UC-99"},
+			Cycles:   []string{"1 -> 2 -> 1"},
+		},
+	}
+
+	msg := err.Error()
+	assert.Contains(t, msg, "missing required field: name", "PRD error must appear inline")
+	assert.Contains(t, msg, "unknown track 'made-up'", "issue error must appear inline")
+	assert.Contains(t, msg, "UC-99", "cross-ref error must appear inline")
+	assert.Contains(t, msg, "1 -> 2 -> 1", "cycle must appear inline")
+	assert.LessOrEqual(t, len(msg), commitValidationErrorMaxLen, "error must respect length cap")
+}
+
 // --- Lock lifetime ---
 
 func TestClose_DiscardsDirtyChanges(t *testing.T) {
