@@ -110,7 +110,7 @@ func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	err = sess.UpdateIssue(validIssue(99, "nope"))
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIssueNotInSession)
 }
 
 func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
@@ -143,7 +143,44 @@ func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	err = sess.CreateIssue(validIssue(1, "different-slug"))
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIssueIDExists)
+}
+
+func TestUpsertIssue_CreatesNew(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	require.NoError(t, sess.UpsertIssue(validIssue(2, "b")))
+
+	snap := mustSnapshot(t, sess)
+	require.Len(t, snap.Issues, 2)
+}
+
+func TestUpsertIssue_UpdatesExisting(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	updated := validIssue(1, "a")
+	updated.Status = "in-progress"
+	require.NoError(t, sess.UpsertIssue(updated))
+
+	snap := mustSnapshot(t, sess)
+	require.Len(t, snap.Issues, 1, "upsert of existing id must not create a new entry")
+	assert.Equal(t, "in-progress", snap.Issues[0].Status)
 }
 
 // --- Commit preflight ---

@@ -45,7 +45,7 @@ func (y *yamlFS) CreateIssue(_ context.Context, issue *schema.IssueYaml, project
 		return RemoteIssue{}, err
 	}
 	defer sess.Close()
-	if err := upsertIssue(sess, *issue); err != nil {
+	if err := sess.UpsertIssue(*issue); err != nil {
 		return RemoteIssue{}, err
 	}
 	if err := sess.Commit(y.cfg); err != nil {
@@ -120,23 +120,6 @@ func (y *yamlFS) PullProject(_ context.Context, projectID string) (PullProjectRe
 		Project: RemoteProject{ID: projectID, Name: snap.PRD.Name},
 		Issues:  remoteIssues,
 	}, nil
-}
-
-// upsertIssue lets CreateIssue act as create-or-update. Existing yamlFS
-// callers (notably SyncPush) treat CreateIssue as a write entry point and
-// may re-run after a partial failure, so silently routing same-id calls to
-// UpdateIssue preserves prior behavior with the session API.
-func upsertIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
-	snap, err := sess.Snapshot()
-	if err != nil {
-		return err
-	}
-	for _, existing := range snap.Issues {
-		if existing.ID == issue.ID {
-			return sess.UpdateIssue(issue)
-		}
-	}
-	return sess.CreateIssue(issue)
 }
 
 func issueToRemote(issue *schema.IssueYaml) RemoteIssue {

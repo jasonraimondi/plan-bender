@@ -12,6 +12,14 @@ import (
 // called after Close. Use errors.Is to detect.
 var ErrSessionClosed = errors.New("planrepo: session is closed")
 
+// ErrIssueNotInSession wraps the error returned by UpdateIssue when the target
+// issue ID is not in the in-session snapshot.
+var ErrIssueNotInSession = errors.New("planrepo: issue not in session")
+
+// ErrIssueIDExists wraps the error returned by CreateIssue when an issue with
+// the same ID is already in the in-session snapshot.
+var ErrIssueIDExists = errors.New("planrepo: issue id already exists")
+
 // Snapshot is an in-session view of a plan. Open populates it from disk and
 // the session mutation methods update it in place; the file API treats it as
 // the single source of truth between Open and Commit/Close.
@@ -147,7 +155,7 @@ func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("update issue: id #%d not in session snapshot", issue.ID)
+	return fmt.Errorf("update issue id #%d: %w", issue.ID, ErrIssueNotInSession)
 }
 
 // CreateIssue appends a new issue to the in-session snapshot and marks it
@@ -159,7 +167,26 @@ func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
 	}
 	for _, existing := range s.snapshot.Issues {
 		if existing.ID == issue.ID {
-			return fmt.Errorf("create issue: id #%d already exists in plan %q", issue.ID, s.slug)
+			return fmt.Errorf("create issue id #%d in plan %q: %w", issue.ID, s.slug, ErrIssueIDExists)
+		}
+	}
+	s.snapshot.Issues = append(s.snapshot.Issues, issue)
+	s.dirtyIssues[issue.ID] = true
+	return nil
+}
+
+// UpsertIssue creates the issue if its ID is new in the in-session snapshot,
+// or updates the existing issue if the ID already exists. Use UpdateIssue or
+// CreateIssue when callers need strict create-only or update-only semantics.
+func (s *PlanSession) UpsertIssue(issue schema.IssueYaml) error {
+	if s.closed {
+		return ErrSessionClosed
+	}
+	for i := range s.snapshot.Issues {
+		if s.snapshot.Issues[i].ID == issue.ID {
+			s.snapshot.Issues[i] = issue
+			s.dirtyIssues[issue.ID] = true
+			return nil
 		}
 	}
 	s.snapshot.Issues = append(s.snapshot.Issues, issue)
