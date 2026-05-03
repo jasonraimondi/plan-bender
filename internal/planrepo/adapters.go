@@ -42,3 +42,12 @@ func AtomicWrite(path string, data []byte, perm fs.FileMode) error {
 func prodMkdir(path string, perm fs.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
+
+// prodRemove deletes the file at path. A non-existent file is not an error so
+// rollback can run idempotently against a partially-applied commit.
+func prodRemove(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

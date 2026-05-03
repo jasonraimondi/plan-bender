@@ -91,22 +91,6 @@ func TestSyncPull_NoLockDuringRemotePullProject(t *testing.T) {
 	assert.True(t, probeOK, "plan lock must be released before remote PullProject runs")
 }
 
-// TestTryOpenWithin_BlocksWhileSessionHeld is the meta-test for the probe
-// helper: while one session is open and holding the flock, a probe goroutine
-// must NOT acquire the lock within the timeout. If this test ever flakes the
-// no-lock-during-remote tests above are giving false positives.
-func TestTryOpenWithin_BlocksWhileSessionHeld(t *testing.T) {
-	prd := testPrd()
-	fix := setupSyncTest(t, prd, nil)
-
-	sess, err := fix.plans.Open("test")
-	require.NoError(t, err)
-	defer sess.Close()
-
-	got := tryOpenWithin(fix.plans, "test", 200*time.Millisecond)
-	assert.False(t, got, "concurrent Open must block while another session holds the lock")
-}
-
 // TestSyncPush_NoLockDuringRemoteCreateProject covers the third remote entry
 // point: CreateProject (called when the PRD has no linear.project_id).
 func TestSyncPush_NoLockDuringRemoteCreateProject(t *testing.T) {

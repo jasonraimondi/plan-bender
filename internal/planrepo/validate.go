@@ -2,7 +2,7 @@ package planrepo
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -18,24 +18,20 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 
 // Validate is a one-shot convenience that opens a session for slug, validates
 // the snapshot, and closes the session. Open failures (missing plan,
-// malformed YAML, lock contention) are surfaced as PRD errors in the returned
-// result so callers always receive a PlanValidationResult and never need to
-// distinguish "couldn't load" from "loaded but invalid" by error type.
-func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationResult {
+// malformed YAML, lock contention) are returned as the error so callers can
+// distinguish "couldn't load" from "loaded but invalid" — schema-level
+// findings populate the result and leave the error nil.
+func (p *Plans) Validate(slug string, cfg config.Config) (schema.PlanValidationResult, error) {
 	sess, err := p.Open(slug)
 	if err != nil {
-		return schema.PlanValidationResult{
-			PRD:    schema.ValidationResult{File: filepath.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
-			Issues: []schema.ValidationResult{},
-			Valid:  false,
-		}
+		return schema.PlanValidationResult{}, err
 	}
 	defer func() { _ = sess.Close() }()
-	return sess.Validate(cfg)
+	return sess.Validate(cfg), nil
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config) schema.PlanValidationResult {
-	prdPath := filepath.Join(snap.Slug, "prd.yaml")
+	prdPath := path.Join(snap.Slug, "prd.yaml")
 
 	var prdErrs []string
 	for _, ve := range snap.PRD.Validate() {
@@ -83,11 +79,11 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 // baseline filename if the issue existed at Open time, otherwise the
 // canonical filename a Commit would write.
 func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) string {
-	dir := filepath.Join(slug, "issues")
+	dir := path.Join(slug, "issues")
 	if name, ok := baseline[iss.ID]; ok {
-		return filepath.Join(dir, name)
+		return path.Join(dir, name)
 	}
-	return filepath.Join(dir, canonicalIssueFilename(iss))
+	return path.Join(dir, canonicalIssueFilename(iss))
 }
 
 func canonicalIssueFilename(iss *schema.IssueYaml) string {

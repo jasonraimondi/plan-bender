@@ -53,6 +53,13 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return data
 }
 
+func mustSnapshot(t *testing.T, s *PlanSession) Snapshot {
+	t.Helper()
+	snap, err := s.Snapshot()
+	require.NoError(t, err)
+	return snap
+}
+
 // --- Mutations ---
 
 func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
@@ -66,11 +73,11 @@ func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Name = "Renamed Plan"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	assert.Equal(t, "Renamed Plan", sess.Snapshot().PRD.Name)
+	assert.Equal(t, "Renamed Plan", mustSnapshot(t, sess).PRD.Name)
 }
 
 func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
@@ -84,11 +91,11 @@ func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	updated := sess.Snapshot().Issues[0]
+	updated := mustSnapshot(t, sess).Issues[0]
 	updated.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(updated))
 
-	assert.Equal(t, "in-progress", sess.Snapshot().Issues[0].Status)
+	assert.Equal(t, "in-progress", mustSnapshot(t, sess).Issues[0].Status)
 }
 
 func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
@@ -103,7 +110,7 @@ func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	err = sess.UpdateIssue(validIssue(99, "nope"))
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIssueNotInSession)
 }
 
 func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
@@ -119,8 +126,8 @@ func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 
 	require.NoError(t, sess.CreateIssue(validIssue(2, "b")))
 
-	require.Len(t, sess.Snapshot().Issues, 2)
-	ids := []int{sess.Snapshot().Issues[0].ID, sess.Snapshot().Issues[1].ID}
+	require.Len(t, mustSnapshot(t, sess).Issues, 2)
+	ids := []int{mustSnapshot(t, sess).Issues[0].ID, mustSnapshot(t, sess).Issues[1].ID}
 	assert.ElementsMatch(t, []int{1, 2}, ids)
 }
 
@@ -136,7 +143,44 @@ func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	err = sess.CreateIssue(validIssue(1, "different-slug"))
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrIssueIDExists)
+}
+
+func TestUpsertIssue_CreatesNew(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	require.NoError(t, sess.UpsertIssue(validIssue(2, "b")))
+
+	snap := mustSnapshot(t, sess)
+	require.Len(t, snap.Issues, 2)
+}
+
+func TestUpsertIssue_UpdatesExisting(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	updated := validIssue(1, "a")
+	updated.Status = "in-progress"
+	require.NoError(t, sess.UpsertIssue(updated))
+
+	snap := mustSnapshot(t, sess)
+	require.Len(t, snap.Issues, 1, "upsert of existing id must not create a new entry")
+	assert.Equal(t, "in-progress", snap.Issues[0].Status)
 }
 
 // --- Commit preflight ---
@@ -154,7 +198,7 @@ func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.Slug = "" // violates required
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -178,7 +222,7 @@ func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	// Cycle: 1 blocks itself via mutation.
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.BlockedBy = []int{1}
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -200,7 +244,7 @@ func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 	res := sess.Validate(testCfg())
 	assert.True(t, res.Valid, "freshly-loaded valid plan must validate")
 
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.Slug = ""
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -220,11 +264,11 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -235,9 +279,9 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	sess2, err := repo.Open("p")
 	require.NoError(t, err)
 	defer func() { _ = sess2.Close() }()
-	assert.Equal(t, "2026-05-03", sess2.Snapshot().PRD.Updated)
-	require.Len(t, sess2.Snapshot().Issues, 1)
-	assert.Equal(t, "in-progress", sess2.Snapshot().Issues[0].Status)
+	assert.Equal(t, "2026-05-03", mustSnapshot(t, sess2).PRD.Updated)
+	require.Len(t, mustSnapshot(t, sess2).Issues, 1)
+	assert.Equal(t, "in-progress", mustSnapshot(t, sess2).Issues[0].Status)
 }
 
 func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
@@ -255,7 +299,8 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 			writes = append(writes, path)
 			return AtomicWrite(path, data, perm)
 		},
-		Lock: LockPlanDir,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -263,7 +308,7 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Only mutate issue #1.
-	iss := sess.Snapshot().Issues[0] // sorted by filename: 1-a, 2-b
+	iss := mustSnapshot(t, sess).Issues[0] // sorted by filename: 1-a, 2-b
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -306,7 +351,7 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Slug = "renamed"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -358,8 +403,9 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -367,11 +413,11 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	for _, iss := range sess.Snapshot().Issues {
+	for _, iss := range mustSnapshot(t, sess).Issues {
 		iss.Status = "in-progress"
 		require.NoError(t, sess.UpdateIssue(iss))
 	}
@@ -414,8 +460,9 @@ func TestCommit_RollbackErrorsJoinedWithOriginalError(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -423,10 +470,10 @@ func TestCommit_RollbackErrorsJoinedWithOriginalError(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
-	for _, iss := range sess.Snapshot().Issues {
+	for _, iss := range mustSnapshot(t, sess).Issues {
 		iss.Status = "in-progress"
 		require.NoError(t, sess.UpdateIssue(iss))
 	}
@@ -457,8 +504,9 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	adapters := Adapters{
 		FS:    os.DirFS(plansDir),
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Write: failingWrite,
-		Lock:  LockPlanDir,
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: prodRemove,
 	}
 	repo := New(plansDir, adapters)
 
@@ -467,7 +515,7 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	require.NoError(t, sess.CreateIssue(validIssue(2, "fresh")))
-	updated := sess.Snapshot().Issues[0]
+	updated := mustSnapshot(t, sess).Issues[0]
 	updated.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(updated))
 
@@ -478,6 +526,74 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	// dir lands back at its pre-commit state.
 	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-fresh.yaml"))
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "create rollback must remove the new file")
+}
+
+func TestCommit_RollbackRemoveFailureSurfaces(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	// Create two new issues (2-foo, 3-bar). Sorted-by-ID write order is
+	// 2 then 3. The first write succeeds and queues an adapters.Remove undo
+	// for the just-created 2-foo.yaml. The second write fails, triggering
+	// rollback — which invokes the failing Remove. The returned error must
+	// surface BOTH the originating write failure and the Remove failure.
+	var writeCount int
+	failingWrite := func(path string, data []byte, perm fs.FileMode) error {
+		writeCount++
+		if writeCount == 2 {
+			return errors.New("forward write boom")
+		}
+		return AtomicWrite(path, data, perm)
+	}
+	failingRemove := func(_ string) error {
+		return errors.New("remove boom")
+	}
+
+	adapters := Adapters{
+		FS:     os.DirFS(plansDir),
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Write:  failingWrite,
+		Lock:   LockPlanDir,
+		Remove: failingRemove,
+	}
+	repo := New(plansDir, adapters)
+
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	require.NoError(t, sess.CreateIssue(validIssue(2, "foo")))
+	require.NoError(t, sess.CreateIssue(validIssue(3, "bar")))
+
+	err = sess.Commit(testCfg())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "forward write boom", "originating write error must be in the joined error")
+	assert.Contains(t, err.Error(), "remove boom", "rollback Remove failure must surface alongside the originating error")
+}
+
+func TestCommitValidationError_ErrorContainsUnderlying(t *testing.T) {
+	err := &CommitValidationError{
+		Result: schema.PlanValidationResult{
+			PRD: schema.ValidationResult{
+				File:   "demo/prd.yaml",
+				Errors: []string{"missing required field: name"},
+			},
+			Issues: []schema.ValidationResult{
+				{File: "demo/issues/1-foo.yaml", Errors: []string{"unknown track 'made-up'"}},
+			},
+			CrossRef: []string{"issue 2 references missing use case UC-99"},
+			Cycles:   []string{"1 -> 2 -> 1"},
+		},
+	}
+
+	msg := err.Error()
+	assert.Contains(t, msg, "missing required field: name", "PRD error must appear inline")
+	assert.Contains(t, msg, "unknown track 'made-up'", "issue error must appear inline")
+	assert.Contains(t, msg, "UC-99", "cross-ref error must appear inline")
+	assert.Contains(t, msg, "1 -> 2 -> 1", "cycle must appear inline")
+	assert.LessOrEqual(t, len(msg), commitValidationErrorMaxLen, "error must respect length cap")
 }
 
 // --- Lock lifetime ---
@@ -493,7 +609,7 @@ func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 

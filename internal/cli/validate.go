@@ -27,7 +27,10 @@ func NewValidateCmd() *cobra.Command {
 			}
 
 			repo := planrepo.NewProd(cfg.PlansDir)
-			result := repo.Validate(slug, cfg)
+			result, err := repo.Validate(slug, cfg)
+			if err != nil {
+				return fmt.Errorf("opening plan %q: %w", slug, err)
+			}
 
 			if jsonOutput || isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)

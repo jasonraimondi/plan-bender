@@ -104,7 +104,11 @@ func lookupIssueSlug(plansDir, slug string, id int) (string, error) {
 		return "", NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
 	}
 	defer sess.Close()
-	for _, iss := range sess.Snapshot().Issues {
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return "", NewAgentError("reading snapshot: "+err.Error(), ErrInternal)
+	}
+	for _, iss := range snap.Issues {
 		if iss.ID == id {
 			return iss.Slug, nil
 		}

@@ -1,9 +1,13 @@
 package planrepo
 
 import (
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,8 +29,8 @@ func TestOpen_LoadsSnapshotWithDeterministicIssueOrder(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sess.Close() })
 
-	snap := sess.Snapshot()
-	require.NotNil(t, snap)
+	snap, err := sess.Snapshot()
+	require.NoError(t, err)
 	assert.Equal(t, "test-plan", snap.Slug)
 	assert.Equal(t, "Test Plan", snap.PRD.Name)
 
@@ -112,6 +116,91 @@ func TestClose_ReleasesLockSoNextOpenSucceeds(t *testing.T) {
 	sess2, err := repo.Open("test-plan")
 	require.NoError(t, err)
 	require.NoError(t, sess2.Close())
+}
+
+func TestSnapshot_DefensiveCopyOfIssues(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
+		"1-first.yaml":  issueYAML(1, "first"),
+		"2-second.yaml": issueYAML(2, "second"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("test-plan")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	first, err := sess.Snapshot()
+	require.NoError(t, err)
+	require.Len(t, first.Issues, 2)
+
+	// Mutating the returned Issues slice must not bleed into the session.
+	first.Issues[0].Slug = "TAMPERED"
+	first.Issues = append(first.Issues, schema.IssueYaml{ID: 999})
+
+	second, err := sess.Snapshot()
+	require.NoError(t, err)
+	require.Len(t, second.Issues, 2, "appended issue must not appear in next Snapshot")
+	assert.Equal(t, "first", second.Issues[0].Slug, "slug mutation must not bleed into session")
+}
+
+func TestSession_AfterCloseRejectsAllOps(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	require.NoError(t, sess.Close())
+
+	t.Run("Snapshot", func(t *testing.T) {
+		_, err := sess.Snapshot()
+		require.ErrorIs(t, err, ErrSessionClosed)
+	})
+	t.Run("UpdatePrd", func(t *testing.T) {
+		err := sess.UpdatePrd(schema.PrdYaml{Slug: "p"})
+		require.ErrorIs(t, err, ErrSessionClosed)
+	})
+	t.Run("UpdateIssue", func(t *testing.T) {
+		err := sess.UpdateIssue(schema.IssueYaml{ID: 1})
+		require.ErrorIs(t, err, ErrSessionClosed)
+	})
+	t.Run("CreateIssue", func(t *testing.T) {
+		err := sess.CreateIssue(schema.IssueYaml{ID: 2})
+		require.ErrorIs(t, err, ErrSessionClosed)
+	})
+	t.Run("Commit", func(t *testing.T) {
+		err := sess.Commit(testCfg())
+		require.ErrorIs(t, err, ErrSessionClosed)
+	})
+}
+
+func TestClose_PropagatesReleaseError(t *testing.T) {
+	wantErr := errors.New("unlock blew up")
+	plansDir := t.TempDir()
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.yaml": issueYAML(1, "a"),
+	})
+	repo := New(plansDir, Adapters{
+		FS:     os.DirFS(plansDir),
+		Write:  func(_ string, _ []byte, _ fs.FileMode) error { return nil },
+		Mkdir:  func(_ string, _ fs.FileMode) error { return nil },
+		Remove: prodRemove,
+		Lock: func(_ string) (func() error, error) {
+			return func() error { return wantErr }, nil
+		},
+	})
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+
+	closeErr := sess.Close()
+	require.ErrorIs(t, closeErr, wantErr)
+
+	// Idempotent: second Close returns the same error without re-running release.
+	closeErr2 := sess.Close()
+	require.ErrorIs(t, closeErr2, wantErr)
 }
 
 func TestOpen_FailedLoadReleasesLock(t *testing.T) {

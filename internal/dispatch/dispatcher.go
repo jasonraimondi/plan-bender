@@ -42,37 +42,11 @@ type Dispatcher struct {
 	gitMu sync.Mutex
 
 	// outOnce + outWriter memoize the synchronized writer wrapping d.Out so
-	// every goroutine streaming sub-agent output shares one mutex.
+	// every goroutine streaming sub-agent output shares one mutex. This stays
+	// behind sync.Once because Out can be nil at construction and only resolves
+	// to os.Stdout at first call.
 	outOnce   sync.Once
 	outWriter io.Writer
-
-	// ownerOnce + owner memoize the status.Owner so every status write in a
-	// Run goes through the same lock-aware adapter without re-allocating.
-	ownerOnce sync.Once
-	owner     *status.Owner
-
-	// plansOnce + plans memoize the planrepo.Plans handle used for resolver
-	// and merge-order snapshots. Sharing one handle across a Run keeps every
-	// read path on the same persistence boundary as status writes.
-	plansOnce sync.Once
-	plans     *planrepo.Plans
-}
-
-// plansRepo returns the lazily-constructed planrepo.Plans handle rooted at
-// d.plansDir(). All read snapshots inside a Run flow through this handle.
-func (d *Dispatcher) plansRepo() *planrepo.Plans {
-	d.plansOnce.Do(func() {
-		d.plans = planrepo.NewProd(d.plansDir())
-	})
-	return d.plans
-}
-
-// snapshotIssues opens a short-lived planrepo session, reads the issue list,
-// and closes the session before returning. The lock is released before the
-// caller proceeds so subsequent status writes (or batch goroutines) can take
-// the same lock without deadlocking.
-func (d *Dispatcher) snapshotIssues(slug string) ([]schema.IssueYaml, error) {
-	return snapshotPlanIssues(d.plansRepo(), slug)
 }
 
 func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml, error) {
@@ -81,20 +55,11 @@ func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml,
 		return nil, err
 	}
 	defer sess.Close()
-	issues := sess.Snapshot().Issues
-	cp := make([]schema.IssueYaml, len(issues))
-	copy(cp, issues)
-	return cp, nil
-}
-
-// statusOwner returns the lazily-constructed status.Owner backed by the
-// production prodStatusStore wired to d.plansDir(). All status writes during
-// a Run flow through this single Owner.
-func (d *Dispatcher) statusOwner() *status.Owner {
-	d.ownerOnce.Do(func() {
-		d.owner = status.New(newProdStatusStore(d.plansDir(), d.Config))
-	})
-	return d.owner
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return snap.Issues, nil
 }
 
 // lockedWriter serializes Write calls so concurrent goroutines streaming
@@ -149,8 +114,11 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 		return fmt.Errorf("setting up integration branch: %w", err)
 	}
 
+	plans := planrepo.NewProd(d.plansDir())
+	owner := status.New(newProdStatusStore(d.plansDir(), d.Config))
+
 	for {
-		issues, err := d.snapshotIssues(slug)
+		issues, err := snapshotPlanIssues(plans, slug)
 		if err != nil {
 			return fmt.Errorf("loading issues: %w", err)
 		}
@@ -169,12 +137,12 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %d blocked", res.BlockedCount)
 		}
 
-		results, err := d.RunBatch(ctx, slug, batch, integrationBranch)
+		results, err := d.RunBatch(ctx, slug, batch, integrationBranch, owner)
 		if err != nil {
 			return fmt.Errorf("running batch: %w", err)
 		}
 
-		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
+		if err := d.MergeBack(ctx, slug, results, integrationBranch, plans, owner); err != nil {
 			return fmt.Errorf("merging batch: %w", err)
 		}
 	}
@@ -183,7 +151,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 // RunBatch fans out one goroutine per issue, each creating a worktree off
 // integrationBranch, rendering a prompt, and running a claude subprocess.
 // Results come back via a buffered channel and are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.IssueYaml, integrationBranch string) ([]SubResult, error) {
+func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.IssueYaml, integrationBranch string, owner *status.Owner) ([]SubResult, error) {
 	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
 
 	results := make([]SubResult, len(issues))
@@ -193,7 +161,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 		wg.Add(1)
 		go func(idx int, issue schema.IssueYaml) {
 			defer wg.Done()
-			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
+			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch, owner)
 		}(i, issues[i])
 	}
 
@@ -201,13 +169,13 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 	return results, nil
 }
 
-func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir, integrationBranch string) SubResult {
+func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir, integrationBranch string, owner *status.Owner) SubResult {
 	d.gitMu.Lock()
 	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason, owner)
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
@@ -217,9 +185,9 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	// skill instructs it to "set branch" by textual edit — Edit on a non-unique
 	// substring or a naive append produces duplicate `branch:` keys, which yaml.v3
 	// then rejects on every subsequent Load.
-	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
+	if err := owner.Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 		reason := fmt.Sprintf("claiming issue: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason, owner)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
@@ -231,14 +199,14 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	if err := linkPlansDir(d.Root, wt.Path); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason, owner)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+			d.markBlockedAndWarn(ctx, slug, issue.ID, reason, owner)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
 	}
@@ -246,13 +214,13 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(ctx, slug, issue.ID, reason, owner)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
 	defer cancel()
-	res := RunSubprocess(subCtx, d.statusOwner(), slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
+	res := RunSubprocess(subCtx, owner, slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {
@@ -271,8 +239,8 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // MergeBack captures the parent's HEAD before checkout and restores it on exit.
 // It refuses to run if the parent has uncommitted changes (the checkout would
 // either fail or leak changes onto the integration branch).
-func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
-	successful := successfulInDepOrder(results, d.plansRepo(), slug)
+func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string, plans *planrepo.Plans, owner *status.Owner) (err error) {
+	successful := successfulInDepOrder(results, plans, slug)
 	if len(successful) == 0 {
 		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
 		// doesn't surface an error that masks the real (all-failed) cause. GC
@@ -315,11 +283,11 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, d.Root, "merge", "--abort")
-			d.markBlockedAndWarn(ctx, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
+			d.markBlockedAndWarn(ctx, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut), owner)
 			continue
 		}
 		merged[r.Branch] = true
-		if err := d.statusOwner().Transition(ctx, slug, r.IssueID, []status.Status{status.StatusInReview}, status.StatusDone, ""); err != nil {
+		if err := owner.Transition(ctx, slug, r.IssueID, []status.Status{status.StatusInReview}, status.StatusDone, ""); err != nil {
 			if errors.Is(err, status.ErrAlreadyInState) {
 				continue
 			}
@@ -389,8 +357,8 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 // backlog→todo→in-progress would otherwise leave the issue stuck at backlog
 // while CAS rejects every block attempt — the dispatch loop would then re-pick
 // the same issue forever (the popar-py CAS-loop bug).
-func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string) {
-	err := d.statusOwner().Transition(ctx, slug, id,
+func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string, owner *status.Owner) {
+	err := owner.Transition(ctx, slug, id,
 		[]status.Status{status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview},
 		status.StatusBlocked, reason)
 	if err == nil || errors.Is(err, status.ErrAlreadyInState) {

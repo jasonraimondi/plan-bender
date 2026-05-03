@@ -43,7 +43,10 @@ func NewStatusCmd() *cobra.Command {
 			}
 			defer func() { _ = sess.Close() }()
 
-			snap := sess.Snapshot()
+			snap, err := sess.Snapshot()
+			if err != nil {
+				return NewAgentError("reading snapshot: "+err.Error(), ErrInternal)
+			}
 			prd := snap.PRD
 			issues := append([]schema.IssueYaml(nil), snap.Issues...)
 			sort.SliceStable(issues, func(i, j int) bool { return issues[i].ID < issues[j].ID })

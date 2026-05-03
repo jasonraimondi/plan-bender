@@ -11,9 +11,9 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/jasonraimondi/plan-bender/internal/agents"
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/linear"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -80,7 +80,7 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 			if err := enc.Close(); err != nil {
 				return err
 			}
-			if err := backend.AtomicWrite(cfgPath, []byte(buf.String()), 0o644); err != nil {
+			if err := planrepo.AtomicWrite(cfgPath, []byte(buf.String()), 0o644); err != nil {
 				return err
 			}
 			created = true
@@ -258,7 +258,7 @@ func mergeYAMLFile(path string, updates map[string]any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return backend.AtomicWrite(path, out, 0o644)
+	return planrepo.AtomicWrite(path, out, 0o644)
 }
 
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.

@@ -13,7 +13,7 @@ import (
 // LockPlanDir takes an exclusive lock on a sentinel file inside plansDir
 // using the Win32 LockFileEx API. The returned release unlocks and closes
 // the file. Mirrors the unix flock implementation.
-func LockPlanDir(plansDir string) (func(), error) {
+func LockPlanDir(plansDir string) (func() error, error) {
 	if err := os.MkdirAll(plansDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating plans dir for lock: %w", err)
 	}
@@ -27,8 +27,15 @@ func LockPlanDir(plansDir string) (func(), error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("acquiring lock: %w", err)
 	}
-	return func() {
-		_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, ol)
-		_ = f.Close()
+	return func() error {
+		unlockErr := windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, ol)
+		closeErr := f.Close()
+		if unlockErr != nil {
+			return fmt.Errorf("releasing lock: %w", unlockErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("closing lock file: %w", closeErr)
+		}
+		return nil
 	}, nil
 }
