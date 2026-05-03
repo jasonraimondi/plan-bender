@@ -86,21 +86,93 @@ func TestCreate_BranchesOffSuppliedBaseRef(t *testing.T) {
 	require.NotEqual(t, strings.TrimSpace(string(mainTip)), strings.TrimSpace(string(branchTip)))
 }
 
-func TestCreate_CleansUpBranchOnWorktreeFailure(t *testing.T) {
+// TestCreate_IdempotentOnRepeatCall asserts that a second Create with the same
+// (slug, id, issueSlug) returns the existing branch+path instead of failing
+// with "branch already exists". This is the dispatch-loop crash-recovery
+// contract — runOne can re-enter without leaving the issue stuck because the
+// branch from a prior partial run is still on disk.
+func TestCreate_IdempotentOnRepeatCall(t *testing.T) {
 	root := initRepo(t)
+
+	first, err := Create(context.Background(), root, "auth", 1, "setup", "")
+	require.NoError(t, err)
+
+	second, err := Create(context.Background(), root, "auth", 1, "setup", "")
+	require.NoError(t, err, "second call must be idempotent, not error")
+	require.Equal(t, first.Branch, second.Branch)
+	require.Equal(t, first.Path, second.Path)
+}
+
+// TestCreate_AttachesWorktreeWhenBranchExistsButWorktreeMissing asserts the
+// branch-without-worktree recovery path: a prior dispatch crashed after `git
+// branch` but before `git worktree add`, or the user manually pruned the
+// worktree. Create should attach a fresh worktree to the existing branch.
+func TestCreate_AttachesWorktreeWhenBranchExistsButWorktreeMissing(t *testing.T) {
+	root := initRepo(t)
+
+	first, err := Create(context.Background(), root, "auth", 1, "setup", "")
+	require.NoError(t, err)
+
+	// Drop the worktree (force, to remove without confirmation) but keep the branch.
+	out, err := exec.Command("git", "-C", root, "worktree", "remove", "--force", first.Path).CombinedOutput()
+	require.NoError(t, err, "worktree remove: %s", string(out))
+
+	// Branch must still exist.
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", first.Branch).Output()
+	require.NoError(t, err)
+	require.Contains(t, string(branchOut), first.Branch)
 
 	res, err := Create(context.Background(), root, "auth", 1, "setup", "")
 	require.NoError(t, err)
+	require.Equal(t, first.Branch, res.Branch)
+	require.Equal(t, first.Path, res.Path)
+	info, err := os.Stat(res.Path)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
+}
 
-	// Second Create with same id collides on path; branch must be cleaned up
-	// so the repo doesn't accumulate orphan branches.
+// TestCreate_DifferentPathConflictRefuses asserts that if the branch is
+// already checked out at a non-canonical path (user mucked with worktrees
+// manually), Create refuses rather than silently masking the divergence.
+func TestCreate_DifferentPathConflictRefuses(t *testing.T) {
+	root := initRepo(t)
+
+	first, err := Create(context.Background(), root, "auth", 1, "setup", "")
+	require.NoError(t, err)
+
+	// Move the worktree somewhere unexpected.
+	movedTo := filepath.Join(t.TempDir(), "elsewhere")
+	out, err := exec.Command("git", "-C", root, "worktree", "move", first.Path, movedTo).CombinedOutput()
+	require.NoError(t, err, "worktree move: %s", string(out))
+
+	_, err = Create(context.Background(), root, "auth", 1, "setup", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already checked out")
+}
+
+// TestCreate_CleansUpBranchOnWorktreeFailureForFreshBranch asserts that when
+// Create has to create the branch itself and `git worktree add` then fails,
+// the orphan branch is deleted — preserving the "no half-created state"
+// invariant. Pre-existing branches are NOT deleted (covered by
+// TestCreate_AttachesWorktreeWhenBranchExistsButWorktreeMissing).
+func TestCreate_CleansUpBranchOnWorktreeFailureForFreshBranch(t *testing.T) {
+	root := initRepo(t)
+
+	// Force `git worktree add` to fail by occupying the canonical path with a
+	// non-empty regular file before Create runs.
+	parent, err := filepath.EvalSymlinks(filepath.Dir(root))
+	require.NoError(t, err)
+	canonical := filepath.Join(parent, "repo-wt", "auth", "1-setup")
+	require.NoError(t, os.MkdirAll(filepath.Dir(canonical), 0o755))
+	require.NoError(t, os.WriteFile(canonical, []byte("blocker"), 0o644))
+
 	_, err = Create(context.Background(), root, "auth", 1, "setup", "")
 	require.Error(t, err)
 
-	out, err := exec.Command("git", "-C", root, "branch", "--list", res.Branch).Output()
+	branch := "tester/auth--1-setup"
+	out, err := exec.Command("git", "-C", root, "branch", "--list", branch).Output()
 	require.NoError(t, err)
-	// Original branch still exists from successful first call.
-	require.Contains(t, string(out), res.Branch)
+	require.NotContains(t, string(out), branch, "fresh branch must be cleaned up after worktree-add failure")
 }
 
 func TestGC_RemovesMatchingSlug(t *testing.T) {
@@ -200,5 +272,11 @@ func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {
 
 	_, err := Create(context.Background(), root, "auth", 1, "x", "")
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "git") || strings.Contains(err.Error(), "user"))
+	// Any of the error-wrapping prefixes is acceptable — we're asserting Create
+	// surfaces a recognizable failure, not pinning the exact failure point.
+	msg := err.Error()
+	matched := strings.Contains(msg, "git") || strings.Contains(msg, "user") ||
+		strings.Contains(msg, "branch") || strings.Contains(msg, "worktree") ||
+		strings.Contains(msg, "not a git repository")
+	require.True(t, matched, "expected git-related error, got: %s", msg)
 }

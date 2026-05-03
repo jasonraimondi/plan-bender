@@ -10,6 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
+
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
 const worktreeIssueYAML = `id: 7
@@ -58,25 +61,31 @@ func setupWorktreeRepo(t *testing.T) string {
 }
 
 func TestWorktreeCreate_AgentModeJSON(t *testing.T) {
-	setupWorktreeRepo(t)
+	root := setupWorktreeRepo(t)
 
-	root := NewAgentRootCmd("test")
-	root.SetArgs([]string{"worktree", "create", "auth", "7"})
+	agentCmd := NewAgentRootCmd("test")
+	agentCmd.SetArgs([]string{"worktree", "create", "auth", "7"})
 	var out strings.Builder
-	root.SetOut(&out)
-	require.NoError(t, root.Execute())
+	agentCmd.SetOut(&out)
+	require.NoError(t, agentCmd.Execute())
 
 	var got map[string]string
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &got))
 	assert.Equal(t, "tester/auth--7-middleware", got["branch"])
 	assert.Contains(t, got["path"], "repo-wt/auth/7-middleware")
+	assert.Equal(t, "in-progress", got["status"])
 
 	_, err := os.Stat(got["path"])
 	assert.NoError(t, err)
+
+	iss := loadWorktreeIssue(t, root)
+	assert.Equal(t, "in-progress", iss.Status, "issue YAML status must be in-progress after create")
+	require.NotNil(t, iss.Branch)
+	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch, "issue YAML branch must be set after create")
 }
 
 func TestWorktreeCreate_HumanMode(t *testing.T) {
-	setupWorktreeRepo(t)
+	root := setupWorktreeRepo(t)
 
 	cmd := NewWorktreeCmd()
 	cmd.SetArgs([]string{"create", "auth", "7"})
@@ -86,6 +95,23 @@ func TestWorktreeCreate_HumanMode(t *testing.T) {
 
 	assert.Contains(t, out.String(), "branch:")
 	assert.Contains(t, out.String(), "tester/auth--7-middleware")
+	assert.Contains(t, out.String(), "status:")
+	assert.Contains(t, out.String(), "in-progress")
+
+	iss := loadWorktreeIssue(t, root)
+	assert.Equal(t, "in-progress", iss.Status)
+	require.NotNil(t, iss.Branch)
+	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch)
+}
+
+func loadWorktreeIssue(t *testing.T, root string) schema.IssueYaml {
+	t.Helper()
+	path := filepath.Join(root, ".plan-bender", "plans", "auth", "issues", "7-middleware.yaml")
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var iss schema.IssueYaml
+	require.NoError(t, yaml.Unmarshal(data, &iss))
+	return iss
 }
 
 func TestWorktreeCreate_UnknownIssue(t *testing.T) {

@@ -2,12 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/dispatch"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -62,13 +65,37 @@ func newWorktreeCreateCmd() *cobra.Command {
 				return NewAgentError("creating worktree: "+err.Error(), ErrInternal)
 			}
 
+			// Atomic claim: flip status to in-progress and stamp the branch field
+			// so the YAML reflects the on-disk worktree. Without this the branch
+			// lives on disk while the issue YAML still shows backlog/null branch,
+			// and dispatch's CAS-checks lose the thread on the next iteration.
+			owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+			claimErr := owner.Claim(cmd.Context(), slug, id, res.Branch, "worktree create")
+			claimed := claimErr == nil || errors.Is(claimErr, status.ErrAlreadyInState)
+			if !claimed {
+				var casErr *status.ErrCASMismatch
+				if errors.As(claimErr, &casErr) {
+					return NewAgentError(
+						fmt.Sprintf("worktree created at %s on branch %s, but issue #%d is %s — refusing to claim a non-actionable issue; resolve manually or run `pba worktree gc %s`",
+							res.Path, res.Branch, id, casErr.Current, slug),
+						ErrValidationFailed,
+					)
+				}
+				return NewAgentError(
+					fmt.Sprintf("worktree created at %s on branch %s, but failed to update issue #%d YAML: %v",
+						res.Path, res.Branch, id, claimErr),
+					ErrInternal,
+				)
+			}
+
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
 					"path":   res.Path,
 					"branch": res.Branch,
+					"status": string(status.StatusInProgress),
 				})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "worktree: %s\nbranch:   %s\n", res.Path, res.Branch)
+			fmt.Fprintf(cmd.OutOrStdout(), "worktree: %s\nbranch:   %s\nstatus:   %s\n", res.Path, res.Branch, status.StatusInProgress)
 			return nil
 		},
 	}

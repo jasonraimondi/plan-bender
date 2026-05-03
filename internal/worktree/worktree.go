@@ -3,6 +3,7 @@ package worktree
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -21,6 +22,14 @@ type WorktreeResult struct {
 // branch off HEAD (used by the ad-hoc `pba worktree create` CLI); dispatchers
 // must pass the integration branch so issue commits root from a stable base
 // rather than wherever the user happened to run from.
+//
+// Create is idempotent against the canonical path: if the branch already
+// exists with a worktree at the canonical path, the existing pair is
+// returned unchanged. If the branch exists but no worktree is attached, a
+// fresh worktree is added against the existing branch. The branch's commit
+// history is left alone — baseRef is only consulted when the branch must
+// be created. This lets dispatch's outer loop re-enter runOne after a
+// crash without tripping "branch already exists" errors.
 //
 // ctx cancels in-flight git plumbing so Ctrl-C during dispatch tears down
 // pending child processes instead of leaking them.
@@ -44,14 +53,64 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 	}
 	path := filepath.Join(parent, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
 
-	if err := runGit(ctx, root, "branch", branch, baseRef); err != nil {
-		return WorktreeResult{}, fmt.Errorf("creating branch %q off %q: %w", branch, baseRef, err)
+	branchExists, err := branchExists(ctx, root, branch)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("checking branch %q: %w", branch, err)
+	}
+
+	existingPath, err := worktreePathForBranch(ctx, root, branch)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("inspecting worktrees: %w", err)
+	}
+	if existingPath != "" {
+		if existingPath != path {
+			return WorktreeResult{}, fmt.Errorf("branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
+		}
+		return WorktreeResult{Path: existingPath, Branch: branch}, nil
+	}
+
+	if !branchExists {
+		if err := runGit(ctx, root, "branch", branch, baseRef); err != nil {
+			return WorktreeResult{}, fmt.Errorf("creating branch %q off %q: %w", branch, baseRef, err)
+		}
 	}
 	if err := runGit(ctx, root, "worktree", "add", path, branch); err != nil {
-		_ = runGit(ctx, root, "branch", "-D", branch)
+		// Only delete the branch if we created it this call. Pre-existing branches
+		// may carry committed work from a prior run that the user expects to recover.
+		if !branchExists {
+			_ = runGit(ctx, root, "branch", "-D", branch)
+		}
 		return WorktreeResult{}, fmt.Errorf("creating worktree at %q: %w", path, err)
 	}
 	return WorktreeResult{Path: path, Branch: branch}, nil
+}
+
+// branchExists reports whether refs/heads/<name> resolves in root.
+func branchExists(ctx context.Context, root, name string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// worktreePathForBranch returns the worktree path currently checking out
+// branch, or "" if no worktree has it checked out.
+func worktreePathForBranch(ctx context.Context, root, branch string) (string, error) {
+	entries, err := listWorktrees(ctx, root)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.branch == branch {
+			return e.path, nil
+		}
+	}
+	return "", nil
 }
 
 // GC removes plan-bender worktrees whose branch matches {user}/{slug}--.

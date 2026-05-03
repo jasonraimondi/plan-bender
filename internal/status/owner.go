@@ -99,6 +99,90 @@ func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Stat
 	return nil
 }
 
+// Claim atomically marks an issue as in-progress and records the branch a
+// worker has reserved for it. Used by `worktree create` so the YAML truthfully
+// reflects on-disk state after a worktree is created — without Claim the
+// branch lives on disk, but the issue YAML still says backlog/todo with no
+// branch field, and dispatch's CAS-checks lose the thread.
+//
+// Claim is idempotent: if the issue is already in-progress on the same
+// branch, Claim returns ErrAlreadyInState (no write). If it is in-progress
+// on a different branch, Claim returns *ErrCASMismatch with that branch's
+// state instead of silently overwriting work.
+//
+// CAS from-set: [backlog, todo, blocked, in-progress]. Anything else (e.g.
+// in-review, done, canceled) is refused via *ErrCASMismatch — claiming a
+// completed issue is almost certainly a mistake worth surfacing.
+func (o *Owner) Claim(ctx context.Context, slug string, id int, branch, reason string) error {
+	_ = ctx
+
+	if branch == "" {
+		return fmt.Errorf("claim: branch is required")
+	}
+
+	release, err := o.store.Lock(slug)
+	if err != nil {
+		return fmt.Errorf("locking plan %q: %w", slug, err)
+	}
+	defer func() {
+		if rerr := release(); rerr != nil {
+			o.logger.Warn("status: lock release failed", "slug", slug, "err", rerr)
+		}
+	}()
+
+	issues, err := o.store.Load(slug)
+	if err != nil {
+		return fmt.Errorf("loading plan %q: %w", slug, err)
+	}
+	idx := -1
+	for i := range issues {
+		if issues[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("issue #%d not found in plan %q", id, slug)
+	}
+
+	current := Status(issues[idx].Status)
+	from := []Status{StatusBacklog, StatusTodo, StatusBlocked, StatusInProgress}
+	if !containsStatus(from, current) {
+		return &ErrCASMismatch{Current: current}
+	}
+
+	issue := issues[idx]
+	branchAlreadySet := issue.Branch != nil && *issue.Branch == branch
+	if current == StatusInProgress && branchAlreadySet {
+		return ErrAlreadyInState
+	}
+
+	if current != StatusInProgress && !isAllowed(current, StatusInProgress) {
+		return &ErrIllegalTransition{From: current, To: StatusInProgress}
+	}
+
+	branchCopy := branch
+	issue.Branch = &branchCopy
+	issue.Status = string(StatusInProgress)
+	issue.Updated = time.Now().Format("2006-01-02")
+	if reason != "" && current != StatusInProgress {
+		appendNote(&issue, current, StatusInProgress, reason)
+	}
+	if err := o.store.Save(slug, issue); err != nil {
+		return fmt.Errorf("saving issue #%d: %w", id, err)
+	}
+
+	o.logger.Info("status: claim",
+		"slug", slug,
+		"id", id,
+		"from", string(current),
+		"to", string(StatusInProgress),
+		"branch", branch,
+		"reason", reason,
+	)
+	return nil
+}
+
 func containsStatus(set []Status, s Status) bool {
 	for _, x := range set {
 		if x == s {

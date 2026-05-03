@@ -51,8 +51,11 @@ func RunSubprocess(
 	block := func(reason string) SubResult {
 		res.Success = false
 		res.Err = errors.New(reason)
+		// Backlog is included so an early subprocess failure (e.g. claude not in
+		// PATH) on a backlog issue picked by ReadyAFK still flips to blocked
+		// instead of CAS-failing and re-dispatching forever.
 		err := owner.Transition(ctx, slug, issue.ID,
-			[]status.Status{status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+			[]status.Status{status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview},
 			status.StatusBlocked, reason)
 		if err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 			fmt.Fprintf(outWriter, "[issue-%d] warning: failed to persist blocked status: %v\n", issue.ID, err)

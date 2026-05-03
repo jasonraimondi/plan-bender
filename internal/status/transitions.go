@@ -10,6 +10,8 @@ package status
 //	in-progress → in-review: cli/complete on the typical path.
 //	in-progress → blocked:   subprocess failure paths and dispatcher setup failures.
 //	in-progress → canceled:  human cancellation.
+//	backlog → in-progress:   worktree create / dispatcher claim on a backlog issue.
+//	backlog → blocked:       dispatcher setup failures on a backlog issue picked by ReadyAFK.
 //	backlog → in-review:     cli/complete supports backlog as a from-state.
 //	in-review → done:        dispatcher merge-back after a clean merge.
 //	in-review → blocked:     dispatcher merge-back on merge conflict.
@@ -21,7 +23,7 @@ package status
 var allowed = map[Status][]Status{
 	StatusTodo:       {StatusInProgress, StatusInReview, StatusBlocked, StatusCanceled},
 	StatusInProgress: {StatusInReview, StatusBlocked, StatusCanceled},
-	StatusBacklog:    {StatusInReview},
+	StatusBacklog:    {StatusInProgress, StatusBlocked, StatusInReview},
 	StatusInReview:   {StatusDone, StatusBlocked},
 	StatusBlocked:    {StatusTodo, StatusInProgress},
 }

@@ -41,6 +41,8 @@ func TestTransition_AllAllowedEdgesSucceed(t *testing.T) {
 		{StatusInProgress, StatusInReview},
 		{StatusInProgress, StatusBlocked},
 		{StatusInProgress, StatusCanceled},
+		{StatusBacklog, StatusInProgress},
+		{StatusBacklog, StatusBlocked},
 		{StatusBacklog, StatusInReview},
 		{StatusInReview, StatusDone},
 		{StatusInReview, StatusBlocked},
@@ -226,4 +228,94 @@ func TestTransition_IssueNotFoundIsAnError(t *testing.T) {
 	err := o.Transition(context.Background(), "p", 99, []Status{StatusTodo}, StatusInProgress, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "#99")
+}
+
+func TestClaim_FromBacklogSetsBranchAndInProgress(t *testing.T) {
+	o, store, _ := newTestOwner(t)
+	store.seed("p", issueAt(1, string(StatusBacklog)))
+
+	err := o.Claim(context.Background(), "p", 1, "user/p--1-x", "worktree create")
+	require.NoError(t, err)
+
+	got, _ := store.Load("p")
+	require.Equal(t, string(StatusInProgress), got[0].Status)
+	require.NotNil(t, got[0].Branch)
+	require.Equal(t, "user/p--1-x", *got[0].Branch)
+	require.NotNil(t, got[0].Notes)
+	require.Contains(t, *got[0].Notes, "backlog→in-progress: worktree create")
+}
+
+func TestClaim_FromTodoSucceeds(t *testing.T) {
+	o, store, _ := newTestOwner(t)
+	store.seed("p", issueAt(1, string(StatusTodo)))
+
+	require.NoError(t, o.Claim(context.Background(), "p", 1, "user/p--1-x", ""))
+
+	got, _ := store.Load("p")
+	require.Equal(t, string(StatusInProgress), got[0].Status)
+	require.NotNil(t, got[0].Branch)
+}
+
+func TestClaim_IdempotentWhenAlreadyInProgressOnSameBranch(t *testing.T) {
+	o, store, _ := newTestOwner(t)
+	seed := issueAt(1, string(StatusInProgress))
+	branch := "user/p--1-x"
+	seed.Branch = &branch
+	store.seed("p", seed)
+
+	err := o.Claim(context.Background(), "p", 1, branch, "noop")
+	require.ErrorIs(t, err, ErrAlreadyInState)
+	require.Equal(t, 0, store.saves, "idempotent claim must not write")
+}
+
+func TestClaim_RewritesBranchWhenInProgressOnDifferentBranch(t *testing.T) {
+	// User force-recreates a worktree; the branch on disk changes. Allow the
+	// branch field to be re-stamped while staying in-progress — this is the
+	// only path that updates the branch field on an active issue.
+	o, store, _ := newTestOwner(t)
+	seed := issueAt(1, string(StatusInProgress))
+	old := "user/p--1-old"
+	seed.Branch = &old
+	store.seed("p", seed)
+
+	err := o.Claim(context.Background(), "p", 1, "user/p--1-new", "")
+	require.NoError(t, err)
+
+	got, _ := store.Load("p")
+	require.NotNil(t, got[0].Branch)
+	require.Equal(t, "user/p--1-new", *got[0].Branch)
+}
+
+func TestClaim_RefusesWhenInReviewOrDone(t *testing.T) {
+	for _, st := range []Status{StatusInReview, StatusDone, StatusCanceled} {
+		t.Run(string(st), func(t *testing.T) {
+			o, store, _ := newTestOwner(t)
+			store.seed("p", issueAt(1, string(st)))
+
+			err := o.Claim(context.Background(), "p", 1, "user/p--1-x", "")
+			var cas *ErrCASMismatch
+			require.ErrorAs(t, err, &cas)
+			require.Equal(t, st, cas.Current)
+			require.Equal(t, 0, store.saves)
+		})
+	}
+}
+
+func TestClaim_FromBlockedTransitionsToInProgress(t *testing.T) {
+	o, store, _ := newTestOwner(t)
+	store.seed("p", issueAt(1, string(StatusBlocked)))
+
+	require.NoError(t, o.Claim(context.Background(), "p", 1, "user/p--1-x", "manual unblock"))
+
+	got, _ := store.Load("p")
+	require.Equal(t, string(StatusInProgress), got[0].Status)
+}
+
+func TestClaim_RequiresBranch(t *testing.T) {
+	o, store, _ := newTestOwner(t)
+	store.seed("p", issueAt(1, string(StatusTodo)))
+
+	err := o.Claim(context.Background(), "p", 1, "", "")
+	require.Error(t, err)
+	require.Equal(t, 0, store.saves)
 }
