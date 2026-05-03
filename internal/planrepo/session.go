@@ -97,12 +97,18 @@ func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
 	}, nil
 }
 
-// Snapshot returns the current in-session snapshot. Mutations made via
-// UpdatePrd, UpdateIssue, or CreateIssue are reflected on subsequent calls.
-// Callers must treat the returned value as read-only; mutate through the
-// session methods instead.
-func (s *PlanSession) Snapshot() *Snapshot {
-	return s.snapshot
+// Snapshot returns the current in-session snapshot by value with a defensive
+// copy of Issues, so caller mutation cannot bleed into session state. Mutations
+// made via UpdatePrd, UpdateIssue, or CreateIssue are reflected on subsequent
+// calls.
+func (s *PlanSession) Snapshot() Snapshot {
+	issues := make([]schema.IssueYaml, len(s.snapshot.Issues))
+	copy(issues, s.snapshot.Issues)
+	return Snapshot{
+		Slug:   s.snapshot.Slug,
+		PRD:    s.snapshot.PRD,
+		Issues: issues,
+	}
 }
 
 // UpdatePrd replaces the in-session PRD and marks it dirty. The change is

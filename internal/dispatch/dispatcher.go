@@ -81,10 +81,7 @@ func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml,
 		return nil, err
 	}
 	defer sess.Close()
-	issues := sess.Snapshot().Issues
-	cp := make([]schema.IssueYaml, len(issues))
-	copy(cp, issues)
-	return cp, nil
+	return sess.Snapshot().Issues, nil
 }
 
 // statusOwner returns the lazily-constructed status.Owner backed by the

@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -112,6 +113,30 @@ func TestClose_ReleasesLockSoNextOpenSucceeds(t *testing.T) {
 	sess2, err := repo.Open("test-plan")
 	require.NoError(t, err)
 	require.NoError(t, sess2.Close())
+}
+
+func TestSnapshot_DefensiveCopyOfIssues(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
+		"1-first.yaml":  issueYAML(1, "first"),
+		"2-second.yaml": issueYAML(2, "second"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("test-plan")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	first := sess.Snapshot()
+	require.Len(t, first.Issues, 2)
+
+	// Mutating the returned Issues slice must not bleed into the session.
+	first.Issues[0].Slug = "TAMPERED"
+	first.Issues = append(first.Issues, schema.IssueYaml{ID: 999})
+
+	second := sess.Snapshot()
+	require.Len(t, second.Issues, 2, "appended issue must not appear in next Snapshot")
+	assert.Equal(t, "first", second.Issues[0].Slug, "slug mutation must not bleed into session")
 }
 
 func TestOpen_FailedLoadReleasesLock(t *testing.T) {

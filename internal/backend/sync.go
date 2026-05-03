@@ -158,9 +158,8 @@ func readSnapshot(plans *planrepo.Plans, slug string) (schema.PrdYaml, []schema.
 		return schema.PrdYaml{}, nil, err
 	}
 	defer sess.Close()
-	prd := sess.Snapshot().PRD
-	issues := append([]schema.IssueYaml{}, sess.Snapshot().Issues...)
-	return prd, issues, nil
+	snap := sess.Snapshot()
+	return snap.PRD, snap.Issues, nil
 }
 
 // ensureRemoteProject returns the projectID to push issues against. When the
