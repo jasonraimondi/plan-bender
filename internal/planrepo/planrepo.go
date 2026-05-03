@@ -25,9 +25,12 @@ type LockFunc func(plansDir string) (release func(), err error)
 
 // Adapters bundles the I/O dependencies a Plans repository needs.
 //
-// Write and Mkdir are unused by the Open/Snapshot/Close/List paths in this
-// package, but are part of the production constructor contract because the
-// session boundary will perform staged writes in a follow-up change.
+// FS and Lock are read by Open/Snapshot/Close/List. Write and Mkdir are the
+// I/O entry points used by PlanSession.Commit during the staged-write phase:
+// Mkdir ensures the plan and issues directories exist before any write runs,
+// and Write applies each staged file atomically (in production, via
+// AtomicWrite — see adapters.go). Tests substitute failing variants here to
+// drive the commit rollback path.
 type Adapters struct {
 	FS    fs.FS
 	Write WriteFunc
