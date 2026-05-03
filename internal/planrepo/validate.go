@@ -2,7 +2,7 @@ package planrepo
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -25,7 +25,7 @@ func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationRe
 	sess, err := p.Open(slug)
 	if err != nil {
 		return schema.PlanValidationResult{
-			PRD:    schema.ValidationResult{File: filepath.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
+			PRD:    schema.ValidationResult{File: path.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
 			Issues: []schema.ValidationResult{},
 			Valid:  false,
 		}
@@ -35,7 +35,7 @@ func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationRe
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config) schema.PlanValidationResult {
-	prdPath := filepath.Join(snap.Slug, "prd.yaml")
+	prdPath := path.Join(snap.Slug, "prd.yaml")
 
 	var prdErrs []string
 	for _, ve := range snap.PRD.Validate() {
@@ -83,11 +83,11 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 // baseline filename if the issue existed at Open time, otherwise the
 // canonical filename a Commit would write.
 func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) string {
-	dir := filepath.Join(slug, "issues")
+	dir := path.Join(slug, "issues")
 	if name, ok := baseline[iss.ID]; ok {
-		return filepath.Join(dir, name)
+		return path.Join(dir, name)
 	}
-	return filepath.Join(dir, canonicalIssueFilename(iss))
+	return path.Join(dir, canonicalIssueFilename(iss))
 }
 
 func canonicalIssueFilename(iss *schema.IssueYaml) string {
