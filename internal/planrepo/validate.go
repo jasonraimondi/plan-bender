@@ -17,10 +17,10 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 }
 
 // Validate is a one-shot convenience that opens a session for slug, validates
-// it, and closes the session. Open failures (missing plan, malformed YAML)
-// are surfaced as PRD errors in the returned result so callers always get the
-// PlanValidationResult shape — matching the behavior of the prior disk-based
-// schema.ValidatePlan path.
+// the snapshot, and closes the session. Open failures (missing plan,
+// malformed YAML, lock contention) are surfaced as PRD errors in the returned
+// result so callers always receive a PlanValidationResult and never need to
+// distinguish "couldn't load" from "loaded but invalid" by error type.
 func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationResult {
 	sess, err := p.Open(slug)
 	if err != nil {
