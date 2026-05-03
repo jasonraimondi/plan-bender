@@ -1,10 +1,13 @@
 package dispatch
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,114 +15,203 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
-func writeAdapterIssue(t *testing.T, plansDir, slug string, iss schema.IssueYaml) {
+// adapterTestCfg returns a config that accepts the validAdapterIssue fixtures
+// when planrepo.Commit runs validation.
+func adapterTestCfg() config.Config {
+	return config.Config{
+		Tracks:         []string{"data", "rules"},
+		WorkflowStates: []string{"backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"},
+		MaxPoints:      8,
+	}
+}
+
+const adapterValidPrd = `name: Demo
+slug: demo
+status: active
+created: "2026-01-01"
+updated: "2026-01-02"
+description: A test
+why: Testing
+outcome: Tests pass
+`
+
+// validAdapterIssue returns an issue that passes planrepo.Commit validation
+// under adapterTestCfg.
+func validAdapterIssue(id int, slug, statusStr string) schema.IssueYaml {
+	return schema.IssueYaml{
+		ID:                 id,
+		Slug:               slug,
+		Name:               "Issue " + slug,
+		Track:              "data",
+		Status:             statusStr,
+		Priority:           "high",
+		Points:             1,
+		Labels:             []string{},
+		BlockedBy:          []int{},
+		Blocking:           []int{},
+		Created:            "2026-01-01",
+		Updated:            "2026-01-02",
+		Outcome:            "ok",
+		Scope:              "small",
+		AcceptanceCriteria: []string{},
+		Steps:              []string{},
+		UseCases:           []string{},
+	}
+}
+
+// writeValidPlan seeds plansDir with a valid PRD and the given issues at
+// canonical {id}-{slug}.yaml paths.
+func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.IssueYaml) {
 	t.Helper()
-	dir := filepath.Join(plansDir, slug, "issues")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	data, err := yaml.Marshal(iss)
-	require.NoError(t, err)
-	path := filepath.Join(dir, fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug))
-	require.NoError(t, os.WriteFile(path, data, 0o644))
-}
-
-func TestProdStatusStore_LoadSaveRoundTrip(t *testing.T) {
-	plansDir := t.TempDir()
-	iss := schema.IssueYaml{ID: 7, Slug: "alpha", Name: "alpha", Status: "todo"}
-	writeAdapterIssue(t, plansDir, "demo", iss)
-
-	store := newProdStatusStore(plansDir)
-
-	got, err := store.Load("demo")
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, "todo", got[0].Status)
-
-	release, err := store.Lock("demo")
-	require.NoError(t, err)
-	got[0].Status = "in-progress"
-	require.NoError(t, store.Save("demo", got[0]))
-	require.NoError(t, release())
-
-	reloaded, err := store.Load("demo")
-	require.NoError(t, err)
-	require.Len(t, reloaded, 1)
-	assert.Equal(t, "in-progress", reloaded[0].Status)
-}
-
-func TestProdStatusStore_LoadMissingPlanReturnsError(t *testing.T) {
-	plansDir := t.TempDir()
-	store := newProdStatusStore(plansDir)
-
-	_, err := store.Load("nope")
-	require.Error(t, err)
-}
-
-// TestProdStatusStore_LockSerializesConcurrent asserts the per-process flock
-// serializes Lock callers — the second waits until the first releases.
-func TestProdStatusStore_LockSerializesConcurrent(t *testing.T) {
-	plansDir := t.TempDir()
-	store := newProdStatusStore(plansDir)
-
-	release1, err := store.Lock("demo")
-	require.NoError(t, err)
-
-	acquired2 := make(chan struct{})
-	var release2 func() error
-	go func() {
-		var err error
-		release2, err = store.Lock("demo")
+	planDir := filepath.Join(plansDir, slug)
+	issuesDir := filepath.Join(planDir, "issues")
+	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), []byte(adapterValidPrd), 0o644))
+	for _, iss := range issues {
+		data, err := yaml.Marshal(iss)
 		require.NoError(t, err)
-		close(acquired2)
-	}()
-
-	select {
-	case <-acquired2:
-		t.Fatal("second Lock acquired before first released")
-	case <-time.After(50 * time.Millisecond):
+		path := filepath.Join(issuesDir, fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug))
+		require.NoError(t, os.WriteFile(path, data, 0o644))
 	}
-
-	require.NoError(t, release1())
-
-	select {
-	case <-acquired2:
-	case <-time.After(2 * time.Second):
-		t.Fatal("second Lock never acquired after first released")
-	}
-	require.NoError(t, release2())
 }
 
-// TestProdStatusStore_ConcurrentSaveSerializes asserts that multiple goroutines
-// taking Lock + Save individually don't corrupt the file or interleave writes.
-func TestProdStatusStore_ConcurrentSaveSerializes(t *testing.T) {
+func loadIssueFile(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
+	t.Helper()
+	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.yaml", id, issueSlug))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var iss schema.IssueYaml
+	require.NoError(t, yaml.Unmarshal(data, &iss))
+	return iss
+}
+
+// TestProdStatusOwner_TransitionPersistsThroughPlanrepo asserts that
+// owner.Transition through the prod adapter writes the new status atomically
+// to disk via the planrepo session path. The reload check proves the write
+// reached disk under the session lock.
+func TestProdStatusOwner_TransitionPersistsThroughPlanrepo(t *testing.T) {
 	plansDir := t.TempDir()
-	iss := schema.IssueYaml{ID: 1, Slug: "x", Name: "x", Status: "todo"}
-	writeAdapterIssue(t, plansDir, "p", iss)
+	writeValidPlan(t, plansDir, "demo", validAdapterIssue(7, "alpha", "todo"))
 
-	store := newProdStatusStore(plansDir)
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+	require.NoError(t, owner.Transition(context.Background(), "demo", 7,
+		[]status.Status{status.StatusTodo}, status.StatusInProgress, ""))
 
+	post := loadIssueFile(t, plansDir, "demo", 7, "alpha")
+	assert.Equal(t, "in-progress", post.Status)
+}
+
+// TestProdStatusOwner_ClaimStampsBranchAndStatus asserts that owner.Claim
+// through the prod adapter persists both the new status and the branch field.
+func TestProdStatusOwner_ClaimStampsBranchAndStatus(t *testing.T) {
+	plansDir := t.TempDir()
+	writeValidPlan(t, plansDir, "demo", validAdapterIssue(7, "alpha", "backlog"))
+
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+	require.NoError(t, owner.Claim(context.Background(), "demo", 7,
+		"user/demo--7-alpha", "worktree create"))
+
+	post := loadIssueFile(t, plansDir, "demo", 7, "alpha")
+	assert.Equal(t, "in-progress", post.Status)
+	require.NotNil(t, post.Branch)
+	assert.Equal(t, "user/demo--7-alpha", *post.Branch)
+}
+
+// TestProdStatusOwner_PreflightValidationRejectsCommitWhenIssueInvalid asserts
+// the planrepo commit path enforces validation: if a track on disk is no
+// longer in cfg.Tracks (e.g. user removed it from .plan-bender.yaml), the
+// commit refuses rather than silently writing a now-invalid issue.
+func TestProdStatusOwner_PreflightValidationRejectsCommitWhenIssueInvalid(t *testing.T) {
+	plansDir := t.TempDir()
+	iss := validAdapterIssue(7, "alpha", "todo")
+	iss.Track = "intent" // not in adapterTestCfg().Tracks
+	writeValidPlan(t, plansDir, "demo", iss)
+
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+	err := owner.Transition(context.Background(), "demo", 7,
+		[]status.Status{status.StatusTodo}, status.StatusInProgress, "")
+	require.Error(t, err, "commit must reject writes when on-disk issue would fail validation")
+}
+
+// TestProdStatusOwner_ConcurrentTransitionsSerializeViaSessionLock asserts
+// that concurrent owner.Transition calls funnel through the planrepo session
+// lock: exactly one transition succeeds, the rest see the post-write state
+// and observe ErrAlreadyInState — without serialization multiple goroutines
+// would race past the CAS check and produce duplicate Saves.
+func TestProdStatusOwner_ConcurrentTransitionsSerializeViaSessionLock(t *testing.T) {
+	plansDir := t.TempDir()
+	writeValidPlan(t, plansDir, "demo", validAdapterIssue(1, "x", "todo"))
+
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+
+	const N = 16
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	var success, alreadyInState atomic.Int32
+
+	for i := 0; i < N; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			release, err := store.Lock("p")
-			require.NoError(t, err)
-			defer func() { require.NoError(t, release()) }()
-
-			issues, err := store.Load("p")
-			require.NoError(t, err)
-			require.Len(t, issues, 1)
-			issues[0].Status = "in-progress"
-			require.NoError(t, store.Save("p", issues[0]))
+			err := owner.Transition(context.Background(), "demo", 1,
+				[]status.Status{status.StatusTodo}, status.StatusInProgress, "")
+			switch {
+			case err == nil:
+				success.Add(1)
+			case errors.Is(err, status.ErrAlreadyInState):
+				alreadyInState.Add(1)
+			}
 		}()
 	}
 	wg.Wait()
 
-	got, err := store.Load("p")
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, "in-progress", got[0].Status)
+	assert.EqualValues(t, 1, success.Load(), "exactly one Transition wins under serialized session lock")
+	assert.EqualValues(t, N-1, alreadyInState.Load(), "remaining callers observe post-write state")
+
+	post := loadIssueFile(t, plansDir, "demo", 1, "x")
+	assert.Equal(t, "in-progress", post.Status)
+}
+
+// TestProdStatusOwner_OpenSessionMissingPlanIsAnError asserts that opening
+// a session against a non-existent plan returns an error rather than panicking.
+func TestProdStatusOwner_OpenSessionMissingPlanIsAnError(t *testing.T) {
+	plansDir := t.TempDir()
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+
+	err := owner.Transition(context.Background(), "nope", 1,
+		[]status.Status{status.StatusTodo}, status.StatusInProgress, "")
+	require.Error(t, err)
+}
+
+// TestProdStatusOwner_TransitionAndClaimReleaseLockBetweenCalls asserts the
+// session lock is released after each Owner call: a follow-up call cannot
+// hang waiting on the previous session.
+func TestProdStatusOwner_TransitionAndClaimReleaseLockBetweenCalls(t *testing.T) {
+	plansDir := t.TempDir()
+	writeValidPlan(t, plansDir, "demo", validAdapterIssue(1, "x", "todo"))
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+
+	done := make(chan error, 1)
+	go func() {
+		ctx := context.Background()
+		if err := owner.Transition(ctx, "demo", 1,
+			[]status.Status{status.StatusTodo}, status.StatusInProgress, ""); err != nil {
+			done <- err
+			return
+		}
+		// If the first session didn't release, this Claim would deadlock.
+		done <- owner.Claim(ctx, "demo", 1, "user/demo--1-x", "")
+	}()
+
+	select {
+	case err := <-done:
+		require.True(t, err == nil || errors.Is(err, status.ErrAlreadyInState),
+			"expected nil or ErrAlreadyInState, got %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Transition + Claim sequence deadlocked — session lock not released")
+	}
 }

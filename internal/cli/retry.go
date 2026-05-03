@@ -36,7 +36,7 @@ func NewRetryCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+			owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
 			err = owner.Transition(cmd.Context(), slug, id,
 				[]status.Status{status.StatusBlocked}, status.StatusTodo, "retry")
 
