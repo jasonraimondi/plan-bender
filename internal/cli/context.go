@@ -2,10 +2,13 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -32,38 +35,43 @@ func NewContextCmd() *cobra.Command {
 				return NewAgentError("config: "+err.Error(), ErrConfigError)
 			}
 
+			repo := planrepo.NewProd(cfg.PlansDir)
 			if len(args) == 0 {
-				return contextList(cmd, cfg)
+				return contextList(cmd, repo)
 			}
-			return contextDetail(cmd, cfg, args[0])
+			return contextDetail(cmd, repo, args[0])
 		},
 	}
 }
 
-func contextList(cmd *cobra.Command, cfg config.Config) error {
-	summaries, err := plan.ListPlans(cfg.PlansDir)
+func contextList(cmd *cobra.Command, repo *planrepo.Plans) error {
+	summaries, err := repo.List()
 	if err != nil {
 		return NewAgentError("listing plans: "+err.Error(), ErrInternal)
+	}
+	if summaries == nil {
+		summaries = []planrepo.PlanSummary{}
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(summaries)
 }
 
-func contextDetail(cmd *cobra.Command, cfg config.Config, slug string) error {
-	prd, err := plan.LoadPrd(cfg.PlansDir, slug)
+func contextDetail(cmd *cobra.Command, repo *planrepo.Plans, slug string) error {
+	sess, err := repo.Open(slug)
 	if err != nil {
-		return NewAgentError("plan not found: "+slug, ErrPlanNotFound)
+		if errors.Is(err, fs.ErrNotExist) {
+			return NewAgentError("plan not found: "+slug, ErrPlanNotFound)
+		}
+		return NewAgentError("opening plan: "+err.Error(), ErrInternal)
 	}
+	defer func() { _ = sess.Close() }()
 
-	issues, err := plan.LoadIssues(cfg.PlansDir, slug)
-	if err != nil {
-		return NewAgentError("loading issues: "+err.Error(), ErrInternal)
-	}
-
+	snap := sess.Snapshot()
+	prd := snap.PRD
 	ctx := contextFullJSON{
-		Prd:          prd,
-		Issues:       issues,
-		Dependencies: plan.BuildGraphJSON(issues),
-		Stats:        plan.IssueStats(issues),
+		Prd:          &prd,
+		Issues:       snap.Issues,
+		Dependencies: plan.BuildGraphJSON(snap.Issues),
+		Stats:        plan.IssueStats(snap.Issues),
 	}
 
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(ctx)

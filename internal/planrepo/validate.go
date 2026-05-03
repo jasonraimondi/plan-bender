@@ -16,6 +16,24 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 	return validateSnapshot(s.snapshot, s.baselineFilenames, cfg)
 }
 
+// Validate is a one-shot convenience that opens a session for slug, validates
+// it, and closes the session. Open failures (missing plan, malformed YAML)
+// are surfaced as PRD errors in the returned result so callers always get the
+// PlanValidationResult shape — matching the behavior of the prior disk-based
+// schema.ValidatePlan path.
+func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationResult {
+	sess, err := p.Open(slug)
+	if err != nil {
+		return schema.PlanValidationResult{
+			PRD:    schema.ValidationResult{File: filepath.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
+			Issues: []schema.ValidationResult{},
+			Valid:  false,
+		}
+	}
+	defer func() { _ = sess.Close() }()
+	return sess.Validate(cfg)
+}
+
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config) schema.PlanValidationResult {
 	prdPath := filepath.Join(snap.Slug, "prd.yaml")
 

@@ -9,13 +9,13 @@ import (
 
 // PlanSummary is a lightweight per-plan summary used by List.
 type PlanSummary struct {
-	Slug    string
-	Name    string
-	Status  string
-	Issues  int
-	Done    int
-	Points  int
-	Blocked int
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Issues  int    `json:"issues"`
+	Done    int    `json:"done"`
+	Points  int    `json:"points"`
+	Blocked int    `json:"blocked"`
 }
 
 // List returns best-effort summaries of all plans in plansDir. Plans whose

@@ -2,13 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/spf13/cobra"
 )
 
@@ -28,16 +30,17 @@ func NewNextCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			if _, err := os.Stat(filepath.Join(cfg.PlansDir, slug, "prd.yaml")); err != nil {
-				return NewAgentError(fmt.Sprintf("plan %q not found", slug), ErrPlanNotFound)
-			}
-
-			issues, err := plan.LoadIssues(cfg.PlansDir, slug)
+			repo := planrepo.NewProd(cfg.PlansDir)
+			sess, err := repo.Open(slug)
 			if err != nil {
-				return NewAgentError("loading issues: "+err.Error(), ErrInternal)
+				if errors.Is(err, fs.ErrNotExist) {
+					return NewAgentError(fmt.Sprintf("plan %q not found", slug), ErrPlanNotFound)
+				}
+				return NewAgentError("opening plan: "+err.Error(), ErrInternal)
 			}
+			defer func() { _ = sess.Close() }()
 
-			result := plan.Resolve(issues)
+			result := plan.Resolve(sess.Snapshot().Issues)
 
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)

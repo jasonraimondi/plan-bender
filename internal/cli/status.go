@@ -2,14 +2,16 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -31,24 +33,27 @@ func NewStatusCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			prd, err := plan.LoadPrd(cfg.PlansDir, slug)
+			repo := planrepo.NewProd(cfg.PlansDir)
+			sess, err := repo.Open(slug)
 			if err != nil {
-				return NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+				if errors.Is(err, fs.ErrNotExist) {
+					return NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+				}
+				return NewAgentError("opening plan: "+err.Error(), ErrInternal)
 			}
+			defer func() { _ = sess.Close() }()
 
-			issues, err := plan.LoadIssues(cfg.PlansDir, slug)
-			if err != nil {
-				return NewAgentError("loading issues: "+err.Error(), ErrInternal)
-			}
-
+			snap := sess.Snapshot()
+			prd := snap.PRD
+			issues := append([]schema.IssueYaml(nil), snap.Issues...)
 			sort.SliceStable(issues, func(i, j int) bool { return issues[i].ID < issues[j].ID })
 
 			counts, order := countByStatus(issues)
 
 			if isAgentMode(cmd) {
-				return writeStatusJSON(cmd.OutOrStdout(), prd, issues, counts, order)
+				return writeStatusJSON(cmd.OutOrStdout(), &prd, issues, counts, order)
 			}
-			writeStatusHuman(cmd.OutOrStdout(), prd, issues, counts, order)
+			writeStatusHuman(cmd.OutOrStdout(), &prd, issues, counts, order)
 			return nil
 		},
 	}
