@@ -158,7 +158,10 @@ func readSnapshot(plans *planrepo.Plans, slug string) (schema.PrdYaml, []schema.
 		return schema.PrdYaml{}, nil, err
 	}
 	defer sess.Close()
-	snap := sess.Snapshot()
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return schema.PrdYaml{}, nil, err
+	}
 	return snap.PRD, snap.Issues, nil
 }
 

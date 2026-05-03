@@ -24,6 +24,9 @@ import (
 // when done; sync.Once makes that safe to call regardless of Commit
 // outcome.
 func (s *PlanSession) Commit(cfg config.Config) error {
+	if s.closed {
+		return ErrSessionClosed
+	}
 	plan, err := s.buildCommitPlan(cfg)
 	if err != nil {
 		return err

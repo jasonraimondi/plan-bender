@@ -40,7 +40,11 @@ func NewNextCmd() *cobra.Command {
 			}
 			defer func() { _ = sess.Close() }()
 
-			result := plan.Resolve(sess.Snapshot().Issues)
+			snap, err := sess.Snapshot()
+			if err != nil {
+				return NewAgentError("reading snapshot: "+err.Error(), ErrInternal)
+			}
+			result := plan.Resolve(snap.Issues)
 
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)

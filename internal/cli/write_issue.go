@@ -79,7 +79,11 @@ func NewWriteIssueCmd() *cobra.Command {
 // upsert-style behavior intact while satisfying the session's separate
 // create / update entry points.
 func stageIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
-	for _, existing := range sess.Snapshot().Issues {
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return err
+	}
+	for _, existing := range snap.Issues {
 		if existing.ID == issue.ID {
 			return sess.UpdateIssue(issue)
 		}

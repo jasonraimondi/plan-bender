@@ -89,8 +89,12 @@ func (y *yamlFS) PullIssue(_ context.Context, remoteID string) (RemoteIssue, err
 		return RemoteIssue{}, err
 	}
 	defer sess.Close()
-	for i := range sess.Snapshot().Issues {
-		iss := &sess.Snapshot().Issues[i]
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return RemoteIssue{}, err
+	}
+	for i := range snap.Issues {
+		iss := &snap.Issues[i]
 		if iss.ID == id {
 			return issueToRemote(iss), nil
 		}
@@ -104,7 +108,10 @@ func (y *yamlFS) PullProject(_ context.Context, projectID string) (PullProjectRe
 		return PullProjectResult{}, err
 	}
 	defer sess.Close()
-	snap := sess.Snapshot()
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return PullProjectResult{}, err
+	}
 	remoteIssues := make([]RemoteIssue, len(snap.Issues))
 	for i := range snap.Issues {
 		remoteIssues[i] = issueToRemote(&snap.Issues[i])
@@ -120,7 +127,11 @@ func (y *yamlFS) PullProject(_ context.Context, projectID string) (PullProjectRe
 // may re-run after a partial failure, so silently routing same-id calls to
 // UpdateIssue preserves prior behavior with the session API.
 func upsertIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
-	for _, existing := range sess.Snapshot().Issues {
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return err
+	}
+	for _, existing := range snap.Issues {
 		if existing.ID == issue.ID {
 			return sess.UpdateIssue(issue)
 		}

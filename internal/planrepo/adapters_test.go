@@ -35,7 +35,7 @@ func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
+		Lock: func(_ string) (func() error, error) {
 			return nil, wantErr
 		},
 	}
@@ -57,8 +57,8 @@ func TestNew_LockReleasedExactlyOnceOnClose(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
-			return func() { releases++ }, nil
+		Lock: func(_ string) (func() error, error) {
+			return func() error { releases++; return nil }, nil
 		},
 	}
 	repo := New(plansDir, adapters)
@@ -79,8 +79,8 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
-			return func() { releases++ }, nil
+		Lock: func(_ string) (func() error, error) {
+			return func() error { releases++; return nil }, nil
 		},
 	}
 	repo := New(plansDir, adapters)
@@ -104,6 +104,8 @@ func TestNewProd_HasAllProductionAdaptersWired(t *testing.T) {
 
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
-	require.NotNil(t, sess.Snapshot())
+	snap, err := sess.Snapshot()
+	require.NoError(t, err)
+	assert.Equal(t, "p", snap.Slug)
 	require.NoError(t, sess.Close())
 }

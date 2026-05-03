@@ -20,8 +20,9 @@ type WriteFunc func(path string, data []byte, perm fs.FileMode) error
 type MkdirFunc func(path string, perm fs.FileMode) error
 
 // LockFunc acquires the plan lock for plansDir and returns a release closure.
-// Callers invoke release exactly once when the session ends.
-type LockFunc func(plansDir string) (release func(), err error)
+// Callers invoke release exactly once when the session ends. Release errors
+// (e.g. unlock or close failures) are returned so Close can surface them.
+type LockFunc func(plansDir string) (release func() error, err error)
 
 // Adapters bundles the I/O dependencies a Plans repository needs.
 //

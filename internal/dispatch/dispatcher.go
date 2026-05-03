@@ -81,7 +81,11 @@ func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml,
 		return nil, err
 	}
 	defer sess.Close()
-	return sess.Snapshot().Issues, nil
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return snap.Issues, nil
 }
 
 // statusOwner returns the lazily-constructed status.Owner backed by the

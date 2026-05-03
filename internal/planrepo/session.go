@@ -1,11 +1,16 @@
 package planrepo
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
+
+// ErrSessionClosed is returned by mutation methods, Snapshot, and Commit when
+// called after Close. Use errors.Is to detect.
+var ErrSessionClosed = errors.New("planrepo: session is closed")
 
 // Snapshot is an in-session view of a plan. Open populates it from disk and
 // the session mutation methods update it in place; the file API treats it as
@@ -36,7 +41,10 @@ type PlanSession struct {
 	dirtyIssues map[int]bool
 
 	releaseOnce sync.Once
-	release     func()
+	release     func() error
+	releaseErr  error
+
+	closed bool
 }
 
 // Open acquires the plan lock and loads a snapshot for slug. If lock
@@ -100,20 +108,26 @@ func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
 // Snapshot returns the current in-session snapshot by value with a defensive
 // copy of Issues, so caller mutation cannot bleed into session state. Mutations
 // made via UpdatePrd, UpdateIssue, or CreateIssue are reflected on subsequent
-// calls.
-func (s *PlanSession) Snapshot() Snapshot {
+// calls. Returns ErrSessionClosed if the session has been closed.
+func (s *PlanSession) Snapshot() (Snapshot, error) {
+	if s.closed {
+		return Snapshot{}, ErrSessionClosed
+	}
 	issues := make([]schema.IssueYaml, len(s.snapshot.Issues))
 	copy(issues, s.snapshot.Issues)
 	return Snapshot{
 		Slug:   s.snapshot.Slug,
 		PRD:    s.snapshot.PRD,
 		Issues: issues,
-	}
+	}, nil
 }
 
 // UpdatePrd replaces the in-session PRD and marks it dirty. The change is
 // not written to disk until Commit succeeds.
 func (s *PlanSession) UpdatePrd(prd schema.PrdYaml) error {
+	if s.closed {
+		return ErrSessionClosed
+	}
 	s.snapshot.PRD = prd
 	s.dirtyPRD = true
 	return nil
@@ -123,6 +137,9 @@ func (s *PlanSession) UpdatePrd(prd schema.PrdYaml) error {
 // snapshot and marks it dirty. Returns an error if the ID is not in the
 // current snapshot — use CreateIssue for new issues.
 func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
+	if s.closed {
+		return ErrSessionClosed
+	}
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == issue.ID {
 			s.snapshot.Issues[i] = issue
@@ -137,6 +154,9 @@ func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
 // dirty. Returns an error if an issue with the same ID already exists in
 // the session (which would also produce a filename conflict at commit).
 func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
+	if s.closed {
+		return ErrSessionClosed
+	}
 	for _, existing := range s.snapshot.Issues {
 		if existing.ID == issue.ID {
 			return fmt.Errorf("create issue: id #%d already exists in plan %q", issue.ID, s.slug)
@@ -148,12 +168,14 @@ func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
 }
 
 // Close releases the plan lock and discards any uncommitted in-session
-// mutations. Idempotent: subsequent calls are no-ops.
+// mutations. The first call returns the lock release error (or nil);
+// subsequent calls return the same error without re-running release.
 func (s *PlanSession) Close() error {
 	s.releaseOnce.Do(func() {
+		s.closed = true
 		if s.release != nil {
-			s.release()
+			s.releaseErr = s.release()
 		}
 	})
-	return nil
+	return s.releaseErr
 }

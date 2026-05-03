@@ -53,6 +53,13 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return data
 }
 
+func mustSnapshot(t *testing.T, s *PlanSession) Snapshot {
+	t.Helper()
+	snap, err := s.Snapshot()
+	require.NoError(t, err)
+	return snap
+}
+
 // --- Mutations ---
 
 func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
@@ -66,11 +73,11 @@ func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Name = "Renamed Plan"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	assert.Equal(t, "Renamed Plan", sess.Snapshot().PRD.Name)
+	assert.Equal(t, "Renamed Plan", mustSnapshot(t, sess).PRD.Name)
 }
 
 func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
@@ -84,11 +91,11 @@ func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	updated := sess.Snapshot().Issues[0]
+	updated := mustSnapshot(t, sess).Issues[0]
 	updated.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(updated))
 
-	assert.Equal(t, "in-progress", sess.Snapshot().Issues[0].Status)
+	assert.Equal(t, "in-progress", mustSnapshot(t, sess).Issues[0].Status)
 }
 
 func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
@@ -119,8 +126,8 @@ func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 
 	require.NoError(t, sess.CreateIssue(validIssue(2, "b")))
 
-	require.Len(t, sess.Snapshot().Issues, 2)
-	ids := []int{sess.Snapshot().Issues[0].ID, sess.Snapshot().Issues[1].ID}
+	require.Len(t, mustSnapshot(t, sess).Issues, 2)
+	ids := []int{mustSnapshot(t, sess).Issues[0].ID, mustSnapshot(t, sess).Issues[1].ID}
 	assert.ElementsMatch(t, []int{1, 2}, ids)
 }
 
@@ -154,7 +161,7 @@ func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.Slug = "" // violates required
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -178,7 +185,7 @@ func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	// Cycle: 1 blocks itself via mutation.
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.BlockedBy = []int{1}
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -200,7 +207,7 @@ func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 	res := sess.Validate(testCfg())
 	assert.True(t, res.Valid, "freshly-loaded valid plan must validate")
 
-	bad := sess.Snapshot().Issues[0]
+	bad := mustSnapshot(t, sess).Issues[0]
 	bad.Slug = ""
 	require.NoError(t, sess.UpdateIssue(bad))
 
@@ -220,11 +227,11 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -235,9 +242,9 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	sess2, err := repo.Open("p")
 	require.NoError(t, err)
 	defer func() { _ = sess2.Close() }()
-	assert.Equal(t, "2026-05-03", sess2.Snapshot().PRD.Updated)
-	require.Len(t, sess2.Snapshot().Issues, 1)
-	assert.Equal(t, "in-progress", sess2.Snapshot().Issues[0].Status)
+	assert.Equal(t, "2026-05-03", mustSnapshot(t, sess2).PRD.Updated)
+	require.Len(t, mustSnapshot(t, sess2).Issues, 1)
+	assert.Equal(t, "in-progress", mustSnapshot(t, sess2).Issues[0].Status)
 }
 
 func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
@@ -263,7 +270,7 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Only mutate issue #1.
-	iss := sess.Snapshot().Issues[0] // sorted by filename: 1-a, 2-b
+	iss := mustSnapshot(t, sess).Issues[0] // sorted by filename: 1-a, 2-b
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -306,7 +313,7 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Slug = "renamed"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -367,11 +374,11 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
 
-	for _, iss := range sess.Snapshot().Issues {
+	for _, iss := range mustSnapshot(t, sess).Issues {
 		iss.Status = "in-progress"
 		require.NoError(t, sess.UpdateIssue(iss))
 	}
@@ -423,10 +430,10 @@ func TestCommit_RollbackErrorsJoinedWithOriginalError(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = sess.Close() }()
 
-	prd := sess.Snapshot().PRD
+	prd := mustSnapshot(t, sess).PRD
 	prd.Updated = "2026-05-03"
 	require.NoError(t, sess.UpdatePrd(prd))
-	for _, iss := range sess.Snapshot().Issues {
+	for _, iss := range mustSnapshot(t, sess).Issues {
 		iss.Status = "in-progress"
 		require.NoError(t, sess.UpdateIssue(iss))
 	}
@@ -467,7 +474,7 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	require.NoError(t, sess.CreateIssue(validIssue(2, "fresh")))
-	updated := sess.Snapshot().Issues[0]
+	updated := mustSnapshot(t, sess).Issues[0]
 	updated.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(updated))
 
@@ -493,7 +500,7 @@ func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	sess, err := repo.Open("p")
 	require.NoError(t, err)
 
-	iss := sess.Snapshot().Issues[0]
+	iss := mustSnapshot(t, sess).Issues[0]
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 

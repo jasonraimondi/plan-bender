@@ -156,9 +156,13 @@ func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {
 		return nil, err
 	}
 	defer sess.Close()
-	for i := range sess.Snapshot().Issues {
-		if sess.Snapshot().Issues[i].ID == id {
-			iss := sess.Snapshot().Issues[i]
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	for i := range snap.Issues {
+		if snap.Issues[i].ID == id {
+			iss := snap.Issues[i]
 			return &iss, nil
 		}
 	}

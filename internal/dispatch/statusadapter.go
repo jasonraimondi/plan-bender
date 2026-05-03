@@ -45,7 +45,11 @@ type prodStatusSession struct {
 }
 
 func (p *prodStatusSession) Issues() []schema.IssueYaml {
-	return p.sess.Snapshot().Issues
+	snap, err := p.sess.Snapshot()
+	if err != nil {
+		return nil
+	}
+	return snap.Issues
 }
 
 func (p *prodStatusSession) Save(issue schema.IssueYaml) error {

@@ -18,8 +18,8 @@ func TestOpenOrCreate_FreshSlugReturnsEmptySnapshot(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sess.Close() })
 
-	snap := sess.Snapshot()
-	require.NotNil(t, snap)
+	snap, err := sess.Snapshot()
+	require.NoError(t, err)
 	assert.Equal(t, "brand-new", snap.Slug)
 	assert.Empty(t, snap.PRD.Name)
 	assert.Empty(t, snap.Issues)
@@ -36,8 +36,10 @@ func TestOpenOrCreate_ExistingPlanLoadsSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sess.Close() })
 
-	assert.Equal(t, "Test Plan", sess.Snapshot().PRD.Name)
-	require.Len(t, sess.Snapshot().Issues, 1)
+	snap, err := sess.Snapshot()
+	require.NoError(t, err)
+	assert.Equal(t, "Test Plan", snap.PRD.Name)
+	require.Len(t, snap.Issues, 1)
 }
 
 func TestOpenOrCreate_HalfBuiltPlanDirReturnsLoadError(t *testing.T) {

@@ -103,10 +103,11 @@ func readIssuesForArchive(plansDir, slug string) ([]schema.IssueYaml, error) {
 		return nil, err
 	}
 	defer sess.Close()
-	snap := sess.Snapshot()
-	out := make([]schema.IssueYaml, len(snap.Issues))
-	copy(out, snap.Issues)
-	return out, nil
+	snap, err := sess.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	return snap.Issues, nil
 }
 
 func buildSummary(slug string, issues []schema.IssueYaml) string {
