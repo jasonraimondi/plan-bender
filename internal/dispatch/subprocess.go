@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
@@ -151,13 +151,15 @@ func truncateForNotes(s string) string {
 }
 
 func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {
-	issues, err := plan.LoadIssues(plansDir, slug)
+	sess, err := planrepo.NewProd(plansDir).Open(slug)
 	if err != nil {
 		return nil, err
 	}
-	for i := range issues {
-		if issues[i].ID == id {
-			return &issues[i], nil
+	defer sess.Close()
+	for i := range sess.Snapshot().Issues {
+		if sess.Snapshot().Issues[i].ID == id {
+			iss := sess.Snapshot().Issues[i]
+			return &iss, nil
 		}
 	}
 	return nil, fmt.Errorf("issue #%d not found in %q", id, slug)
