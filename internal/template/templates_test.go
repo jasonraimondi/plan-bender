@@ -27,17 +27,20 @@ func fixtureContext() map[string]any {
 		"track_descriptions": []map[string]string{},
 		"agent":            "claude-code",
 		"review_with_user": false,
+		"report_bugs":      false,
 		"commands": map[string]string{
-			"context":     "plan-bender-agent context",
-			"validate":    "plan-bender-agent validate",
-			"write_prd":   "plan-bender-agent write-prd",
-			"write_issue": "plan-bender-agent write-issue",
-			"sync_push":   "plan-bender-agent sync linear push",
-			"sync_pull":   "plan-bender-agent sync linear pull",
-			"archive":     "plan-bender-agent archive",
-			"next":        "plan-bender-agent next",
-			"dispatch":    "plan-bender-agent dispatch",
-			"complete":    "plan-bender-agent complete",
+			"context":         "plan-bender-agent context",
+			"validate":        "plan-bender-agent validate",
+			"write_prd":       "plan-bender-agent write-prd",
+			"write_issue":     "plan-bender-agent write-issue",
+			"sync_push":       "plan-bender-agent sync linear push",
+			"sync_pull":       "plan-bender-agent sync linear pull",
+			"archive":         "plan-bender-agent archive",
+			"next":            "plan-bender-agent next",
+			"dispatch":        "plan-bender-agent dispatch",
+			"complete":        "plan-bender-agent complete",
+			"retry":           "plan-bender-agent retry",
+			"worktree_create": "plan-bender-agent worktree create",
 		},
 	}
 }
@@ -231,6 +234,31 @@ func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotContains(t, out, "Review with the user")
 	})
+}
+
+func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	const marker = "pb-error-report-"
+
+	for name, content := range tmpls {
+		t.Run(name+"/off", func(t *testing.T) {
+			ctx := fixtureContext()
+			ctx["report_bugs"] = false
+			out, err := Render(name, content, ctx)
+			require.NoError(t, err)
+			assert.NotContains(t, out, marker)
+		})
+		t.Run(name+"/on", func(t *testing.T) {
+			ctx := fixtureContext()
+			ctx["report_bugs"] = true
+			out, err := Render(name, content, ctx)
+			require.NoError(t, err)
+			assert.Contains(t, out, marker)
+			assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
+		})
+	}
 }
 
 func TestSyncCommands_RenderWithLinearTool(t *testing.T) {

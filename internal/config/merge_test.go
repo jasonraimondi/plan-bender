@@ -127,6 +127,18 @@ func TestMerge_ManageGitignoreOverrideToTrue(t *testing.T) {
 	assert.True(t, result.ManageGitignore)
 }
 
+func TestMerge_ReportBugsDefaultFalse(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.False(t, result.ReportBugs)
+}
+
+func TestMerge_ReportBugsOverrideToTrue(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{ReportBugs: ptr(true)})
+	assert.True(t, result.ReportBugs)
+}
+
 func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{

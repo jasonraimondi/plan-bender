@@ -66,6 +66,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.ReviewWithUser != nil {
 		out.ReviewWithUser = *layer.ReviewWithUser
 	}
+	if layer.ReportBugs != nil {
+		out.ReportBugs = *layer.ReportBugs
+	}
 
 	return out
 }

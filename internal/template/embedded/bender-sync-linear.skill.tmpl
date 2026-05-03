@@ -110,3 +110,8 @@ After a successful sync, if the user might want the other direction next, sugges
 - `linear.api_key is required` — config missing; tell the user to run `pb setup` and pick Linear.
 - `no linear.project_id in PRD — run push first` — they tried to pull before linking. Suggest push first.
 - HTTP/auth errors from Linear — surface verbatim; don't paper over.
+{{if .report_bugs}}
+## Bug reports
+
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+{{end}}

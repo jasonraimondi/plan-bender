@@ -3,16 +3,18 @@ package template
 import "github.com/jasonraimondi/plan-bender/internal/config"
 
 var defaultCommands = map[string]string{
-	"context":     "plan-bender-agent context",
-	"validate":    "plan-bender-agent validate",
-	"write_prd":   "plan-bender-agent write-prd",
-	"write_issue": "plan-bender-agent write-issue",
-	"sync_push":   "plan-bender-agent sync linear push",
-	"sync_pull":   "plan-bender-agent sync linear pull",
-	"archive":     "plan-bender-agent archive",
-	"next":        "plan-bender-agent next",
-	"dispatch":    "plan-bender-agent dispatch",
-	"complete":    "plan-bender-agent complete",
+	"context":         "plan-bender-agent context",
+	"validate":        "plan-bender-agent validate",
+	"write_prd":       "plan-bender-agent write-prd",
+	"write_issue":     "plan-bender-agent write-issue",
+	"sync_push":       "plan-bender-agent sync linear push",
+	"sync_pull":       "plan-bender-agent sync linear pull",
+	"archive":         "plan-bender-agent archive",
+	"next":            "plan-bender-agent next",
+	"dispatch":        "plan-bender-agent dispatch",
+	"complete":        "plan-bender-agent complete",
+	"retry":           "plan-bender-agent retry",
+	"worktree_create": "plan-bender-agent worktree create",
 }
 
 var defaultTrackDescriptions = map[string]string{
@@ -117,6 +119,7 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 	ctx["agent"] = agent.Name
 	ctx["commands"] = defaultCommands
 	ctx["review_with_user"] = cfg.ReviewWithUser
+	ctx["report_bugs"] = cfg.ReportBugs
 
 	return ctx
 }

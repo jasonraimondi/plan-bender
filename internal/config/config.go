@@ -156,6 +156,7 @@ type Config struct {
 	UpdateCheck     bool              `yaml:"update_check"`
 	ManageGitignore bool              `yaml:"manage_gitignore"`
 	ReviewWithUser  bool              `yaml:"review_with_user"`
+	ReportBugs      bool              `yaml:"report_bugs"`
 }
 
 // PartialConfig is used for YAML layer loading — all fields optional.
@@ -172,4 +173,5 @@ type PartialConfig struct {
 	UpdateCheck     *bool                  `yaml:"update_check,omitempty"`
 	ManageGitignore *bool                  `yaml:"manage_gitignore,omitempty"`
 	ReviewWithUser  *bool                  `yaml:"review_with_user,omitempty"`
+	ReportBugs      *bool                  `yaml:"report_bugs,omitempty"`
 }

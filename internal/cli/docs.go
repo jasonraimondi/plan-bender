@@ -50,6 +50,8 @@ issue_schema:
 
 review_with_user: false        # Insert a user review step before writing PRDs/issues
 
+report_bugs: false             # Add bug-report instructions to skill files (writes pb-error-report-*.log)
+
 update_check: true             # Check for new releases on pb commands
 
 manage_gitignore: false        # Set true to let pb setup manage .gitignore entries

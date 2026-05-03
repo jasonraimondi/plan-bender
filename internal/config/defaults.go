@@ -37,5 +37,6 @@ func Defaults() Config {
 		UpdateCheck:     true,
 		ManageGitignore: false,
 		ReviewWithUser:  false,
+		ReportBugs:      false,
 	}
 }
