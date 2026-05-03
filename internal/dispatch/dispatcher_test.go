@@ -463,6 +463,85 @@ exit 0
 	assert.Contains(t, err.Error(), "uncommitted changes")
 }
 
+// TestDispatcher_RecoversInReviewWithUnmergedBranch asserts Run reconciles an
+// in-review issue whose branch never made it back to integration (prior
+// dispatch crashed between `pba complete` and MergeBack). Without recovery,
+// ReadyAFK skips the in-review issue and Run errors with "stuck; 0 blocked".
+func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
+	fix := setupDispatch(t)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	// Branch with an unmerged commit, mimicking a sub-agent that committed
+	// then exited before MergeBack ran.
+	branch := "tester/demo--1-alpha"
+	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
+	require.NoError(t, err, "checkout: %s", string(out))
+	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
+
+	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Branch = &branch
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	// Stub fails the test if invoked — recovery must not spawn a sub-agent.
+	installClaudeStub(t, "echo 'should not be called' >&2\nexit 99\n")
+
+	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
+
+	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "done", alpha.Status, "in-review issue must be flipped to done after recovery merge")
+
+	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
+	require.NoError(t, err, "git log: %s", string(logOut))
+	assert.Contains(t, string(logOut), "merge issue #1", "integration branch must contain merge commit from recovery")
+}
+
+// TestDispatcher_RecoveryUnblocksDependents reproduces the dispatch-stuck bug:
+// issue 1 in-review with unmerged branch, issue 2 backlog blocked_by [1].
+// Without recovery, ReadyAFK skips both (blocker not done) and Run errors with
+// "dispatch stuck; 0 blocked". With recovery, issue 1 merges + flips done,
+// then ReadyAFK picks up issue 2 and the loop completes normally.
+func TestDispatcher_RecoveryUnblocksDependents(t *testing.T) {
+	fix := setupDispatch(t)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	branch1 := "tester/demo--1-first"
+	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
+	require.NoError(t, err, "checkout: %s", string(out))
+	makeMergeableBranch(t, fix.root, integrationBranch, branch1, "first.txt")
+
+	iss1 := mkAFKIssue(1, "first", "in-review")
+	iss1.Branch = &branch1
+	writeIssue(t, fix.plansDir, iss1)
+	writeIssue(t, fix.plansDir, mkAFKIssue(2, "second", "backlog", 1))
+	installSkillFile(t, fix.root)
+
+	body := fmt.Sprintf(`prompt=$(cat)
+case "$prompt" in
+  *"slug: second"*)
+    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-second.yaml"
+    exit 0
+    ;;
+esac
+echo "unexpected prompt" >&2
+exit 1
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	require.NoError(t, timeBoxRun(t, d, "demo", 30*time.Second))
+
+	first := loadIssueYAML(t, fix.plansDir, 1, "first")
+	second := loadIssueYAML(t, fix.plansDir, 2, "second")
+	assert.Equal(t, "done", first.Status)
+	assert.Equal(t, "done", second.Status)
+}
+
 // quiet a couple of vet/staticcheck unused imports on environments where we
 // trim them — left in for explicit signaling.
 var _ = strings.HasPrefix

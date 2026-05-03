@@ -119,6 +119,18 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("loading issues: %w", err)
 		}
 
+		// Recover from a previous run that crashed between the sub-agent
+		// completing (status flipped to in-review by `pba complete`) and
+		// MergeBack running. Without this, ReadyAFK skips the in-review
+		// issue, openBlockers keeps its dependents unready, and Run hits
+		// the "stuck; 0 blocked" error path with no actionable signal.
+		if recovery := pendingMergeBack(issues); len(recovery) > 0 {
+			if err := d.MergeBack(ctx, slug, recovery, integrationBranch); err != nil {
+				return fmt.Errorf("recovering in-review issues: %w", err)
+			}
+			continue
+		}
+
 		res := plan.Resolve(issues)
 		if res.AllDone {
 			return nil
@@ -427,6 +439,36 @@ func computeDepth(issues []schema.IssueYaml) map[int]int {
 		visit(iss.ID)
 	}
 	return depth
+}
+
+// pendingMergeBack returns synthetic SubResults for issues stuck in `in-review`
+// with a branch set. These are the recoverable remnants of a prior dispatch
+// that completed a sub-agent (and the `pba complete` status flip) but exited
+// before MergeBack could merge the branch and flip status to done. Feeding
+// these back into MergeBack is safe: an already-merged branch is a no-op
+// (`git merge --no-ff` reports "Already up to date.") and Transition still
+// flips in-review → done; an unmerged branch gets merged for the first time;
+// a missing/conflicting branch is routed to markBlockedAndWarn so the issue
+// surfaces as blocked instead of silently re-stalling.
+//
+// In-review issues without a branch are skipped — those imply a human flipped
+// status by hand and there's no branch to merge.
+func pendingMergeBack(issues []schema.IssueYaml) []SubResult {
+	var results []SubResult
+	for _, iss := range issues {
+		if iss.Status != "in-review" {
+			continue
+		}
+		if iss.Branch == nil || *iss.Branch == "" {
+			continue
+		}
+		results = append(results, SubResult{
+			IssueID: iss.ID,
+			Success: true,
+			Branch:  *iss.Branch,
+		})
+	}
+	return results
 }
 
 func hitlOnlyRemaining(issues []schema.IssueYaml) bool {
