@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -33,8 +33,7 @@ func NewArchiveCmd() *cobra.Command {
 			}
 
 			planDir := filepath.Join(cfg.PlansDir, slug)
-			store := backend.NewProdPlanStore(cfg.PlansDir)
-			issues, err := store.ReadIssues(slug)
+			issues, err := readIssuesForArchive(cfg.PlansDir, slug)
 			if err != nil {
 				return err
 			}
@@ -82,6 +81,24 @@ func NewArchiveCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&force, "force", false, "archive even with active issues")
 	return cmd
+}
+
+// readIssuesForArchive opens a short-lived planrepo session, copies out the
+// issues snapshot, and closes — releasing the plan lock before any of the
+// summary write or rename happens. The destructive filesystem move stays
+// outside the session: holding the plan lock while moving the directory the
+// lock file lives in would tangle release semantics on platforms that resolve
+// .pb-lock through the moved path.
+func readIssuesForArchive(plansDir, slug string) ([]schema.IssueYaml, error) {
+	sess, err := planrepo.NewProd(plansDir).Open(slug)
+	if err != nil {
+		return nil, err
+	}
+	defer sess.Close()
+	snap := sess.Snapshot()
+	out := make([]schema.IssueYaml, len(snap.Issues))
+	copy(out, snap.Issues)
+	return out, nil
 }
 
 func buildSummary(slug string, issues []schema.IssueYaml) string {

@@ -2,13 +2,14 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -47,9 +48,18 @@ func NewWritePrdCmd() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 
-			store := backend.NewProdPlanStore(cfg.PlansDir)
-			if err := store.WritePrd(slug, &prd); err != nil {
+			plans := planrepo.NewProd(cfg.PlansDir)
+			sess, err := plans.OpenOrCreate(slug)
+			if err != nil {
 				return err
+			}
+			defer sess.Close()
+
+			if err := sess.UpdatePrd(prd); err != nil {
+				return err
+			}
+			if err := sess.Commit(cfg); err != nil {
+				return reportCommitError(cmd, err)
 			}
 
 			outPath := filepath.Join(cfg.PlansDir, slug, "prd.yaml")
@@ -65,6 +75,31 @@ func NewWritePrdCmd() *cobra.Command {
 	}
 }
 
+// reportCommitError formats a CommitValidationError into the same shape that
+// CLI uses for direct schema validation failures (one line per error followed
+// by "validation failed"). Other commit errors propagate unchanged.
+func reportCommitError(cmd *cobra.Command, err error) error {
+	var ve *planrepo.CommitValidationError
+	if !errors.As(err, &ve) {
+		return err
+	}
+	for _, e := range ve.Result.PRD.Errors {
+		fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", e)
+	}
+	for _, ir := range ve.Result.Issues {
+		for _, e := range ir.Errors {
+			fmt.Fprintf(cmd.ErrOrStderr(), "  - %s: %s\n", ir.File, e)
+		}
+	}
+	for _, e := range ve.Result.CrossRef {
+		fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", e)
+	}
+	for _, e := range ve.Result.Cycles {
+		fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", e)
+	}
+	return fmt.Errorf("validation failed")
+}
+
 func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
 	if len(args) > 0 {
 		return os.ReadFile(args[0])
@@ -76,4 +111,3 @@ func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
 	}
 	return io.ReadAll(cmd.InOrStdin())
 }
-

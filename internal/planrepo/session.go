@@ -61,6 +61,42 @@ func (p *Plans) Open(slug string) (*PlanSession, error) {
 	}, nil
 }
 
+// OpenOrCreate behaves like Open when the plan exists. When the plan
+// directory is missing entirely, it returns a session with an empty in-session
+// snapshot so callers can stage a fresh PRD and Commit. A plan dir that exists
+// but is incomplete (missing prd.yaml or issues dir) still returns the load
+// error from Open so half-written state surfaces loudly rather than silently
+// being treated as fresh.
+func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
+	release, err := p.adapters.Lock(p.plansDir)
+	if err != nil {
+		return nil, err
+	}
+	if !planDirExists(p.adapters.FS, slug) {
+		return &PlanSession{
+			plans:             p,
+			slug:              slug,
+			snapshot:          &Snapshot{Slug: slug},
+			baselineFilenames: map[int]string{},
+			dirtyIssues:       map[int]bool{},
+			release:           release,
+		}, nil
+	}
+	snap, filenames, err := loadSnapshotWithFilenames(p.adapters.FS, slug)
+	if err != nil {
+		release()
+		return nil, err
+	}
+	return &PlanSession{
+		plans:             p,
+		slug:              slug,
+		snapshot:          snap,
+		baselineFilenames: filenames,
+		dirtyIssues:       map[int]bool{},
+		release:           release,
+	}, nil
+}
+
 // Snapshot returns the current in-session snapshot. Mutations made via
 // UpdatePrd, UpdateIssue, or CreateIssue are reflected on subsequent calls.
 // Callers must treat the returned value as read-only; mutate through the
