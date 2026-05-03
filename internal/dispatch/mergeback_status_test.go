@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
@@ -55,7 +56,9 @@ func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
 	makeMergeableBranch(t, fix.root, integrationBranch, "feat/1-alpha", "alpha.txt")
 
 	results := []SubResult{{IssueID: 1, Success: true, Branch: "feat/1-alpha"}}
-	err = d.MergeBack(context.Background(), "demo", results, integrationBranch)
+	plans := planrepo.NewProd(fix.plansDir)
+	owner := status.New(newProdStatusStore(fix.plansDir, d.Config))
+	err = d.MergeBack(context.Background(), "demo", results, integrationBranch, plans, owner)
 
 	require.Error(t, err)
 	var cas *status.ErrCASMismatch
@@ -81,7 +84,9 @@ func TestDispatcher_MergeBack_AlreadyInStateSwallowed(t *testing.T) {
 	makeMergeableBranch(t, fix.root, integrationBranch, "feat/1-alpha", "alpha.txt")
 
 	results := []SubResult{{IssueID: 1, Success: true, Branch: "feat/1-alpha"}}
-	err = d.MergeBack(context.Background(), "demo", results, integrationBranch)
+	plans := planrepo.NewProd(fix.plansDir)
+	owner := status.New(newProdStatusStore(fix.plansDir, d.Config))
+	err = d.MergeBack(context.Background(), "demo", results, integrationBranch, plans, owner)
 
 	require.NoError(t, err, "ErrAlreadyInState must be swallowed (crash-recovery path)")
 
