@@ -396,7 +396,7 @@ func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int
 	if err == nil || errors.Is(err, status.ErrAlreadyInState) {
 		return
 	}
-	fmt.Fprintf(d.out(), "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
+	fmt.Fprintf(os.Stderr, "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
 }
 
 func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
