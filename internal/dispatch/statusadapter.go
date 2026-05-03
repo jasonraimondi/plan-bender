@@ -1,45 +1,60 @@
 package dispatch
 
 import (
-	"github.com/jasonraimondi/plan-bender/internal/backend"
+	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 // prodStatusStore is the production wiring for internal/status.Store. It is
-// intentionally a thin translator over backend's flock + atomic-write
-// primitives — no business logic. status.Owner takes Lock, then Load/Save
-// inside the held region; Save uses an unlocked PlanStore so it doesn't
-// re-acquire the same flock and deadlock.
+// a thin translator over planrepo.Plans — no business logic. Each Owner call
+// runs inside one planrepo session that holds the plan lock from Open through
+// Save (which delegates to PlanSession.Commit) until Close.
 type prodStatusStore struct {
-	plansDir string
+	plans *planrepo.Plans
+	cfg   config.Config
 }
 
-func newProdStatusStore(plansDir string) *prodStatusStore {
-	return &prodStatusStore{plansDir: plansDir}
+func newProdStatusStore(plansDir string, cfg config.Config) *prodStatusStore {
+	return &prodStatusStore{plans: planrepo.NewProd(plansDir), cfg: cfg}
 }
 
-// NewProdStatusOwner returns a status.Owner backed by the production
-// flock + atomic-write adapter for plansDir. CLI commands that perform a
-// single transition (retry, complete) call this directly. Long-running
-// callers like Dispatcher memoize the Owner via Dispatcher.statusOwner to
-// avoid re-allocating per Run.
-func NewProdStatusOwner(plansDir string) *status.Owner {
-	return status.New(newProdStatusStore(plansDir))
+// NewProdStatusOwner returns a status.Owner backed by a planrepo-session
+// adapter rooted at plansDir. CLI commands that perform a single transition
+// (retry, complete) call this directly. Long-running callers like Dispatcher
+// memoize the Owner via Dispatcher.statusOwner to avoid re-allocating per Run.
+func NewProdStatusOwner(plansDir string, cfg config.Config) *status.Owner {
+	return status.New(newProdStatusStore(plansDir, cfg))
 }
 
-func (s *prodStatusStore) Load(slug string) ([]schema.IssueYaml, error) {
-	return backend.NewProdPlanStore(s.plansDir).ReadIssues(slug)
-}
-
-func (s *prodStatusStore) Save(slug string, issue schema.IssueYaml) error {
-	return backend.NewUnlockedPlanStore(s.plansDir).WriteIssue(slug, &issue)
-}
-
-func (s *prodStatusStore) Lock(_ string) (func() error, error) {
-	release, err := backend.LockPlanDir(s.plansDir)
+func (s *prodStatusStore) OpenSession(slug string) (status.Session, error) {
+	sess, err := s.plans.Open(slug)
 	if err != nil {
 		return nil, err
 	}
-	return func() error { release(); return nil }, nil
+	return &prodStatusSession{sess: sess, cfg: s.cfg}, nil
+}
+
+// prodStatusSession adapts one planrepo.PlanSession to status.Session. Owner
+// only mutates a single issue per call, so Save stages the update and commits
+// in one step before returning control.
+type prodStatusSession struct {
+	sess *planrepo.PlanSession
+	cfg  config.Config
+}
+
+func (p *prodStatusSession) Issues() []schema.IssueYaml {
+	return p.sess.Snapshot().Issues
+}
+
+func (p *prodStatusSession) Save(issue schema.IssueYaml) error {
+	if err := p.sess.UpdateIssue(issue); err != nil {
+		return err
+	}
+	return p.sess.Commit(p.cfg)
+}
+
+func (p *prodStatusSession) Close() error {
+	return p.sess.Close()
 }

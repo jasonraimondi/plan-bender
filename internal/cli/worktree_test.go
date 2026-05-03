@@ -52,7 +52,7 @@ func setupWorktreeRepo(t *testing.T) string {
 
 	plansDir := filepath.Join(root, ".plan-bender", "plans", "auth", "issues")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "../prd.yaml"), []byte("name: Auth\nslug: auth\nstatus: active\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "../prd.yaml"), []byte(validAuthPrd), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.yaml"), []byte(worktreeIssueYAML), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.yaml"), []byte("plans_dir: ./.plan-bender/plans/\nagents:\n  claude-code: true\n"), 0o644))
 
