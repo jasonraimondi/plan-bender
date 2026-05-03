@@ -6,8 +6,23 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/require"
 )
+
+// mustValidPRD returns a valid PrdYaml struct with the given slug.
+func mustValidPRD(slug string) schema.PrdYaml {
+	return schema.PrdYaml{
+		Name:        "Fresh Plan",
+		Slug:        slug,
+		Status:      "active",
+		Created:     "2026-01-01",
+		Updated:     "2026-01-02",
+		Description: "Fresh PRD",
+		Why:         "Tests",
+		Outcome:     "Passes",
+	}
+}
 
 // writePlan creates a plan directory with a PRD and zero or more issue files.
 // Issue file names come from the map keys so tests can exercise ordering.
