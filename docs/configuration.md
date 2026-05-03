@@ -79,6 +79,10 @@ issue_schema:
 
 review_with_user: false        # Insert a user review step before writing PRDs/issues
 
+report_bugs: false             # Inject a "Bug reports" section into every generated SKILL.md
+                               # telling the agent to write pb-error-report-<UTC>.log on failure
+                               # and link the user to the GitHub issues page.
+
 update_check: true             # Check for new releases on pb commands
 
 manage_gitignore: false        # Set true to let pb setup add .plan-bender/, .plan-bender.local.yaml,
@@ -126,6 +130,7 @@ Templates receive a context map built from your config:
 | `max_points` | int | `max_points` config |
 | `has_backend_sync` | bool | `linear.enabled` config |
 | `review_with_user` | bool | `review_with_user` config |
+| `report_bugs` | bool | `report_bugs` config |
 | `agent` | string | Current agent name |
 | `commands` | map | CLI command strings (see below) |
 | `custom_fields` | []map | `issue_schema.custom_fields` config |
