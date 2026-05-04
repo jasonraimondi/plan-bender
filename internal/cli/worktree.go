@@ -65,17 +65,31 @@ func newWorktreeCreateCmd() *cobra.Command {
 			claimErr := owner.Claim(cmd.Context(), slug, id, res.Branch, "worktree create")
 			claimed := claimErr == nil || errors.Is(claimErr, status.ErrAlreadyInState)
 			if !claimed {
+				// The lookup→Create→Claim flow releases the plan lock between
+				// lookup and Claim. If a concurrent writer changed the issue's
+				// state in that window, the worktree we just created is now
+				// orphaned. When res.Created is true we materialized this pair
+				// in this call, so it's safe to roll back the artifacts; when
+				// false, leave them alone (they predate this call).
+				rollbackNote := ""
+				if res.Created {
+					if rmErr := worktree.Remove(cmd.Context(), root, res.Path, res.Branch); rmErr != nil {
+						rollbackNote = fmt.Sprintf(" (rollback also failed: %v; run `pba worktree gc %s` manually)", rmErr, slug)
+					} else {
+						rollbackNote = " (worktree and branch rolled back)"
+					}
+				}
 				var casErr *status.ErrCASMismatch
 				if errors.As(claimErr, &casErr) {
 					return NewAgentError(
-						fmt.Sprintf("worktree created at %s on branch %s, but issue #%d is %s — refusing to claim a non-actionable issue; resolve manually or run `pba worktree gc %s`",
-							res.Path, res.Branch, id, casErr.Current, slug),
+						fmt.Sprintf("worktree created at %s on branch %s, but issue #%d is %s — refusing to claim a non-actionable issue%s",
+							res.Path, res.Branch, id, casErr.Current, rollbackNote),
 						ErrValidationFailed,
 					)
 				}
 				return NewAgentError(
-					fmt.Sprintf("worktree created at %s on branch %s, but failed to update issue #%d YAML: %v",
-						res.Path, res.Branch, id, claimErr),
+					fmt.Sprintf("worktree created at %s on branch %s, but failed to update issue #%d YAML: %v%s",
+						res.Path, res.Branch, id, claimErr, rollbackNote),
 					ErrInternal,
 				)
 			}

@@ -12,9 +12,17 @@ import (
 )
 
 // WorktreeResult is the output of Create.
+//
+// Created is true iff this Create call materialized the branch and worktree.
+// It is false on the idempotent path (a branch+worktree pair already existed at
+// the canonical location). Callers that want to roll back on a downstream
+// failure (e.g. a status claim that races with another writer) should only
+// destroy the artifacts when Created is true; otherwise they may delete a
+// pre-existing worktree that holds the operator's in-progress work.
 type WorktreeResult struct {
-	Path   string
-	Branch string
+	Path    string
+	Branch  string
+	Created bool
 }
 
 // Create makes a new branch off baseRef and a git worktree at the canonical
@@ -66,7 +74,7 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 		if existingPath != path {
 			return WorktreeResult{}, fmt.Errorf("branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
 		}
-		return WorktreeResult{Path: existingPath, Branch: branch}, nil
+		return WorktreeResult{Path: existingPath, Branch: branch, Created: false}, nil
 	}
 
 	if !branchExists {
@@ -82,7 +90,26 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 		}
 		return WorktreeResult{}, fmt.Errorf("creating worktree at %q: %w", path, err)
 	}
-	return WorktreeResult{Path: path, Branch: branch}, nil
+	return WorktreeResult{Path: path, Branch: branch, Created: true}, nil
+}
+
+// Remove force-deletes a worktree at path and its branch. It exists so a
+// caller that just created a worktree (Created=true on the WorktreeResult)
+// can roll back when a downstream step (e.g. status Claim) fails after the
+// worktree was materialized. Returns the joined errors of `worktree remove`
+// and `branch -D`; nil is returned only when both succeed.
+//
+// Do not call this on a worktree returned with Created=false — that worktree
+// may hold the user's in-progress committed work from a prior run.
+func Remove(ctx context.Context, root, path, branch string) error {
+	var errs []error
+	if err := runGit(ctx, root, "worktree", "remove", "--force", path); err != nil {
+		errs = append(errs, fmt.Errorf("removing worktree %q: %w", path, err))
+	}
+	if err := runGit(ctx, root, "branch", "-D", branch); err != nil {
+		errs = append(errs, fmt.Errorf("deleting branch %q: %w", branch, err))
+	}
+	return errors.Join(errs...)
 }
 
 // branchExists reports whether refs/heads/<name> resolves in root.
