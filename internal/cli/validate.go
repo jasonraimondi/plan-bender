@@ -3,9 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -26,8 +26,8 @@ func NewValidateCmd() *cobra.Command {
 				return err
 			}
 
-			fsys := os.DirFS(cfg.PlansDir)
-			result := schema.ValidatePlan(slug, cfg, fsys)
+			repo := planrepo.NewProd(cfg.PlansDir)
+			result := repo.Validate(slug, cfg)
 
 			if jsonOutput || isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)

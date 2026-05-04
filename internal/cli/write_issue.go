@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -46,9 +46,18 @@ func NewWriteIssueCmd() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 
-			store := backend.NewProdPlanStore(cfg.PlansDir)
-			if err := store.WriteIssue(slug, &issue); err != nil {
+			plans := planrepo.NewProd(cfg.PlansDir)
+			sess, err := plans.OpenOrCreate(slug)
+			if err != nil {
 				return err
+			}
+			defer sess.Close()
+
+			if err := stageIssue(sess, issue); err != nil {
+				return err
+			}
+			if err := sess.Commit(cfg); err != nil {
+				return reportCommitError(cmd, err)
 			}
 
 			outPath := filepath.Join(cfg.PlansDir, slug, "issues",
@@ -63,4 +72,17 @@ func NewWriteIssueCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// stageIssue routes the write through CreateIssue when the ID is new, or
+// UpdateIssue when it already exists in the snapshot. Keeps the command's
+// upsert-style behavior intact while satisfying the session's separate
+// create / update entry points.
+func stageIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
+	for _, existing := range sess.Snapshot().Issues {
+		if existing.ID == issue.ID {
+			return sess.UpdateIssue(issue)
+		}
+	}
+	return sess.CreateIssue(issue)
 }

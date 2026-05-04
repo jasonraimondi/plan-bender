@@ -48,7 +48,7 @@ func setupRetryPlan(t *testing.T, status string, withNotes bool) string {
 	require.NoError(t, os.Chdir(dir))
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte("name: Ship\nslug: ship\nstatus: active\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(validShipPrd), 0o644))
 
 	body := retryIssueYAML
 	if status != "" {
@@ -197,7 +197,7 @@ func TestRetry_ConcurrentRaceSurfacesCASMismatch(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+		owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
 		competeErr = owner.Transition(context.Background(), "ship", 4,
 			[]status.Status{status.StatusBlocked}, status.StatusInProgress, "manual resume")
 	}()

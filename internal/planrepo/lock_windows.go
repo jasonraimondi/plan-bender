@@ -1,6 +1,6 @@
 //go:build windows
 
-package backend
+package planrepo
 
 import (
 	"fmt"
@@ -10,11 +10,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// LockPlanDir takes an exclusive lock on a sentinel file inside plansDir using
-// the Win32 LockFileEx API. The returned release unlocks and closes the file.
-//
-// Mirrors the unix flock implementation: serializes write-side access across
-// processes sharing the same plansDir.
+// LockPlanDir takes an exclusive lock on a sentinel file inside plansDir
+// using the Win32 LockFileEx API. The returned release unlocks and closes
+// the file. Mirrors the unix flock implementation.
 func LockPlanDir(plansDir string) (func(), error) {
 	if err := os.MkdirAll(plansDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating plans dir for lock: %w", err)

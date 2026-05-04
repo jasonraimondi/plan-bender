@@ -1,6 +1,6 @@
 //go:build !windows
 
-package backend
+package planrepo
 
 import (
 	"fmt"
@@ -9,13 +9,12 @@ import (
 	"syscall"
 )
 
-// LockPlanDir takes an exclusive POSIX advisory lock (flock) on a sentinel file
-// inside plansDir. The returned release closes the file and drops the lock.
+// LockPlanDir takes an exclusive POSIX advisory lock (flock) on a sentinel
+// file inside plansDir. The returned release closes the file and drops the
+// lock.
 //
-// This serializes write-side access across processes that share the same
-// plansDir — including sub-agents that reach plansDir through a symlink from a
-// worktree. The kernel resolves the symlink to the same inode, so all callers
-// contend on the same lock.
+// The kernel resolves symlinks to the same inode, so sub-agents reaching
+// plansDir through a symlink from a worktree contend on the same lock.
 func LockPlanDir(plansDir string) (func(), error) {
 	if err := os.MkdirAll(plansDir, 0o755); err != nil {
 		return nil, fmt.Errorf("creating plans dir for lock: %w", err)

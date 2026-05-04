@@ -3,16 +3,24 @@ package backend
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
+
+// syncTestCfg returns a config compatible with the schema validation
+// performed inside session.Commit for test fixtures created by testPrd /
+// testIssue.
+func syncTestCfg() config.Config {
+	return config.Defaults()
+}
 
 // mockBackend implements Backend with per-method function fields.
 type mockBackend struct {
@@ -39,29 +47,55 @@ func (m *mockBackend) PullProject(ctx context.Context, projectID string) (PullPr
 	return m.pullProject(ctx, projectID)
 }
 
-// setupSyncTest creates a temp dir with PRD and issues, returns a PlanStore and the dir path.
-func setupSyncTest(t *testing.T, prd *schema.PrdYaml, issues []*schema.IssueYaml) *PlanStore {
+// syncFixture bundles the plan repository and on-disk plansDir produced by
+// setupSyncTest, so individual tests can both invoke SyncPush/SyncPull (which
+// take *planrepo.Plans) and read the post-write YAML directly to verify
+// behavior parity through observable files.
+type syncFixture struct {
+	plans    *planrepo.Plans
+	plansDir string
+	cfg      config.Config
+}
+
+// setupSyncTest seeds plansDir with prd + issues using the production plan
+// repository so subsequent SyncPush/SyncPull calls hit the same on-disk
+// contract a real CLI invocation would.
+func setupSyncTest(t *testing.T, prd *schema.PrdYaml, issues []*schema.IssueYaml) syncFixture {
 	t.Helper()
 	dir := t.TempDir()
 	slug := prd.Slug
+	cfg := syncTestCfg()
+	plans := planrepo.NewProd(dir)
 
-	store := NewProdPlanStore(dir)
-
-	require.NoError(t, store.WritePrd(slug, prd))
+	sess, err := plans.OpenOrCreate(slug)
+	require.NoError(t, err)
+	require.NoError(t, sess.UpdatePrd(*prd))
 	for _, issue := range issues {
-		require.NoError(t, store.WriteIssue(slug, issue))
+		require.NoError(t, sess.CreateIssue(*issue))
 	}
-	return store
+	require.NoError(t, sess.Commit(cfg))
+	require.NoError(t, sess.Close())
+
+	return syncFixture{plans: plans, plansDir: dir, cfg: cfg}
 }
 
-func readIssueFromDisk(t *testing.T, store *PlanStore, slug string, id int, issueSlug string) schema.IssueYaml {
+func readIssueFromDisk(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
 	t.Helper()
-	path := filepath.Join(store.root, slug, "issues", fmt.Sprintf("%d-%s.yaml", id, issueSlug))
+	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.yaml", id, issueSlug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var issue schema.IssueYaml
 	require.NoError(t, yaml.Unmarshal(data, &issue))
 	return issue
+}
+
+func readPrdFromDisk(t *testing.T, plansDir, slug string) schema.PrdYaml {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(plansDir, slug, "prd.yaml"))
+	require.NoError(t, err)
+	var prd schema.PrdYaml
+	require.NoError(t, yaml.Unmarshal(data, &prd))
+	return prd
 }
 
 func TestSyncPush_AllCreate(t *testing.T) {
@@ -74,7 +108,7 @@ func TestSyncPush_AllCreate(t *testing.T) {
 	issues[2].Slug = "issue-three"
 	issues[2].Name = "Issue three"
 
-	store := setupSyncTest(t, prd, issues)
+	fix := setupSyncTest(t, prd, issues)
 
 	createCount := 0
 	be := &mockBackend{
@@ -84,7 +118,7 @@ func TestSyncPush_AllCreate(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), store, be, "test")
+	result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 3, result.Created)
 	assert.Equal(t, 0, result.Updated)
@@ -92,13 +126,13 @@ func TestSyncPush_AllCreate(t *testing.T) {
 	assert.Equal(t, 3, createCount)
 
 	// Verify linear_id was written back for each issue
-	i1 := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	i1 := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "lin-1", *i1.LinearID)
 
-	i2 := readIssueFromDisk(t, store, "test", 2, "issue-two")
+	i2 := readIssueFromDisk(t, fix.plansDir, "test", 2, "issue-two")
 	assert.Equal(t, "lin-2", *i2.LinearID)
 
-	i3 := readIssueFromDisk(t, store, "test", 3, "issue-three")
+	i3 := readIssueFromDisk(t, fix.plansDir, "test", 3, "issue-three")
 	assert.Equal(t, "lin-3", *i3.LinearID)
 }
 
@@ -114,7 +148,7 @@ func TestSyncPush_AllUpdate(t *testing.T) {
 	issues[2].Slug = "issue-three"
 	issues[2].LinearID = &linID3
 
-	store := setupSyncTest(t, prd, issues)
+	fix := setupSyncTest(t, prd, issues)
 
 	updateCount := 0
 	be := &mockBackend{
@@ -124,7 +158,7 @@ func TestSyncPush_AllUpdate(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), store, be, "test")
+	result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Created)
 	assert.Equal(t, 3, result.Updated)
@@ -140,7 +174,7 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	issues[1].Slug = "issue-two"
 	issues[2].Slug = "issue-three"
 
-	store := setupSyncTest(t, prd, issues)
+	fix := setupSyncTest(t, prd, issues)
 
 	be := &mockBackend{
 		createIssue: func(_ context.Context, issue *schema.IssueYaml, _ string) (RemoteIssue, error) {
@@ -151,7 +185,7 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), store, be, "test")
+	result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Created)
 	assert.Equal(t, 0, result.Updated)
@@ -160,16 +194,16 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	assert.Contains(t, result.Errors[0].Err.Error(), "api error")
 
 	// Verify linear_id written for successes only
-	i1 := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	i1 := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.NotNil(t, i1.LinearID)
 	assert.Equal(t, "lin-1", *i1.LinearID)
 
-	i3 := readIssueFromDisk(t, store, "test", 3, "issue-three")
+	i3 := readIssueFromDisk(t, fix.plansDir, "test", 3, "issue-three")
 	assert.NotNil(t, i3.LinearID)
 	assert.Equal(t, "lin-3", *i3.LinearID)
 
 	// Issue 2 should NOT have linear_id
-	i2 := readIssueFromDisk(t, store, "test", 2, "issue-two")
+	i2 := readIssueFromDisk(t, fix.plansDir, "test", 2, "issue-two")
 	assert.Nil(t, i2.LinearID)
 }
 
@@ -182,7 +216,7 @@ func TestSyncPush_Idempotent(t *testing.T) {
 	issues[0].LinearID = &linID // already synced
 	issues[1].Slug = "issue-two" // not yet synced
 
-	store := setupSyncTest(t, prd, issues)
+	fix := setupSyncTest(t, prd, issues)
 
 	var createCalls, updateCalls []int
 	be := &mockBackend{
@@ -196,7 +230,7 @@ func TestSyncPush_Idempotent(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), store, be, "test")
+	result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Created)
 	assert.Equal(t, 1, result.Updated)
@@ -212,7 +246,7 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 	prd := testPrd()
 	// No Linear ref — should trigger CreateProject
 
-	store := setupSyncTest(t, prd, nil)
+	fix := setupSyncTest(t, prd, nil)
 
 	projectCreated := false
 	be := &mockBackend{
@@ -222,14 +256,13 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), store, be, "test")
+	result, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.True(t, projectCreated)
 	assert.Equal(t, 0, result.Created)
 
 	// Verify project_id was written back to PRD
-	updatedPrd, err := store.ReadPrd("test")
-	require.NoError(t, err)
+	updatedPrd := readPrdFromDisk(t, fix.plansDir, "test")
 	require.NotNil(t, updatedPrd.Linear)
 	assert.Equal(t, "new-proj", updatedPrd.Linear.ProjectID)
 }
@@ -245,7 +278,7 @@ func TestSyncPull_StatusUpdate(t *testing.T) {
 	issue.LinearID = &linID
 	issue.Status = "backlog"
 
-	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -258,12 +291,12 @@ func TestSyncPull_StatusUpdate(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPull(context.Background(), store, be, "test")
+	result, err := SyncPull(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Updated)
 	assert.Empty(t, result.Errors)
 
-	updated := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	updated := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "in-progress", updated.Status)
 }
 
@@ -277,7 +310,7 @@ func TestSyncPull_PriorityAndAssignee(t *testing.T) {
 	issue.Priority = "low"
 	issue.Assignee = nil
 
-	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -290,12 +323,12 @@ func TestSyncPull_PriorityAndAssignee(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPull(context.Background(), store, be, "test")
+	result, err := SyncPull(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Updated)
 	assert.Empty(t, result.Errors)
 
-	updated := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	updated := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "urgent", updated.Priority)
 	require.NotNil(t, updated.Assignee)
 	assert.Equal(t, "alice", *updated.Assignee)
@@ -308,7 +341,7 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 	issue := testIssue(1)
 	// No linear_id — should be skipped
 
-	store := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -319,34 +352,36 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPull(context.Background(), store, be, "test")
+	result, err := SyncPull(context.Background(), fix.plans, be, "test", fix.cfg)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Updated)
 	assert.Empty(t, result.Errors)
 
 	// Issue should be unchanged
-	unchanged := readIssueFromDisk(t, store, "test", 1, "test-issue")
+	unchanged := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "backlog", unchanged.Status)
 }
 
 // --- Marshal/write error propagation tests ---
 
-func TestSyncPush_WriteIssueError(t *testing.T) {
-	// Set up a store where WriteIssue fails (simulating marshal/write failure)
-	dir := t.TempDir()
-	realStore := NewProdPlanStore(dir)
+// failingWritePlans wraps a fixture's plans dir in a planrepo.Plans whose
+// Write adapter always fails. Reads still hit the real filesystem so an
+// existing snapshot can be opened; only commits fail. Used to verify that
+// SyncPush / SyncPull surface per-issue write errors via SyncResult rather
+// than aborting the whole run.
+func failingWritePlans(plansDir string) *planrepo.Plans {
+	return planrepo.New(plansDir, planrepo.Adapters{
+		FS:    os.DirFS(plansDir),
+		Write: func(string, []byte, os.FileMode) error { return fmt.Errorf("write failed") },
+		Mkdir: os.MkdirAll,
+		Lock:  planrepo.LockPlanDir,
+	})
+}
 
+func TestSyncPush_WriteIssueError(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
-	require.NoError(t, realStore.WritePrd("test", prd))
-
-	issue := testIssue(1)
-	require.NoError(t, realStore.WriteIssue("test", issue))
-
-	// Create a store with a failing write func (reads from real disk, writes fail)
-	failStore := NewPlanStore(dir, prodFS(dir), func(_ string, _ []byte, _ fs.FileMode) error {
-		return fmt.Errorf("write failed")
-	}, prodMkdir)
+	fix := setupSyncTest(t, prd, []*schema.IssueYaml{testIssue(1)})
 
 	be := &mockBackend{
 		createIssue: func(_ context.Context, _ *schema.IssueYaml, _ string) (RemoteIssue, error) {
@@ -354,7 +389,7 @@ func TestSyncPush_WriteIssueError(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPush(context.Background(), failStore, be, "test")
+	result, err := SyncPush(context.Background(), failingWritePlans(fix.plansDir), be, "test", fix.cfg)
 	require.NoError(t, err) // SyncPush itself succeeds (continue-on-error)
 	require.Len(t, result.Errors, 1)
 	assert.Equal(t, 1, result.Errors[0].IssueID)
@@ -363,22 +398,12 @@ func TestSyncPush_WriteIssueError(t *testing.T) {
 }
 
 func TestSyncPull_WriteIssueError(t *testing.T) {
-	dir := t.TempDir()
-	realStore := NewProdPlanStore(dir)
-
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
-	require.NoError(t, realStore.WritePrd("test", prd))
-
 	linID := "lin-1"
 	issue := testIssue(1)
 	issue.LinearID = &linID
-	require.NoError(t, realStore.WriteIssue("test", issue))
-
-	// Store that reads from real disk but fails on write
-	failStore := NewPlanStore(dir, prodFS(dir), func(_ string, _ []byte, _ fs.FileMode) error {
-		return fmt.Errorf("disk error")
-	}, prodMkdir)
+	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -389,10 +414,10 @@ func TestSyncPull_WriteIssueError(t *testing.T) {
 		},
 	}
 
-	result, err := SyncPull(context.Background(), failStore, be, "test")
+	result, err := SyncPull(context.Background(), failingWritePlans(fix.plansDir), be, "test", fix.cfg)
 	require.NoError(t, err) // SyncPull itself succeeds (continue-on-error)
 	require.Len(t, result.Errors, 1)
 	assert.Equal(t, 1, result.Errors[0].IssueID)
-	assert.Contains(t, result.Errors[0].Err.Error(), "disk error")
+	assert.Contains(t, result.Errors[0].Err.Error(), "write failed")
 	assert.Equal(t, 0, result.Updated) // not counted as updated since write failed
 }

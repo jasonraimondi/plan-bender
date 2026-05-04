@@ -44,7 +44,7 @@ func setupCompletePlan(t *testing.T, status string) string {
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte("name: Ship\nslug: ship\nstatus: active\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(validShipPrd), 0o644))
 
 	body := completeIssueYAML
 	if status != "" {

@@ -156,3 +156,66 @@ func TestPullIssue_InvalidFormat(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid remoteId")
 }
+
+// TestUpdateIssue_FindsProjectInSortedOrder pins the deterministic project
+// lookup invariant: when two plans contain a file matching the same issue ID
+// prefix, UpdateIssue must route the write to the alphabetically-first slug.
+// Without sorted scanning the winner would depend on filesystem readdir
+// order, which yields cross-platform flakes.
+func TestUpdateIssue_FindsProjectInSortedOrder(t *testing.T) {
+	b, dir := testBackend(t)
+	ctx := context.Background()
+
+	prdAlpha := testPrd()
+	prdAlpha.Slug = "alpha"
+	prdAlpha.Name = "Alpha"
+	prdZeta := testPrd()
+	prdZeta.Slug = "zeta"
+	prdZeta.Name = "Zeta"
+
+	_, err := b.CreateProject(ctx, prdAlpha)
+	require.NoError(t, err)
+	_, err = b.CreateProject(ctx, prdZeta)
+	require.NoError(t, err)
+
+	// Same issue ID lives in both plans with different slugs so we can tell
+	// which one UpdateIssue actually wrote to.
+	alphaIssue := testIssue(7)
+	alphaIssue.Slug = "in-alpha"
+	_, err = b.CreateIssue(ctx, alphaIssue, "alpha")
+	require.NoError(t, err)
+	zetaIssue := testIssue(7)
+	zetaIssue.Slug = "in-zeta"
+	_, err = b.CreateIssue(ctx, zetaIssue, "zeta")
+	require.NoError(t, err)
+
+	// UpdateIssue does not receive a project hint — it must look up the
+	// project itself. Sorted scan picks "alpha" first.
+	bumped := testIssue(7)
+	bumped.Slug = "in-alpha"
+	bumped.Status = "in-progress"
+	_, err = b.UpdateIssue(ctx, bumped)
+	require.NoError(t, err)
+
+	// Alpha's file should reflect the new status.
+	alphaPath := filepath.Join(dir, "alpha", "issues", "7-in-alpha.yaml")
+	data, err := os.ReadFile(alphaPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "status: in-progress")
+
+	// Zeta's file should be untouched.
+	zetaPath := filepath.Join(dir, "zeta", "issues", "7-in-zeta.yaml")
+	data, err = os.ReadFile(zetaPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "status: backlog")
+}
+
+// TestUpdateIssue_MissingIssueReports surfaces the not-found error from
+// FindIssueProject so callers can distinguish "no such issue" from a
+// write failure.
+func TestUpdateIssue_MissingIssueReports(t *testing.T) {
+	b, _ := testBackend(t)
+	_, err := b.UpdateIssue(context.Background(), testIssue(999))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "issue #999")
+}

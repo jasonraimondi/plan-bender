@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,7 +87,7 @@ func TestContextCmd_NoSlug_ListsPlans(t *testing.T) {
 	cmd.SetArgs([]string{})
 	require.NoError(t, cmd.Execute())
 
-	var summaries []plan.PlanSummary
+	var summaries []planrepo.PlanSummary
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &summaries))
 
 	require.Len(t, summaries, 1)
@@ -164,7 +165,7 @@ func TestContextCmd_NoSlug_EmptyPlans(t *testing.T) {
 	cmd.SetArgs([]string{})
 	require.NoError(t, cmd.Execute())
 
-	var summaries []plan.PlanSummary
+	var summaries []planrepo.PlanSummary
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &summaries))
 	assert.Empty(t, summaries)
 }

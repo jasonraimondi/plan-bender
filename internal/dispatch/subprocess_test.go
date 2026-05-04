@@ -12,13 +12,31 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 func newTestOwner(plansDir string) *status.Owner {
-	return status.New(newProdStatusStore(plansDir))
+	return status.New(newProdStatusStore(plansDir, config.Defaults()))
 }
+
+// subprocessTestPrd is a fully-populated PRD — including UC-1 in use_cases
+// so cross-ref validation accepts stubIssueYAML — so planrepo.Commit's
+// preflight validation accepts status writes from the owner during
+// subprocess tests.
+const subprocessTestPrd = `name: Ship
+slug: ship
+status: active
+created: "2026-04-30"
+updated: "2026-04-30"
+description: ship it
+why: testing
+outcome: shipped
+use_cases:
+  - id: UC-1
+    description: ship use case
+`
 
 const stubIssueYAML = `id: 5
 slug: ship-it
@@ -49,7 +67,7 @@ func writeStubIssue(t *testing.T, plansDir, slug, status string) {
 		body = strings.Replace(body, "status: in-progress", "status: "+status, 1)
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "5-ship-it.yaml"), []byte(body), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, slug, "prd.yaml"), []byte("name: Ship\nslug: ship\nstatus: active\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, slug, "prd.yaml"), []byte(subprocessTestPrd), 0o644))
 }
 
 // installFakeClaude writes a shell script named `claude` to a fresh dir, prepends

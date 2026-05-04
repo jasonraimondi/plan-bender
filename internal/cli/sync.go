@@ -8,6 +8,7 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/spf13/cobra"
 )
 
@@ -94,8 +95,8 @@ func syncPush(cmd *cobra.Command, slug string) error {
 		return fmt.Errorf("creating backend: %w", err)
 	}
 
-	store := backend.NewProdPlanStore(cfg.PlansDir)
-	result, err := backend.SyncPush(ctx, store, be, slug)
+	plans := planrepo.NewProd(cfg.PlansDir)
+	result, err := backend.SyncPush(ctx, plans, be, slug, cfg)
 	if err != nil {
 		return err
 	}
@@ -117,8 +118,8 @@ func syncPull(cmd *cobra.Command, slug string) error {
 		return fmt.Errorf("creating backend: %w", err)
 	}
 
-	store := backend.NewProdPlanStore(cfg.PlansDir)
-	result, err := backend.SyncPull(ctx, store, be, slug)
+	plans := planrepo.NewProd(cfg.PlansDir)
+	result, err := backend.SyncPull(ctx, plans, be, slug, cfg)
 	if err != nil {
 		return err
 	}

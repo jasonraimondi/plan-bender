@@ -9,7 +9,7 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/dispatch"
-	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 	"github.com/spf13/cobra"
@@ -43,24 +43,16 @@ func newWorktreeCreateCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			issues, err := plan.LoadIssues(cfg.PlansDir, slug)
+			// Load issue slug through a planrepo session so this command shares
+			// one persistence boundary with status writes. Close the session before
+			// worktree.Create + Claim so we don't hold the plan lock across the
+			// `git worktree add` subprocess (and so Claim's session can reacquire).
+			issueSlug, err := lookupIssueSlug(cfg.PlansDir, slug, id)
 			if err != nil {
-				return NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+				return err
 			}
 
-			var found *int
-			for i := range issues {
-				if issues[i].ID == id {
-					found = &i
-					break
-				}
-			}
-			if found == nil {
-				return NewAgentError(fmt.Sprintf("issue #%d not found in plan %q", id, slug), ErrPlanNotFound)
-			}
-			issue := issues[*found]
-
-			res, err := worktree.Create(cmd.Context(), root, slug, id, issue.Slug, "")
+			res, err := worktree.Create(cmd.Context(), root, slug, id, issueSlug, "")
 			if err != nil {
 				return NewAgentError("creating worktree: "+err.Error(), ErrInternal)
 			}
@@ -69,7 +61,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 			// so the YAML reflects the on-disk worktree. Without this the branch
 			// lives on disk while the issue YAML still shows backlog/null branch,
 			// and dispatch's CAS-checks lose the thread on the next iteration.
-			owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+			owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
 			claimErr := owner.Claim(cmd.Context(), slug, id, res.Branch, "worktree create")
 			claimed := claimErr == nil || errors.Is(claimErr, status.ErrAlreadyInState)
 			if !claimed {
@@ -99,6 +91,25 @@ func newWorktreeCreateCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// lookupIssueSlug opens a short-lived planrepo session to read one issue's
+// slug, then releases the lock. The lock is intentionally released before
+// `worktree create` and `Claim` run so the subsequent Claim session can
+// reacquire without deadlocking against the read.
+func lookupIssueSlug(plansDir, slug string, id int) (string, error) {
+	plans := planrepo.NewProd(plansDir)
+	sess, err := plans.Open(slug)
+	if err != nil {
+		return "", NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+	}
+	defer sess.Close()
+	for _, iss := range sess.Snapshot().Issues {
+		if iss.ID == id {
+			return iss.Slug, nil
+		}
+	}
+	return "", NewAgentError(fmt.Sprintf("issue #%d not found in plan %q", id, slug), ErrPlanNotFound)
 }
 
 func newWorktreeGCCmd() *cobra.Command {

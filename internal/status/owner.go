@@ -26,7 +26,7 @@ func New(store Store) *Owner {
 //
 // Algorithm (per PRD decision "current must be in from-set OR equal to target"):
 //
-//  1. Take the plan-wide lock; load issues.
+//  1. Open a store session (which holds the plan lock).
 //  2. CAS check: current must be in `from` OR equal to `to`. Otherwise
 //     return *ErrCASMismatch carrying the actual current state.
 //  3. Idempotency: if current == to, return ErrAlreadyInState — no audit
@@ -34,28 +34,26 @@ func New(store Store) *Owner {
 //     transition that already landed).
 //  4. Allowed-transitions check: (current → to) must be in the hardcoded
 //     allowed table. Otherwise return *ErrIllegalTransition.
-//  5. Write status, append a structured note when reason is non-empty,
-//     update the Updated date, save, then emit a single slog.Info audit line.
+//  5. Save the mutated issue through the session, append a structured note
+//     when reason is non-empty, update the Updated date, and emit a single
+//     slog.Info audit line.
 //
 // The ctx is currently used only for cancellation symmetry with future
 // callers; the backend store does not yet take a ctx.
 func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Status, to Status, reason string) error {
 	_ = ctx
 
-	release, err := o.store.Lock(slug)
+	sess, err := o.store.OpenSession(slug)
 	if err != nil {
-		return fmt.Errorf("locking plan %q: %w", slug, err)
+		return fmt.Errorf("opening session for plan %q: %w", slug, err)
 	}
 	defer func() {
-		if rerr := release(); rerr != nil {
-			o.logger.Warn("status: lock release failed", "slug", slug, "err", rerr)
+		if cerr := sess.Close(); cerr != nil {
+			o.logger.Warn("status: session close failed", "slug", slug, "err", cerr)
 		}
 	}()
 
-	issues, err := o.store.Load(slug)
-	if err != nil {
-		return fmt.Errorf("loading plan %q: %w", slug, err)
-	}
+	issues := sess.Issues()
 	idx := -1
 	for i := range issues {
 		if issues[i].ID == id {
@@ -85,7 +83,7 @@ func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Stat
 	if reason != "" {
 		appendNote(&issue, current, to, reason)
 	}
-	if err := o.store.Save(slug, issue); err != nil {
+	if err := sess.Save(issue); err != nil {
 		return fmt.Errorf("saving issue #%d: %w", id, err)
 	}
 
@@ -120,20 +118,17 @@ func (o *Owner) Claim(ctx context.Context, slug string, id int, branch, reason s
 		return fmt.Errorf("claim: branch is required")
 	}
 
-	release, err := o.store.Lock(slug)
+	sess, err := o.store.OpenSession(slug)
 	if err != nil {
-		return fmt.Errorf("locking plan %q: %w", slug, err)
+		return fmt.Errorf("opening session for plan %q: %w", slug, err)
 	}
 	defer func() {
-		if rerr := release(); rerr != nil {
-			o.logger.Warn("status: lock release failed", "slug", slug, "err", rerr)
+		if cerr := sess.Close(); cerr != nil {
+			o.logger.Warn("status: session close failed", "slug", slug, "err", cerr)
 		}
 	}()
 
-	issues, err := o.store.Load(slug)
-	if err != nil {
-		return fmt.Errorf("loading plan %q: %w", slug, err)
-	}
+	issues := sess.Issues()
 	idx := -1
 	for i := range issues {
 		if issues[i].ID == id {
@@ -168,7 +163,7 @@ func (o *Owner) Claim(ctx context.Context, slug string, id int, branch, reason s
 	if reason != "" && current != StatusInProgress {
 		appendNote(&issue, current, StatusInProgress, reason)
 	}
-	if err := o.store.Save(slug, issue); err != nil {
+	if err := sess.Save(issue); err != nil {
 		return fmt.Errorf("saving issue #%d: %w", id, err)
 	}
 

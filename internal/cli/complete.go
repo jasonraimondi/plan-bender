@@ -44,7 +44,7 @@ func NewCompleteCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			owner := dispatch.NewProdStatusOwner(cfg.PlansDir)
+			owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
 			err = owner.Transition(cmd.Context(), slug, id,
 				[]status.Status{status.StatusTodo, status.StatusInProgress, status.StatusBacklog},
 				status.StatusInReview, "")

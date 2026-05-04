@@ -40,7 +40,7 @@ func setupDispatchCLI(t *testing.T) string {
 		[]byte("plans_dir: ./.plan-bender/plans/\nagents:\n  claude-code: true\n"), 0o644))
 	require.NoError(t, os.MkdirAll(filepath.Join(root, ".plan-bender", "plans", "demo", "issues"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender", "plans", "demo", "prd.yaml"),
-		[]byte("name: Demo\nslug: demo\nstatus: active\n"), 0o644))
+		[]byte(validDemoPrd), 0o644))
 	require.NoError(t, os.Chdir(root))
 	return root
 }

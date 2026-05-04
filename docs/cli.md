@@ -39,8 +39,8 @@ All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero e
 | `plan-bender-agent context <slug>` | Full dump — PRD, issues, dependency graph, stats |
 | `plan-bender-agent validate <slug>` | Structured validation errors |
 | `plan-bender-agent next <slug>` | Recommended next issue (JSON) |
-| `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write PRD |
-| `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write issue |
+| `plan-bender-agent write-prd <slug> [file]` | Validate + atomically write PRD; creates the plan dir for fresh slugs |
+| `plan-bender-agent write-issue <slug> [file]` | Validate + atomically write issue; requires the slug's PRD to exist |
 | `plan-bender-agent sync linear push <slug>` | Push local issues to Linear |
 | `plan-bender-agent sync linear pull <slug>` | Pull remote state to local |
 | `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |

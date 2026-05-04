@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
@@ -25,38 +27,26 @@ type SyncResult struct {
 }
 
 // SyncPush pushes local issues to the remote backend.
-// It creates or updates each issue, writes linear_id back on success,
-// and continues on per-issue errors.
-func SyncPush(ctx context.Context, store *PlanStore, be Backend, slug string) (SyncResult, error) {
+//
+// To honor the "no plan lock held during remote API calls" invariant the
+// flow is split into discrete phases:
+//
+//  1. Open a session, copy the snapshot, Close — releases the lock before
+//     any remote work begins.
+//  2. Ensure project exists; if a CreateProject API call is required, write
+//     the returned project ID back through a fresh short session.
+//  3. For each issue, perform the remote create/update with no lock held,
+//     then write the linear_id back (on create) through a per-issue short
+//     session so a single write failure does not block the rest.
+func SyncPush(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, cfg config.Config) (SyncResult, error) {
 	var result SyncResult
 
-	// Read PRD
-	prd, err := store.ReadPrd(slug)
+	prd, issues, err := readSnapshot(plans, slug)
 	if err != nil {
 		return result, err
 	}
 
-	// Ensure project exists
-	projectID := ""
-	if prd.Linear != nil && prd.Linear.ProjectID != "" {
-		projectID = prd.Linear.ProjectID
-	} else {
-		project, err := be.CreateProject(ctx, prd)
-		if err != nil {
-			return result, fmt.Errorf("creating project: %w", err)
-		}
-		projectID = project.ID
-		if prd.Linear == nil {
-			prd.Linear = &schema.LinearRef{}
-		}
-		prd.Linear.ProjectID = projectID
-		if err := store.WritePrd(slug, prd); err != nil {
-			return result, fmt.Errorf("writing PRD: %w", err)
-		}
-	}
-
-	// Read and push issues
-	issues, err := store.ReadIssues(slug)
+	projectID, err := ensureRemoteProject(ctx, plans, be, slug, &prd, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -64,44 +54,42 @@ func SyncPush(ctx context.Context, store *PlanStore, be Backend, slug string) (S
 	for i := range issues {
 		issue := &issues[i]
 		if issue.LinearID != nil && *issue.LinearID != "" {
-			// Update existing
 			if _, err := be.UpdateIssue(ctx, issue); err != nil {
 				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 				continue
 			}
 			result.Updated++
-		} else {
-			// Create new
-			remote, err := be.CreateIssue(ctx, issue, projectID)
-			if err != nil {
-				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
-				continue
-			}
-			// Write linear_id back per-issue
-			remoteID := remote.ID
-			issue.LinearID = &remoteID
-			if err := store.WriteIssue(slug, issue); err != nil {
-				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
-				continue
-			}
-			result.Created++
+			continue
 		}
+		remote, err := be.CreateIssue(ctx, issue, projectID)
+		if err != nil {
+			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
+			continue
+		}
+		remoteID := remote.ID
+		issue.LinearID = &remoteID
+		if err := commitIssue(plans, slug, *issue, cfg); err != nil {
+			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
+			continue
+		}
+		result.Created++
 	}
 
 	return result, nil
 }
 
 // SyncPull pulls remote state and updates local issues.
-// It matches local issues to remote by linear_id, updates dirty fields,
-// and writes changed issues back via store.WriteIssue.
-func SyncPull(ctx context.Context, store *PlanStore, be Backend, slug string) (SyncResult, error) {
+//
+// Same lock-discipline as SyncPush: read snapshot under a short session,
+// release before the remote PullProject call, then write each dirty issue
+// back through a per-issue short session.
+func SyncPull(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, cfg config.Config) (SyncResult, error) {
 	var result SyncResult
 
-	prd, err := store.ReadPrd(slug)
+	prd, issues, err := readSnapshot(plans, slug)
 	if err != nil {
 		return result, err
 	}
-
 	if prd.Linear == nil || prd.Linear.ProjectID == "" {
 		return result, fmt.Errorf("no linear.project_id in PRD — run push first")
 	}
@@ -111,12 +99,6 @@ func SyncPull(ctx context.Context, store *PlanStore, be Backend, slug string) (S
 		return result, fmt.Errorf("pulling project: %w", err)
 	}
 
-	issues, err := store.ReadIssues(slug)
-	if err != nil {
-		return result, err
-	}
-
-	// Index remote issues by ID
 	remoteByID := make(map[string]RemoteIssue, len(remote.Issues))
 	for _, ri := range remote.Issues {
 		remoteByID[ri.ID] = ri
@@ -131,31 +113,102 @@ func SyncPull(ctx context.Context, store *PlanStore, be Backend, slug string) (S
 		if !ok {
 			continue
 		}
-
-		dirty := false
-		if ri.Status != "" && ri.Status != issue.Status {
-			issue.Status = ri.Status
-			dirty = true
+		if !applyRemoteFields(issue, ri) {
+			continue
 		}
-		if ri.Priority != "" && ri.Priority != issue.Priority {
-			issue.Priority = ri.Priority
-			dirty = true
+		if err := commitIssue(plans, slug, *issue, cfg); err != nil {
+			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
+			continue
 		}
-		if ri.Assignee != "" {
-			if issue.Assignee == nil || *issue.Assignee != ri.Assignee {
-				issue.Assignee = &ri.Assignee
-				dirty = true
-			}
-		}
-
-		if dirty {
-			if err := store.WriteIssue(slug, issue); err != nil {
-				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
-				continue
-			}
-			result.Updated++
-		}
+		result.Updated++
 	}
 
 	return result, nil
+}
+
+// readSnapshot opens a short session, returns copies of the PRD and issues,
+// then closes — guaranteeing the plan lock is no longer held when remote
+// API calls begin.
+func readSnapshot(plans *planrepo.Plans, slug string) (schema.PrdYaml, []schema.IssueYaml, error) {
+	sess, err := plans.Open(slug)
+	if err != nil {
+		return schema.PrdYaml{}, nil, err
+	}
+	defer sess.Close()
+	prd := sess.Snapshot().PRD
+	issues := append([]schema.IssueYaml{}, sess.Snapshot().Issues...)
+	return prd, issues, nil
+}
+
+// ensureRemoteProject returns the projectID to push issues against. When the
+// PRD already has a Linear ProjectID it is used as-is; otherwise CreateProject
+// is called (no lock held) and the returned ID is written back to the PRD via
+// a fresh session.
+func ensureRemoteProject(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, prd *schema.PrdYaml, cfg config.Config) (string, error) {
+	if prd.Linear != nil && prd.Linear.ProjectID != "" {
+		return prd.Linear.ProjectID, nil
+	}
+	project, err := be.CreateProject(ctx, prd)
+	if err != nil {
+		return "", fmt.Errorf("creating project: %w", err)
+	}
+	if prd.Linear == nil {
+		prd.Linear = &schema.LinearRef{}
+	}
+	prd.Linear.ProjectID = project.ID
+	if err := commitPRD(plans, slug, *prd, cfg); err != nil {
+		return "", fmt.Errorf("writing PRD: %w", err)
+	}
+	return project.ID, nil
+}
+
+// applyRemoteFields mirrors a remote issue's mutable fields into the local
+// copy, returning true when anything changed (i.e. a write-back is needed).
+func applyRemoteFields(local *schema.IssueYaml, remote RemoteIssue) bool {
+	dirty := false
+	if remote.Status != "" && remote.Status != local.Status {
+		local.Status = remote.Status
+		dirty = true
+	}
+	if remote.Priority != "" && remote.Priority != local.Priority {
+		local.Priority = remote.Priority
+		dirty = true
+	}
+	if remote.Assignee != "" {
+		if local.Assignee == nil || *local.Assignee != remote.Assignee {
+			a := remote.Assignee
+			local.Assignee = &a
+			dirty = true
+		}
+	}
+	return dirty
+}
+
+func commitPRD(plans *planrepo.Plans, slug string, prd schema.PrdYaml, cfg config.Config) error {
+	sess, err := plans.Open(slug)
+	if err != nil {
+		return err
+	}
+	defer sess.Close()
+	if err := sess.UpdatePrd(prd); err != nil {
+		return err
+	}
+	return sess.Commit(cfg)
+}
+
+// commitIssue opens a fresh session per call so the snapshot reflects any
+// writes a concurrent process made between the original readSnapshot and
+// this commit. UpdateIssue may surface "id not in session snapshot" if the
+// issue was deleted out from under us; the caller turns that into a
+// per-issue SyncError so one disappearance doesn't abort the whole run.
+func commitIssue(plans *planrepo.Plans, slug string, issue schema.IssueYaml, cfg config.Config) error {
+	sess, err := plans.Open(slug)
+	if err != nil {
+		return err
+	}
+	defer sess.Close()
+	if err := sess.UpdateIssue(issue); err != nil {
+		return err
+	}
+	return sess.Commit(cfg)
 }

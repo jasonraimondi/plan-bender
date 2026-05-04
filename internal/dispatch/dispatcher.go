@@ -14,6 +14,7 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/plan"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
@@ -49,6 +50,41 @@ type Dispatcher struct {
 	// Run goes through the same lock-aware adapter without re-allocating.
 	ownerOnce sync.Once
 	owner     *status.Owner
+
+	// plansOnce + plans memoize the planrepo.Plans handle used for resolver
+	// and merge-order snapshots. Sharing one handle across a Run keeps every
+	// read path on the same persistence boundary as status writes.
+	plansOnce sync.Once
+	plans     *planrepo.Plans
+}
+
+// plansRepo returns the lazily-constructed planrepo.Plans handle rooted at
+// d.plansDir(). All read snapshots inside a Run flow through this handle.
+func (d *Dispatcher) plansRepo() *planrepo.Plans {
+	d.plansOnce.Do(func() {
+		d.plans = planrepo.NewProd(d.plansDir())
+	})
+	return d.plans
+}
+
+// snapshotIssues opens a short-lived planrepo session, reads the issue list,
+// and closes the session before returning. The lock is released before the
+// caller proceeds so subsequent status writes (or batch goroutines) can take
+// the same lock without deadlocking.
+func (d *Dispatcher) snapshotIssues(slug string) ([]schema.IssueYaml, error) {
+	return snapshotPlanIssues(d.plansRepo(), slug)
+}
+
+func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml, error) {
+	sess, err := plans.Open(slug)
+	if err != nil {
+		return nil, err
+	}
+	defer sess.Close()
+	issues := sess.Snapshot().Issues
+	cp := make([]schema.IssueYaml, len(issues))
+	copy(cp, issues)
+	return cp, nil
 }
 
 // statusOwner returns the lazily-constructed status.Owner backed by the
@@ -56,7 +92,7 @@ type Dispatcher struct {
 // a Run flow through this single Owner.
 func (d *Dispatcher) statusOwner() *status.Owner {
 	d.ownerOnce.Do(func() {
-		d.owner = status.New(newProdStatusStore(d.plansDir()))
+		d.owner = status.New(newProdStatusStore(d.plansDir(), d.Config))
 	})
 	return d.owner
 }
@@ -114,7 +150,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 
 	for {
-		issues, err := plan.LoadIssues(d.plansDir(), slug)
+		issues, err := d.snapshotIssues(slug)
 		if err != nil {
 			return fmt.Errorf("loading issues: %w", err)
 		}
@@ -248,7 +284,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // It refuses to run if the parent has uncommitted changes (the checkout would
 // either fail or leak changes onto the integration branch).
 func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
-	successful := successfulInDepOrder(results, d.plansDir(), slug)
+	successful := successfulInDepOrder(results, d.plansRepo(), slug)
 	if len(successful) == 0 {
 		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
 		// doesn't surface an error that masks the real (all-failed) cause. GC
@@ -375,7 +411,7 @@ func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int
 	fmt.Fprintf(d.out(), "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
 }
 
-func successfulInDepOrder(results []SubResult, plansDir, slug string) []SubResult {
+func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
 	successByID := make(map[int]SubResult, len(results))
 	for _, r := range results {
 		if r.Success {
@@ -383,7 +419,7 @@ func successfulInDepOrder(results []SubResult, plansDir, slug string) []SubResul
 		}
 	}
 
-	issues, err := plan.LoadIssues(plansDir, slug)
+	issues, err := snapshotPlanIssues(plans, slug)
 	if err != nil {
 		// fall back to result order if we can't load (tests covered)
 		out := make([]SubResult, 0, len(successByID))

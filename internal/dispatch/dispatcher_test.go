@@ -20,6 +20,23 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
+// dispatcherTestPrd is the PRD body written by setupDispatch. It is fully
+// populated — including UC-1 in use_cases so cross-ref validation accepts
+// the issues produced by mkAFKIssue — so planrepo.Commit's preflight
+// validation accepts status writes from the prod owner adapter.
+const dispatcherTestPrd = `name: Demo
+slug: demo
+status: active
+created: "2026-04-30"
+updated: "2026-04-30"
+description: demo plan
+why: testing
+outcome: demoed
+use_cases:
+  - id: UC-1
+    description: demo use case
+`
+
 // dispatchFixture holds the artifacts a dispatcher test needs: a real git repo
 // with an initial commit, a plans dir under .plan-bender/plans/, a worktree-side
 // SKILL.md so BuildPrompt succeeds, and an env-resident fake claude on PATH.
@@ -56,7 +73,7 @@ func setupDispatch(t *testing.T) *dispatchFixture {
 	plansDir := filepath.Join(root, ".plan-bender", "plans")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "demo", "issues"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.yaml"),
-		[]byte("name: Demo\nslug: demo\nstatus: active\n"), 0o644))
+		[]byte(dispatcherTestPrd), 0o644))
 
 	return &dispatchFixture{root: root, plansDir: plansDir}
 }
@@ -200,7 +217,9 @@ exit 2
 func TestReadyAFK_DispatcherIntegration_RespectsDependencyOrder(t *testing.T) {
 	fix := setupDispatch(t)
 	// 1 blocks 2: only 1 is ready.
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "first", "todo"))
+	first := mkAFKIssue(1, "first", "todo")
+	first.Blocking = []int{2}
+	writeIssue(t, fix.plansDir, first)
 	writeIssue(t, fix.plansDir, mkAFKIssue(2, "second", "todo", 1))
 	installSkillFile(t, fix.root)
 
@@ -222,10 +241,10 @@ exit 1
 	d := newDispatcher(fix)
 	require.NoError(t, d.Run(context.Background(), "demo"))
 
-	first := loadIssueYAML(t, fix.plansDir, 1, "first")
-	second := loadIssueYAML(t, fix.plansDir, 2, "second")
-	assert.Equal(t, "done", first.Status)
-	assert.Equal(t, "done", second.Status)
+	firstResult := loadIssueYAML(t, fix.plansDir, 1, "first")
+	secondResult := loadIssueYAML(t, fix.plansDir, 2, "second")
+	assert.Equal(t, "done", firstResult.Status)
+	assert.Equal(t, "done", secondResult.Status)
 }
 
 func TestEnsureIntegrationBranch_DirectStrategyUsesDefault(t *testing.T) {
