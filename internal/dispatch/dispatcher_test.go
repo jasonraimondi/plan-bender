@@ -537,6 +537,7 @@ func TestDispatcher_RecoveryUnblocksDependents(t *testing.T) {
 
 	iss1 := mkAFKIssue(1, "first", "in-review")
 	iss1.Branch = &branch1
+	iss1.Blocking = []int{2}
 	writeIssue(t, fix.plansDir, iss1)
 	writeIssue(t, fix.plansDir, mkAFKIssue(2, "second", "backlog", 1))
 	installSkillFile(t, fix.root)
