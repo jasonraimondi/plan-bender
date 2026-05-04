@@ -1,6 +1,8 @@
 package dispatch
 
 import (
+	"fmt"
+
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -33,23 +35,27 @@ func (s *prodStatusStore) OpenSession(slug string) (status.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &prodStatusSession{sess: sess, cfg: s.cfg}, nil
+	snap, err := sess.Snapshot()
+	if err != nil {
+		_ = sess.Close()
+		return nil, fmt.Errorf("loading snapshot for plan %q: %w", slug, err)
+	}
+	return &prodStatusSession{sess: sess, cfg: s.cfg, issues: snap.Issues}, nil
 }
 
 // prodStatusSession adapts one planrepo.PlanSession to status.Session. Owner
 // only mutates a single issue per call, so Save stages the update and commits
-// in one step before returning control.
+// in one step before returning control. Issues are captured eagerly at
+// OpenSession time so the no-error Issues() contract on status.Session cannot
+// silently swallow a Snapshot failure.
 type prodStatusSession struct {
-	sess *planrepo.PlanSession
-	cfg  config.Config
+	sess   *planrepo.PlanSession
+	cfg    config.Config
+	issues []schema.IssueYaml
 }
 
 func (p *prodStatusSession) Issues() []schema.IssueYaml {
-	snap, err := p.sess.Snapshot()
-	if err != nil {
-		return nil
-	}
-	return snap.Issues
+	return p.issues
 }
 
 func (p *prodStatusSession) Save(issue schema.IssueYaml) error {
