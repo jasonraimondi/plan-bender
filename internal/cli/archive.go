@@ -34,10 +34,24 @@ func NewArchiveCmd() *cobra.Command {
 			}
 
 			planDir := filepath.Join(cfg.PlansDir, slug)
-			issues, err := readIssuesForArchive(cfg.PlansDir, slug)
+
+			// Hold the planrepo session lock through the entire archive
+			// operation so a concurrent dispatcher mid-Commit cannot interleave
+			// writes into the directory we are about to rename. Safe because
+			// the lock file lives at <plansDir>/.pb-lock — sibling to
+			// planDir, not inside it — so the rename does not move the lock
+			// file itself, and the held fd stays valid until Close.
+			sess, err := planrepo.NewProd(cfg.PlansDir).Open(slug)
 			if err != nil {
 				return err
 			}
+			defer func() { _ = sess.Close() }()
+
+			snap, err := sess.Snapshot()
+			if err != nil {
+				return err
+			}
+			issues := snap.Issues
 
 			// Check for active issues
 			if !force {
@@ -89,25 +103,6 @@ func NewArchiveCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&force, "force", false, "archive even with active issues")
 	return cmd
-}
-
-// readIssuesForArchive opens a short-lived planrepo session, copies out the
-// issues snapshot, and closes — releasing the plan lock before any of the
-// summary write or rename happens. The destructive filesystem move stays
-// outside the session: holding the plan lock while moving the directory the
-// lock file lives in would tangle release semantics on platforms that resolve
-// .pb-lock through the moved path.
-func readIssuesForArchive(plansDir, slug string) ([]schema.IssueYaml, error) {
-	sess, err := planrepo.NewProd(plansDir).Open(slug)
-	if err != nil {
-		return nil, err
-	}
-	defer sess.Close()
-	snap, err := sess.Snapshot()
-	if err != nil {
-		return nil, err
-	}
-	return snap.Issues, nil
 }
 
 func buildSummary(slug string, issues []schema.IssueYaml) string {
