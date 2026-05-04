@@ -113,21 +113,91 @@ func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
 	}, nil
 }
 
-// Snapshot returns the current in-session snapshot by value with a defensive
-// copy of Issues, so caller mutation cannot bleed into session state. Mutations
-// made via UpdatePrd, UpdateIssue, or CreateIssue are reflected on subsequent
-// calls. Returns ErrSessionClosed if the session has been closed.
+// Snapshot returns the current in-session snapshot with a deep copy of every
+// slice and pointer field, so caller mutation cannot bleed into session state.
+// Mutations made via UpdatePrd, UpdateIssue, or CreateIssue are reflected on
+// subsequent calls. Returns ErrSessionClosed if the session has been closed.
 func (s *PlanSession) Snapshot() (Snapshot, error) {
 	if s.closed {
 		return Snapshot{}, ErrSessionClosed
 	}
 	issues := make([]schema.IssueYaml, len(s.snapshot.Issues))
-	copy(issues, s.snapshot.Issues)
+	for i := range s.snapshot.Issues {
+		issues[i] = cloneIssue(s.snapshot.Issues[i])
+	}
 	return Snapshot{
 		Slug:   s.snapshot.Slug,
-		PRD:    s.snapshot.PRD,
+		PRD:    clonePrd(s.snapshot.PRD),
 		Issues: issues,
 	}, nil
+}
+
+func cloneIssue(iss schema.IssueYaml) schema.IssueYaml {
+	iss.Labels = cloneStringSlice(iss.Labels)
+	iss.BlockedBy = cloneIntSlice(iss.BlockedBy)
+	iss.Blocking = cloneIntSlice(iss.Blocking)
+	iss.AcceptanceCriteria = cloneStringSlice(iss.AcceptanceCriteria)
+	iss.Steps = cloneStringSlice(iss.Steps)
+	iss.UseCases = cloneStringSlice(iss.UseCases)
+	iss.Assignee = clonePtrString(iss.Assignee)
+	iss.Branch = clonePtrString(iss.Branch)
+	iss.PR = clonePtrString(iss.PR)
+	iss.LinearID = clonePtrString(iss.LinearID)
+	iss.Notes = clonePtrString(iss.Notes)
+	iss.Headed = clonePtrBool(iss.Headed)
+	return iss
+}
+
+func clonePrd(prd schema.PrdYaml) schema.PrdYaml {
+	prd.InScope = cloneStringSlice(prd.InScope)
+	prd.OutOfScope = cloneStringSlice(prd.OutOfScope)
+	prd.Decisions = cloneStringSlice(prd.Decisions)
+	prd.OpenQuestions = cloneStringSlice(prd.OpenQuestions)
+	prd.Risks = cloneStringSlice(prd.Risks)
+	prd.Validation = cloneStringSlice(prd.Validation)
+	if prd.UseCases != nil {
+		ucs := make([]schema.UseCase, len(prd.UseCases))
+		copy(ucs, prd.UseCases)
+		prd.UseCases = ucs
+	}
+	prd.Notes = clonePtrString(prd.Notes)
+	prd.DevCommand = clonePtrString(prd.DevCommand)
+	prd.BaseURL = clonePtrString(prd.BaseURL)
+	if prd.Linear != nil {
+		l := *prd.Linear
+		prd.Linear = &l
+	}
+	return prd
+}
+
+func cloneStringSlice(s []string) []string {
+	if s == nil {
+		return nil
+	}
+	return append([]string(nil), s...)
+}
+
+func cloneIntSlice(s []int) []int {
+	if s == nil {
+		return nil
+	}
+	return append([]int(nil), s...)
+}
+
+func clonePtrString(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	s := *p
+	return &s
+}
+
+func clonePtrBool(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	b := *p
+	return &b
 }
 
 // UpdatePrd replaces the in-session PRD and marks it dirty. The change is

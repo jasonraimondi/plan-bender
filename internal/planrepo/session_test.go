@@ -130,18 +130,38 @@ func TestSnapshot_DefensiveCopyOfIssues(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sess.Close() })
 
+	// Seed in-session state with non-empty inner slices and a pointer field
+	// so the deep-copy contract has something to alias if it regresses.
+	seed := mustSnapshot(t, sess).Issues[0]
+	seed.Labels = []string{"AFK"}
+	seed.BlockedBy = []int{2}
+	branch := "feature/initial"
+	seed.Branch = &branch
+	require.NoError(t, sess.UpdateIssue(seed))
+
 	first, err := sess.Snapshot()
 	require.NoError(t, err)
 	require.Len(t, first.Issues, 2)
 
-	// Mutating the returned Issues slice must not bleed into the session.
+	// Outer slice tampering.
 	first.Issues[0].Slug = "TAMPERED"
 	first.Issues = append(first.Issues, schema.IssueYaml{ID: 999})
+
+	// Inner slice tampering.
+	first.Issues[0].Labels[0] = "TAMPERED-LABEL"
+	first.Issues[0].BlockedBy[0] = 999
+
+	// Pointer field tampering.
+	*first.Issues[0].Branch = "TAMPERED-BRANCH"
 
 	second, err := sess.Snapshot()
 	require.NoError(t, err)
 	require.Len(t, second.Issues, 2, "appended issue must not appear in next Snapshot")
 	assert.Equal(t, "first", second.Issues[0].Slug, "slug mutation must not bleed into session")
+	assert.Equal(t, []string{"AFK"}, second.Issues[0].Labels, "inner slice mutation must not bleed into session")
+	assert.Equal(t, []int{2}, second.Issues[0].BlockedBy, "inner int slice mutation must not bleed into session")
+	require.NotNil(t, second.Issues[0].Branch)
+	assert.Equal(t, "feature/initial", *second.Issues[0].Branch, "pointer-field mutation must not bleed into session")
 }
 
 func TestSession_AfterCloseRejectsAllOps(t *testing.T) {
