@@ -126,7 +126,9 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	case created:
 		fmt.Fprintf(out, "Config:  .plan-bender.yaml (created)\n")
 	case localOnly:
-		fmt.Fprintf(out, "Config:  .plan-bender.local.yaml (local only)\n")
+		fmt.Fprintf(out, "Config:  .plan-bender.local.yaml (local only — no project file written)\n")
+		fmt.Fprintf(out, "         If teammates clone this repo they'll get the starter config; your\n")
+		fmt.Fprintf(out, "         local overrides stay in .plan-bender.local.yaml.\n")
 	default:
 		fmt.Fprintf(out, "Config:  .plan-bender.yaml (exists)\n")
 	}
@@ -156,8 +158,15 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	}
 
 	fmt.Fprintf(out, "\nReady! Next:\n")
-	fmt.Fprintf(out, "  /bender-orchestrator    — see your planning dashboard\n")
-	fmt.Fprintf(out, "  /bender-write-prd       — start a new plan\n")
+	fmt.Fprintf(out, "  In your agent (Claude Code, Pi, etc.):\n")
+	fmt.Fprintf(out, "    /bender-orchestrator    — see your planning dashboard\n")
+	fmt.Fprintf(out, "    /bender-write-prd       — start a new plan\n")
+	fmt.Fprintf(out, "  From the shell:\n")
+	fmt.Fprintf(out, "    pb status <slug>           — per-issue state for a plan\n")
+	fmt.Fprintf(out, "    pb dispatch <slug>         — autonomous implementation loop\n")
+	if useLinear {
+		fmt.Fprintf(out, "    pb sync linear push <slug> — push existing plan to Linear (creates project + issues)\n")
+	}
 
 	return nil
 }

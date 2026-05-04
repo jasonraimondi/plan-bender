@@ -123,7 +123,8 @@ func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), ".plan-bender.yaml should not be created when .plan-bender.local.yaml exists")
 
 	output := h.output()
-	assert.Contains(t, output, "Config:  .plan-bender.local.yaml (local only)")
+	assert.Contains(t, output, "Config:  .plan-bender.local.yaml (local only")
+	assert.Contains(t, output, "no project file written", "users hitting the local-only branch should be told why")
 	assert.NotContains(t, output, "(created)")
 }
 
@@ -169,6 +170,30 @@ func TestSetup_LinearWithEnvVars(t *testing.T) {
 
 	output := h.output()
 	assert.Contains(t, output, "Linear:  enabled")
+	assert.Contains(t, output, "pb sync linear push", "--linear should hint at the explicit push command for existing plans")
+}
+
+func TestSetup_NoLinearOmitsSyncHint(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	assert.NotContains(t, h.output(), "pb sync linear push", "no --linear means no Linear-specific next step")
+}
+
+func TestSetup_ReadyBlockShowsCLIEquivalents(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	output := h.output()
+	assert.Contains(t, output, "From the shell:")
+	assert.Contains(t, output, "pb status")
+	assert.Contains(t, output, "pb dispatch")
 }
 
 func TestSetup_LinearWithInvalidCreds(t *testing.T) {
