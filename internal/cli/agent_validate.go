@@ -2,6 +2,9 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
@@ -38,7 +41,10 @@ func NewAgentValidateCmd() *cobra.Command {
 			repo := planrepo.NewProd(cfg.PlansDir)
 			planResult, err := repo.Validate(slug, cfg)
 			if err != nil {
-				return NewAgentError("opening plan "+slug+": "+err.Error(), ErrPlanNotFound)
+				if errors.Is(err, fs.ErrNotExist) {
+					return NewAgentError(fmt.Sprintf("plan %q not found", slug), ErrPlanNotFound)
+				}
+				return NewAgentError("opening plan: "+err.Error(), ErrInternal)
 			}
 
 			out := transformValidationResult(planResult)
