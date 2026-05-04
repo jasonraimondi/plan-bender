@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -290,5 +291,23 @@ type CommitValidationError struct {
 }
 
 func (e *CommitValidationError) Error() string {
-	return fmt.Sprintf("commit preflight validation failed for plan %q", e.Result.PRD.File)
+	var details []string
+	for _, msg := range e.Result.PRD.Errors {
+		details = append(details, fmt.Sprintf("prd: %s", msg))
+	}
+	for _, ir := range e.Result.Issues {
+		for _, msg := range ir.Errors {
+			details = append(details, fmt.Sprintf("%s: %s", ir.File, msg))
+		}
+	}
+	for _, msg := range e.Result.CrossRef {
+		details = append(details, fmt.Sprintf("cross-ref: %s", msg))
+	}
+	for _, c := range e.Result.Cycles {
+		details = append(details, fmt.Sprintf("cycle: %v", c))
+	}
+	if len(details) == 0 {
+		return fmt.Sprintf("commit preflight validation failed for plan %q", e.Result.PRD.File)
+	}
+	return fmt.Sprintf("commit preflight validation failed for plan %q: %s", e.Result.PRD.File, strings.Join(details, "; "))
 }
