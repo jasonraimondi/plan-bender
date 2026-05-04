@@ -201,26 +201,28 @@ func clonePtrBool(p *bool) *bool {
 }
 
 // UpdatePrd replaces the in-session PRD and marks it dirty. The change is
-// not written to disk until Commit succeeds.
+// not written to disk until Commit succeeds. The input is deep-cloned so
+// subsequent caller mutations do not bleed into session state.
 func (s *PlanSession) UpdatePrd(prd schema.PrdYaml) error {
 	if s.closed {
 		return ErrSessionClosed
 	}
-	s.snapshot.PRD = prd
+	s.snapshot.PRD = clonePrd(prd)
 	s.dirtyPRD = true
 	return nil
 }
 
 // UpdateIssue replaces an existing issue (matched by ID) in the in-session
-// snapshot and marks it dirty. Returns an error if the ID is not in the
-// current snapshot — use CreateIssue for new issues.
+// snapshot and marks it dirty. The input is deep-cloned so subsequent caller
+// mutations do not bleed into session state. Returns an error if the ID is
+// not in the current snapshot — use CreateIssue for new issues.
 func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
 	if s.closed {
 		return ErrSessionClosed
 	}
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == issue.ID {
-			s.snapshot.Issues[i] = issue
+			s.snapshot.Issues[i] = cloneIssue(issue)
 			s.dirtyIssues[issue.ID] = true
 			return nil
 		}
@@ -229,8 +231,10 @@ func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
 }
 
 // CreateIssue appends a new issue to the in-session snapshot and marks it
-// dirty. Returns an error if an issue with the same ID already exists in
-// the session (which would also produce a filename conflict at commit).
+// dirty. The input is deep-cloned so subsequent caller mutations do not bleed
+// into session state. Returns an error if an issue with the same ID already
+// exists in the session (which would also produce a filename conflict at
+// commit).
 func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
 	if s.closed {
 		return ErrSessionClosed
@@ -240,26 +244,28 @@ func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
 			return fmt.Errorf("create issue id #%d in plan %q: %w", issue.ID, s.slug, ErrIssueIDExists)
 		}
 	}
-	s.snapshot.Issues = append(s.snapshot.Issues, issue)
+	s.snapshot.Issues = append(s.snapshot.Issues, cloneIssue(issue))
 	s.dirtyIssues[issue.ID] = true
 	return nil
 }
 
 // UpsertIssue creates the issue if its ID is new in the in-session snapshot,
-// or updates the existing issue if the ID already exists. Use UpdateIssue or
-// CreateIssue when callers need strict create-only or update-only semantics.
+// or updates the existing issue if the ID already exists. The input is
+// deep-cloned so subsequent caller mutations do not bleed into session state.
+// Use UpdateIssue or CreateIssue when callers need strict create-only or
+// update-only semantics.
 func (s *PlanSession) UpsertIssue(issue schema.IssueYaml) error {
 	if s.closed {
 		return ErrSessionClosed
 	}
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == issue.ID {
-			s.snapshot.Issues[i] = issue
+			s.snapshot.Issues[i] = cloneIssue(issue)
 			s.dirtyIssues[issue.ID] = true
 			return nil
 		}
 	}
-	s.snapshot.Issues = append(s.snapshot.Issues, issue)
+	s.snapshot.Issues = append(s.snapshot.Issues, cloneIssue(issue))
 	s.dirtyIssues[issue.ID] = true
 	return nil
 }
