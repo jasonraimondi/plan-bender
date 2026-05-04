@@ -47,6 +47,13 @@ type Dispatcher struct {
 	// to os.Stdout at first call.
 	outOnce   sync.Once
 	outWriter io.Writer
+
+	// skipMu guards skipIDs. skipIDs records issue IDs whose blocked-status
+	// write failed inside markBlockedAndWarn; Run filters those out of every
+	// subsequent batch so a persistent write failure cannot drive the dispatch
+	// loop to re-pick the same issue forever.
+	skipMu  sync.Mutex
+	skipIDs map[int]bool
 }
 
 func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml, error) {
@@ -128,8 +135,11 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return nil
 		}
 
-		batch := plan.ReadyAFK(issues)
+		batch := d.filterSkipped(plan.ReadyAFK(issues))
 		if len(batch) == 0 {
+			if skipped := d.skippedCount(); skipped > 0 {
+				return fmt.Errorf("dispatch stuck: %d issue(s) failed to mark blocked and were skipped this run; check stderr warnings", skipped)
+			}
 			if hitlOnlyRemaining(issues) {
 				d.printHITLSummary(issues)
 				return ErrHITLOnly
@@ -291,7 +301,11 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 			if errors.Is(err, status.ErrAlreadyInState) {
 				continue
 			}
-			return fmt.Errorf("flipping issue #%d to done: %w", r.IssueID, err)
+			// Warn-and-continue: the merge already landed in integrationBranch,
+			// so returning here would strand later successful branches and
+			// skip worktree GC. The YAML status will be stale for this issue
+			// until the operator re-runs or fixes the underlying error.
+			fmt.Fprintf(d.out(), "warning: failed to mark issue #%d done after merging branch %s: %v; YAML status is stale\n", r.IssueID, r.Branch, err)
 		}
 	}
 
@@ -364,7 +378,38 @@ func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int
 	if err == nil || errors.Is(err, status.ErrAlreadyInState) {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
+	// Persist the skip in process memory so the next Run iteration cannot
+	// re-pick this id and rerun the same failing transition forever.
+	d.skipMu.Lock()
+	if d.skipIDs == nil {
+		d.skipIDs = make(map[int]bool)
+	}
+	d.skipIDs[id] = true
+	d.skipMu.Unlock()
+	fmt.Fprintf(os.Stderr, "warning: failed to mark issue #%d blocked (%s); skipping for remainder of this dispatcher's lifetime\n", id, err)
+}
+
+// filterSkipped removes issues recorded in skipIDs from batch. Returns batch
+// unchanged when nothing has been skipped yet.
+func (d *Dispatcher) filterSkipped(batch []schema.IssueYaml) []schema.IssueYaml {
+	d.skipMu.Lock()
+	defer d.skipMu.Unlock()
+	if len(d.skipIDs) == 0 {
+		return batch
+	}
+	out := make([]schema.IssueYaml, 0, len(batch))
+	for _, iss := range batch {
+		if !d.skipIDs[iss.ID] {
+			out = append(out, iss)
+		}
+	}
+	return out
+}
+
+func (d *Dispatcher) skippedCount() int {
+	d.skipMu.Lock()
+	defer d.skipMu.Unlock()
+	return len(d.skipIDs)
 }
 
 func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {

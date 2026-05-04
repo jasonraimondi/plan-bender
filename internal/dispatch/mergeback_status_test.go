@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -38,15 +39,19 @@ func makeMergeableBranch(t *testing.T, root, integrationBranch, branch, file str
 	}
 }
 
-// TestDispatcher_MergeBack_CASMismatchSurfaces drives MergeBack against an
-// issue YAML whose status is not in the from-set [in-review] and not equal to
-// the target done. owner.Transition returns *ErrCASMismatch; MergeBack must
-// wrap and return it instead of swallowing.
-func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
+// TestDispatcher_MergeBack_CASMismatchSurfacesAsWarning drives MergeBack
+// against an issue YAML whose status is not in the from-set [in-review] and
+// not equal to the target done. owner.Transition returns *ErrCASMismatch;
+// MergeBack must surface it as a warning to d.out (so later successful
+// merges in the loop and worktree GC still run) but return nil. The issue
+// YAML stays in its prior state — no spurious overwrite.
+func TestDispatcher_MergeBack_CASMismatchSurfacesAsWarning(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 
 	d := newDispatcher(fix)
+	var dispatchOut bytes.Buffer
+	d.Out = &dispatchOut
 	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 
@@ -60,10 +65,11 @@ func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
 	owner := status.New(newProdStatusStore(fix.plansDir, d.Config))
 	err = d.MergeBack(context.Background(), "demo", results, integrationBranch, plans, owner)
 
-	require.Error(t, err)
-	var cas *status.ErrCASMismatch
-	require.ErrorAs(t, err, &cas, "MergeBack must surface ErrCASMismatch wrapped, not swallow it")
-	assert.Equal(t, status.StatusTodo, cas.Current)
+	require.NoError(t, err, "MergeBack must not abort mid-loop on a status-flip failure — that would strand later merges and skip GC")
+	assert.Contains(t, dispatchOut.String(), "failed to mark issue #1 done", "warning must surface the failed flip so the operator can recover")
+
+	post := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "todo", post.Status, "issue YAML must not have been overwritten when the CAS check refused the transition")
 }
 
 // TestDispatcher_MergeBack_AlreadyInStateSwallowed drives MergeBack against
