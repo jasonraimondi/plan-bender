@@ -79,6 +79,11 @@ func TestGenerateCmd_Aliases(t *testing.T) {
 	assert.ElementsMatch(t, []string{"gen"}, cmd.Aliases)
 }
 
+func TestGenerateCmd_HiddenFromHelp(t *testing.T) {
+	cmd := NewGenerateCmd()
+	assert.True(t, cmd.Hidden, "generate is a power-user/script command; pb setup is the documented entry point")
+}
+
 func TestGenerateCmd_InvalidConfigReportsError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))

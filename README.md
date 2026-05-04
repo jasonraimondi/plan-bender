@@ -265,7 +265,6 @@ Local YAML remains the source of truth; Linear mirrors it.
 
 ```sh
 pb setup                       # idempotent — write config + regenerate skills
-pb generate                    # regenerate skills from current config
 pb next <slug>                 # recommended next issue
 pb status <slug>               # per-issue state + failure notes
 pb dispatch <slug>             # autonomous loop

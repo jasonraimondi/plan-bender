@@ -4,10 +4,9 @@
 
 | Command | What it does |
 | --- | --- |
-| `pb setup` | Write defaults, generate skills, symlink install |
+| `pb setup` | Write defaults, generate skills, symlink install (idempotent — re-run after config changes) |
 | `pb setup --linear` | Configure Linear integration |
 | `pb setup --yes` | Non-interactive mode |
-| `pb generate` | Regenerate skills from current config (alias: `gen`) |
 | `pb sync linear push <slug>` | Push local issues to Linear |
 | `pb sync linear pull <slug>` | Pull Linear state into local YAML |
 | `pb doctor` | Verify installation health |

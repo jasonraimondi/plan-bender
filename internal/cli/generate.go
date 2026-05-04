@@ -15,12 +15,15 @@ import (
 
 // NewGenerateCmd creates the generate command, which re-renders skill
 // templates and refreshes symlinks from the current config without touching
-// the config file itself or running Linear setup.
+// the config file itself or running Linear setup. Hidden from --help: `pb
+// setup` is the documented entry point and runs the same code idempotently.
+// `generate` stays callable for scripts that want to skip the doctor pass.
 func NewGenerateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "generate",
 		Aliases: []string{"gen"},
 		Short:   "Regenerate skills from the current config",
+		Hidden:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := os.Getwd()
 			if err != nil {
