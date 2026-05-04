@@ -14,8 +14,7 @@ func TestSyncCmd_Structure(t *testing.T) {
 
 	linear := findSub(sync, "linear")
 	require.NotNil(t, linear, "sync should have a 'linear' subcommand")
-	assert.True(t, linear.Runnable(), "sync linear should be directly runnable with --from")
-	assert.NotNil(t, linear.Flags().Lookup("from"), "sync linear should have --from flag")
+	assert.Nil(t, linear.Flags().Lookup("from"), "--from flag was removed; only push/pull subcommands remain")
 
 	push := findSub(linear, "push")
 	require.NotNil(t, push, "sync linear should have a 'push' subcommand")
@@ -30,25 +29,27 @@ func TestSyncCmd_Structure(t *testing.T) {
 	assert.Nil(t, findSub(sync, "pull"))
 }
 
-func TestSyncLinear_RequiresFromFlag(t *testing.T) {
+func TestSyncLinear_BareSlugSuggestsDirection(t *testing.T) {
 	sync := NewSyncCmd()
-	sync.SetArgs([]string{"linear", "anything"})
+	sync.SetArgs([]string{"linear", "myplan"})
 	var stderr bytes.Buffer
 	sync.SetErr(&stderr)
 	sync.SetOut(&bytes.Buffer{})
 	err := sync.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--from required")
+	assert.Contains(t, err.Error(), "sync linear push myplan")
+	assert.Contains(t, err.Error(), "sync linear pull myplan")
 }
 
-func TestSyncLinear_RejectsBadFromValue(t *testing.T) {
+func TestSyncLinear_NoArgsPrintsHelp(t *testing.T) {
 	sync := NewSyncCmd()
-	sync.SetArgs([]string{"linear", "anything", "--from", "neither"})
+	sync.SetArgs([]string{"linear"})
+	var out bytes.Buffer
+	sync.SetOut(&out)
 	sync.SetErr(&bytes.Buffer{})
-	sync.SetOut(&bytes.Buffer{})
-	err := sync.Execute()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must be 'local' or 'linear'")
+	require.NoError(t, sync.Execute())
+	assert.Contains(t, out.String(), "push")
+	assert.Contains(t, out.String(), "pull")
 }
 
 func TestAgentRoot_SyncLeavesGetSlugCompletion(t *testing.T) {

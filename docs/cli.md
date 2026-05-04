@@ -8,7 +8,6 @@
 | `pb setup --linear` | Configure Linear integration |
 | `pb setup --yes` | Non-interactive mode |
 | `pb generate` | Regenerate skills from current config (alias: `gen`) |
-| `pb sync linear <slug> --from local\|linear` | Sync plan with Linear; `local`=push, `linear`=pull |
 | `pb sync linear push <slug>` | Push local issues to Linear |
 | `pb sync linear pull <slug>` | Pull Linear state into local YAML |
 | `pb doctor` | Verify installation health |
