@@ -17,7 +17,7 @@
 | `pb worktree create <slug> <id>` | Create a git branch and worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan (preserves unmerged) |
 | `pb status <slug>` | Per-issue state for a plan: status counts, labels, blocked notes, branch/PR |
-| `pb retry <slug> <id>` | Reset a blocked issue to `todo` and clear its failure notes |
+| `pb retry <slug> <id>` | Reset a blocked issue to `todo` (appends a structured transition note) |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
 | `pb docs` | Open GitHub repo in browser |
 | `pb docs --print` | Print repo URL without opening |
@@ -44,10 +44,10 @@ All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero e
 | `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |
 | `plan-bender-agent dispatch <slug>` | Autonomous implementation loop (see below) |
 | `plan-bender-agent complete <slug> <id>` | Mark issue in-review + emit completion sentinel |
-| `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch}` |
+| `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch, status}` — status is the post-claim issue status (`in-progress`) |
 | `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; unmerged branches are preserved and logged to stderr |
 | `plan-bender-agent status <slug>` | JSON `{plan, issues}` — per-issue id, status, labels, branch, full notes |
-| `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status, cleared_notes}`; refuses non-blocked status |
+| `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] blocked→todo: retry` note. Refuses non-blocked status. |
 
 `write-prd` and `write-issue` read from stdin when no file is given.
 
@@ -76,4 +76,4 @@ A sub-agent signals completion by calling `pba complete <slug> <id>`. The comman
 
 ## Recovering from a stuck dispatch
 
-When `pba dispatch` exits non-zero, `pb status <slug>` shows the per-issue state with the failure reason in `notes`. After fixing the underlying problem (build break, missing dep, etc.), `pb retry <slug> <id>` flips the issue back to `todo` and clears its notes so the next dispatch will re-pick it. Retry refuses any non-`blocked` status — fix `done`/`in-review`/`canceled` issues by hand if you need to.
+When `pba dispatch` exits non-zero, `pb status <slug>` shows the per-issue state with the failure reason in `notes`. After fixing the underlying problem (build break, missing dep, etc.), `pb retry <slug> <id>` flips the issue back to `todo` and appends a `[date] blocked→todo: retry` note (the prior failure note is preserved as audit trail) so the next dispatch will re-pick it. Retry refuses any non-`blocked` status — fix `done`/`in-review`/`canceled` issues by hand if you need to.

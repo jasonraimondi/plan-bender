@@ -196,7 +196,7 @@ flowchart LR
 ```sh
 pb status <slug>            # see per-issue state and failure notes
 # fix the underlying problem
-pb retry <slug> <id>        # flip blocked → todo, clear notes
+pb retry <slug> <id>        # flip blocked → todo (appends transition note)
 pb dispatch <slug>          # resume
 ```
 

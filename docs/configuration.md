@@ -29,8 +29,9 @@ All available keys with their default values:
 ```yaml
 plans_dir: ./.plan-bender/plans/
 max_points: 3                  # Cap per issue — forces thin slices
-agents:
-  - claude-code                # claude-code | opencode | openclaw | pi
+agents:                        # claude-code | opencode | openclaw | pi
+  claude-code: true            # bool toggles registry defaults; or use object form
+  pi: true                     #   for per-agent overrides (project_dir, scope, ...)
 
 tracks:                        # Classify issue concerns; PRD-to-issues checks coverage
   - intent
@@ -152,6 +153,8 @@ Templates receive a context map built from your config:
 | `next` | `plan-bender-agent next` |
 | `dispatch` | `plan-bender-agent dispatch` |
 | `complete` | `plan-bender-agent complete` |
+| `retry` | `plan-bender-agent retry` |
+| `worktree_create` | `plan-bender-agent worktree create` |
 
 Use `{{.commands.write_prd}}` in templates instead of hardcoding binary names.
 

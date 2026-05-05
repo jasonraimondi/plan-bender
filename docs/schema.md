@@ -18,7 +18,7 @@ plans/
 ```yaml
 name: "Auth System"
 slug: auth-system
-status: draft                  # draft | active | complete | archived
+status: draft                  # draft | active | in-review | approved | complete | archived
 created: 2025-03-15
 updated: 2025-03-15
 
@@ -65,8 +65,16 @@ labels: [AFK]                  # AFK = autonomous, HITL = needs human input
 assignee: null
 blocked_by: []
 blocking: [2, 3]
+created: 2025-03-15
+updated: 2025-03-15
 tdd: true                      # Write tests first
 headed: false                  # Verify in browser
+
+# Optional fields populated by dispatch / sync — usually omitted at authoring time:
+# branch: jason/auth-system/1-setup-middleware
+# pr: https://github.com/org/repo/pull/42
+# linear_id: ENG-123
+# notes: "[2025-03-15 10:42] todo→in-progress: dispatch worktree"
 
 outcome: "Auth middleware validates JWTs and attaches user context."
 scope: "Middleware only — no login UI, no token issuance."
