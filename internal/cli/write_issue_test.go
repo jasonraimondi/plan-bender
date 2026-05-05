@@ -102,6 +102,31 @@ func TestWriteIssue_StdinPipe(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestWriteIssue_AcceptsForwardRefs is the bootstrap regression test:
+// the very first issue in a plan must be writable even when its blocking
+// edges point at issues that haven't been authored yet. Strict cross-ref
+// validation still runs at `agent validate` time; the per-write path is
+// lax so authors don't have to write all issues with empty deps and patch
+// them later.
+func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+	seedPlan(t, dir, "test-plan")
+
+	forwardRefIssue := strings.Replace(validIssueYAML, "blocking: []", "blocking: [2, 3, 9]", 1)
+
+	cmd := NewWriteIssueCmd()
+	cmd.SetArgs([]string{"test-plan"})
+	cmd.SetIn(strings.NewReader(forwardRefIssue))
+	var out, errBuf strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	require.NoError(t, cmd.Execute(), "stderr: %s", errBuf.String())
+
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.yaml"))
+	assert.NoError(t, err)
+}
+
 // TestWriteIssue_UpdatesExisting exercises the upsert routing inside
 // stageIssue: a second write to the same ID must succeed (UpdateIssue path)
 // rather than failing on duplicate-ID. Slug rename also exercises the

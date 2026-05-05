@@ -70,7 +70,12 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 	plan := commitPlan{}
 
 	// 1. Validate the in-session snapshot against the schema package.
-	res := validateSnapshot(s.snapshot, s.baselineFilenames, cfg)
+	//    Cross-refs run in lax mode here so an issue can declare forward
+	//    blocked_by/blocking edges to issues that have not been written
+	//    yet — the bootstrap case for the very first issue in a plan.
+	//    `agent validate` runs the strict variant and remains the gate
+	//    for whole-plan consistency.
+	res := validateSnapshot(s.snapshot, s.baselineFilenames, cfg, schema.CrossRefLax)
 	if !res.Valid {
 		return commitPlan{}, &CommitValidationError{Result: res}
 	}

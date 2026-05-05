@@ -2,8 +2,32 @@ package schema
 
 import "fmt"
 
-// ValidateCrossRefs checks blocked_by/blocking references, symmetry, and use_case existence.
-func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml) []ValidationError {
+// CrossRefMode controls how strictly ValidateCrossRefs treats blocked_by /
+// blocking edges that point at issues which are not present in the snapshot.
+//
+// Strict: the canonical full-plan check. Missing targets and broken symmetry
+// are errors. Used by `agent validate` and any caller that wants to confirm
+// the plan as a whole is internally consistent.
+//
+// Lax: bootstrap-friendly. Edges whose target is absent are silently
+// accepted (and their symmetry check is skipped, since there is nothing to
+// be symmetric with). Edges between two present issues are still required
+// to be symmetric. Used by the per-write commit path so the first issue in
+// a plan can declare forward dependencies on issues that have not been
+// written yet — a strict commit-time check would otherwise force authors to
+// write all issues with empty deps and patch them after the fact.
+type CrossRefMode int
+
+const (
+	CrossRefStrict CrossRefMode = iota
+	CrossRefLax
+)
+
+// ValidateCrossRefs checks blocked_by/blocking references, symmetry, and
+// use_case existence. See CrossRefMode for the strict/lax distinction.
+// use_case validation is unaffected by mode — the PRD is always written
+// before issues, so unknown use cases are always errors.
+func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml, mode CrossRefMode) []ValidationError {
 	var errs []ValidationError
 
 	ids := make(map[int]bool, len(issues))
@@ -11,7 +35,6 @@ func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml) []ValidationError {
 		ids[iss.ID] = true
 	}
 
-	// Build lookup for quick symmetry checks
 	blockedBySet := make(map[int]map[int]bool)
 	blockingSet := make(map[int]map[int]bool)
 	for _, iss := range issues {
@@ -20,16 +43,16 @@ func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml) []ValidationError {
 	}
 
 	for _, iss := range issues {
-		// blocked_by targets must exist
 		for _, dep := range iss.BlockedBy {
 			if !ids[dep] {
-				errs = append(errs, ValidationError{
-					Field:   fmt.Sprintf("issue #%d blocked_by", iss.ID),
-					Message: fmt.Sprintf("references non-existent issue #%d", dep),
-				})
+				if mode == CrossRefStrict {
+					errs = append(errs, ValidationError{
+						Field:   fmt.Sprintf("issue #%d blocked_by", iss.ID),
+						Message: fmt.Sprintf("references non-existent issue #%d", dep),
+					})
+				}
 				continue
 			}
-			// Symmetry: dep.blocking should contain iss.ID
 			if !blockingSet[dep][iss.ID] {
 				errs = append(errs, ValidationError{
 					Field:   fmt.Sprintf("issue #%d blocked_by", iss.ID),
@@ -38,16 +61,16 @@ func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml) []ValidationError {
 			}
 		}
 
-		// blocking targets must exist
 		for _, dep := range iss.Blocking {
 			if !ids[dep] {
-				errs = append(errs, ValidationError{
-					Field:   fmt.Sprintf("issue #%d blocking", iss.ID),
-					Message: fmt.Sprintf("references non-existent issue #%d", dep),
-				})
+				if mode == CrossRefStrict {
+					errs = append(errs, ValidationError{
+						Field:   fmt.Sprintf("issue #%d blocking", iss.ID),
+						Message: fmt.Sprintf("references non-existent issue #%d", dep),
+					})
+				}
 				continue
 			}
-			// Symmetry: dep.blocked_by should contain iss.ID
 			if !blockedBySet[dep][iss.ID] {
 				errs = append(errs, ValidationError{
 					Field:   fmt.Sprintf("issue #%d blocking", iss.ID),
@@ -56,7 +79,6 @@ func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml) []ValidationError {
 			}
 		}
 
-		// use_case references must exist in PRD
 		if prd != nil {
 			prdUCs := make(map[string]bool, len(prd.UseCases))
 			for _, uc := range prd.UseCases {
