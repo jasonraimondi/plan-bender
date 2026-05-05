@@ -12,8 +12,11 @@ import (
 // reuses the schema package validators so the result shape matches what
 // disk-based tooling produces, but never re-reads from disk — the snapshot
 // is the source of truth for the lifetime of the session.
+//
+// Strict cross-ref mode: this is the canonical full-plan check, used by the
+// `agent validate` path. Commit uses the lax variant; see validateSnapshot.
 func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
-	return validateSnapshot(s.snapshot, s.baselineFilenames, cfg)
+	return validateSnapshot(s.snapshot, s.baselineFilenames, cfg, schema.CrossRefStrict)
 }
 
 // Validate is a one-shot convenience that opens a session for slug, validates
@@ -34,7 +37,7 @@ func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationRe
 	return sess.Validate(cfg)
 }
 
-func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config) schema.PlanValidationResult {
+func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config, crossRefMode schema.CrossRefMode) schema.PlanValidationResult {
 	prdPath := filepath.Join(snap.Slug, "prd.yaml")
 
 	var prdErrs []string
@@ -56,7 +59,7 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 	}
 
 	var crossRef []string
-	for _, ve := range schema.ValidateCrossRefs(&snap.PRD, snap.Issues) {
+	for _, ve := range schema.ValidateCrossRefs(&snap.PRD, snap.Issues, crossRefMode) {
 		crossRef = append(crossRef, ve.String())
 	}
 
