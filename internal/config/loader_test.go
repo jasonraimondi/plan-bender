@@ -102,6 +102,24 @@ func TestLoad_OldAgentsArrayMigrated(t *testing.T) {
 	assert.Contains(t, names, "openclaw")
 }
 
+func TestLoad_OldReviewWithUserArrayMigrated(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "review_with_user: []\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.False(t, cfg.ReviewWithUser)
+}
+
+func TestLoad_OldReviewWithUserNonEmptyArrayMigratedToTrue(t *testing.T) {
+	dir := t.TempDir()
+	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "review_with_user:\n  - prd\n")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.True(t, cfg.ReviewWithUser)
+}
+
 func TestLoad_NewAgentsMapUntouched(t *testing.T) {
 	dir := t.TempDir()
 	writeYAML(t, filepath.Join(dir, ".plan-bender.yaml"), "agents:\n  claude-code: true\n")

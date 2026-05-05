@@ -72,6 +72,7 @@ func readPartial(path string) (PartialConfig, error) {
 // backend: linear → linear.enabled: true (silent migration).
 // backend: yaml-fs → dropped (default behavior).
 // agents: [seq] → agents: {name: true, ...} (silent migration to map format).
+// review_with_user: [seq] → review_with_user: <bool> (silent migration; non-empty → true).
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -93,6 +94,14 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 				}
 			}
 			raw["agents"] = agentsMap
+			modified = true
+		}
+	}
+
+	// Migrate old review_with_user []string to bool (any non-empty list → true).
+	if rwuVal, ok := raw["review_with_user"]; ok {
+		if rwuList, ok := rwuVal.([]any); ok {
+			raw["review_with_user"] = len(rwuList) > 0
 			modified = true
 		}
 	}
