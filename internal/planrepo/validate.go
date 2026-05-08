@@ -1,6 +1,7 @@
 package planrepo
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -27,14 +28,38 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationResult {
 	sess, err := p.Open(slug)
 	if err != nil {
-		return schema.PlanValidationResult{
-			PRD:    schema.ValidationResult{File: filepath.Join(slug, "prd.yaml"), Errors: []string{err.Error()}},
-			Issues: []schema.ValidationResult{},
-			Valid:  false,
-		}
+		return openErrorAsValidationResult(slug, err)
 	}
 	defer func() { _ = sess.Close() }()
 	return sess.Validate(cfg)
+}
+
+// openErrorAsValidationResult shapes a single Open failure into the
+// PlanValidationResult contract. Parse errors get attributed to the actual
+// broken file (PRD or issue) so `agent validate` points editors at the right
+// place; everything else is reported against the PRD path.
+func openErrorAsValidationResult(slug string, err error) schema.PlanValidationResult {
+	prdPath := filepath.Join(slug, "prd.yaml")
+	var parseErr *ParseError
+	if errors.As(err, &parseErr) {
+		if parseErr.File == prdPath {
+			return schema.PlanValidationResult{
+				PRD:    schema.ValidationResult{File: prdPath, Errors: []string{err.Error()}},
+				Issues: []schema.ValidationResult{},
+				Valid:  false,
+			}
+		}
+		return schema.PlanValidationResult{
+			PRD:    schema.ValidationResult{File: prdPath, Errors: nil},
+			Issues: []schema.ValidationResult{{File: parseErr.File, Errors: []string{err.Error()}}},
+			Valid:  false,
+		}
+	}
+	return schema.PlanValidationResult{
+		PRD:    schema.ValidationResult{File: prdPath, Errors: []string{err.Error()}},
+		Issues: []schema.ValidationResult{},
+		Valid:  false,
+	}
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config, crossRefMode schema.CrossRefMode) schema.PlanValidationResult {

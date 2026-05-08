@@ -34,7 +34,7 @@ func TestPlansValidate_MissingPlan_SurfacesAsPrdError(t *testing.T) {
 	assert.NotEmpty(t, res.PRD.Errors, "open failure must surface as a structured PRD error")
 }
 
-func TestPlansValidate_MalformedYAML_SurfacesAsPrdError(t *testing.T) {
+func TestPlansValidate_MalformedIssueYAML_AttributedToIssueFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "broken", validPrd, map[string]string{
 		"1-bad.yaml": "::not yaml::",
@@ -44,7 +44,30 @@ func TestPlansValidate_MalformedYAML_SurfacesAsPrdError(t *testing.T) {
 	res := repo.Validate("broken", testCfg())
 
 	assert.False(t, res.Valid)
-	assert.NotEmpty(t, res.PRD.Errors, "malformed issue YAML must surface in result rather than crashing")
+	// PRD parses fine; the parse error is on the issue file, so attribute
+	// it there instead of misreporting under prd.yaml.
+	assert.Empty(t, res.PRD.Errors)
+	require.Len(t, res.Issues, 1)
+	assert.Contains(t, res.Issues[0].File, "1-bad.yaml")
+	assert.NotEmpty(t, res.Issues[0].Errors)
+}
+
+func TestPlansValidate_MalformedPRD_AttributedToPRDFile(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	// Write a PRD that fails strict yaml decoding (KnownFields rejects
+	// unexpected_field). Write at least one issue so the failure isn't
+	// confused with "no plan dir".
+	planDir := filepath.Join(plansDir, "broken")
+	require.NoError(t, mkdirAll(t, filepath.Join(planDir, "issues")))
+	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.yaml"), "not_a_real_field: x"))
+	require.NoError(t, writeFile(t, filepath.Join(planDir, "issues", "1-a.yaml"), issueYAML(1, "a")))
+
+	repo := NewProd(plansDir)
+	res := repo.Validate("broken", testCfg())
+
+	assert.False(t, res.Valid)
+	assert.NotEmpty(t, res.PRD.Errors)
+	assert.Equal(t, filepath.Join("broken", "prd.yaml"), res.PRD.File)
 }
 
 func TestPlansValidate_ReleasesLockSoNextOpenSucceeds(t *testing.T) {

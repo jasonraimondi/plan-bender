@@ -121,6 +121,7 @@ func TestErrorCodes_AreDistinct(t *testing.T) {
 	codes := []ErrorCode{
 		ErrPlanNotFound,
 		ErrValidationFailed,
+		ErrInvalidPlan,
 		ErrConfigError,
 		ErrInternal,
 	}

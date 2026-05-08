@@ -30,6 +30,7 @@ If `.plan-bender.local.yaml` already exists, no `.plan-bender.yaml` is created. 
 ## `plan-bender-agent` — Agent CLI
 
 All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero exit codes.
+Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (yaml on disk doesn't parse — includes `file`, `line`, and a `hint`), `VALIDATION_FAILED`, `CONFIG_ERROR`, `INTERNAL`.
 
 | Command | What it does |
 | --- | --- |

@@ -101,7 +101,7 @@ func lookupIssueSlug(plansDir, slug string, id int) (string, error) {
 	plans := planrepo.NewProd(plansDir)
 	sess, err := plans.Open(slug)
 	if err != nil {
-		return "", NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+		return "", openErrorToAgent(slug, err)
 	}
 	defer sess.Close()
 	for _, iss := range sess.Snapshot().Issues {

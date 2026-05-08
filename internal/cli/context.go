@@ -2,8 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
-	"io/fs"
 	"os"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
@@ -58,10 +56,7 @@ func contextList(cmd *cobra.Command, repo *planrepo.Plans) error {
 func contextDetail(cmd *cobra.Command, repo *planrepo.Plans, slug string) error {
 	sess, err := repo.Open(slug)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return NewAgentError("plan not found: "+slug, ErrPlanNotFound)
-		}
-		return NewAgentError("opening plan: "+err.Error(), ErrInternal)
+		return openErrorToAgent(slug, err)
 	}
 	defer func() { _ = sess.Close() }()
 

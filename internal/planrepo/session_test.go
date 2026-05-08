@@ -65,6 +65,50 @@ func TestOpen_MalformedIssueErrors(t *testing.T) {
 	repo := NewProd(plansDir)
 	_, err := repo.Open("test-plan")
 	require.Error(t, err)
+
+	var parseErr *ParseError
+	require.ErrorAs(t, err, &parseErr, "open should surface yaml decode failures as *ParseError")
+	require.Contains(t, parseErr.File, "1-broken.yaml")
+}
+
+func TestOpen_ColonInListItem_ReportsLine(t *testing.T) {
+	// Reproduces the colon-in-list YAML footgun: a list item containing
+	// `: ` mid-prose decodes as a !!map. yaml.v3 reports the line; the
+	// loader must propagate it on the ParseError so callers can render
+	// file:line.
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	issue := `id: 1
+slug: bad
+name: Bad
+track: intent
+status: todo
+priority: high
+points: 1
+labels: []
+blocked_by: []
+blocking: []
+created: "2026-01-01"
+updated: "2026-01-02"
+outcome: ok
+scope: small
+acceptance_criteria: []
+steps:
+  - first step
+  - some/path/file.ts — implement methodName: when X is true do Y
+use_cases: []
+`
+	writePlan(t, plansDir, "bad", validPrd, map[string]string{
+		"1-bad.yaml": issue,
+	})
+
+	repo := NewProd(plansDir)
+	_, err := repo.Open("bad")
+	require.Error(t, err)
+
+	var parseErr *ParseError
+	require.ErrorAs(t, err, &parseErr)
+	require.Contains(t, parseErr.File, "1-bad.yaml")
+	require.Greater(t, parseErr.Line, 0, "expected yaml.v3 to report a line; got %q", parseErr.Err)
 }
 
 func TestOpen_NoIssuesDir(t *testing.T) {

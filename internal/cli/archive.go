@@ -35,7 +35,7 @@ func NewArchiveCmd() *cobra.Command {
 			planDir := filepath.Join(cfg.PlansDir, slug)
 			issues, err := readIssuesForArchive(cfg.PlansDir, slug)
 			if err != nil {
-				return err
+				return openErrorToAgent(slug, err)
 			}
 
 			// Check for active issues

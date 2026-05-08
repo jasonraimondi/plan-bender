@@ -2,10 +2,8 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
@@ -33,10 +31,7 @@ func NewNextCmd() *cobra.Command {
 			repo := planrepo.NewProd(cfg.PlansDir)
 			sess, err := repo.Open(slug)
 			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					return NewAgentError(fmt.Sprintf("plan %q not found", slug), ErrPlanNotFound)
-				}
-				return NewAgentError("opening plan: "+err.Error(), ErrInternal)
+				return openErrorToAgent(slug, err)
 			}
 			defer func() { _ = sess.Close() }()
 
