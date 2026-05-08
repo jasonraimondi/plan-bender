@@ -22,21 +22,24 @@ type LinearRef struct {
 
 // PrdYaml represents a PRD YAML file.
 type PrdYaml struct {
-	Name          string     `yaml:"name" json:"name"`
-	Slug          string     `yaml:"slug" json:"slug"`
-	Status        string     `yaml:"status" json:"status"`
-	Created       string     `yaml:"created" json:"created"`
-	Updated       string     `yaml:"updated" json:"updated"`
-	Description   string     `yaml:"description" json:"description"`
-	Why           string     `yaml:"why" json:"why"`
-	Outcome       string     `yaml:"outcome" json:"outcome"`
-	InScope       []string   `yaml:"in_scope,omitempty" json:"in_scope,omitempty"`
-	OutOfScope    []string   `yaml:"out_of_scope,omitempty" json:"out_of_scope,omitempty"`
+	Name        string `yaml:"name" json:"name"`
+	Slug        string `yaml:"slug" json:"slug"`
+	Status      string `yaml:"status" json:"status"`
+	Created     string `yaml:"created" json:"created"`
+	Updated     string `yaml:"updated" json:"updated"`
+	Description string `yaml:"description" json:"description"`
+	Why         string `yaml:"why" json:"why"`
+	Outcome     string `yaml:"outcome" json:"outcome"`
+	// Prose fields use ProseList so authors can write list items containing
+	// `: ` without having to quote them. Identifier-shaped fields (slugs,
+	// IDs, structured records like UseCases) keep their stricter types.
+	InScope       ProseList  `yaml:"in_scope,omitempty" json:"in_scope,omitempty"`
+	OutOfScope    ProseList  `yaml:"out_of_scope,omitempty" json:"out_of_scope,omitempty"`
 	UseCases      []UseCase  `yaml:"use_cases,omitempty" json:"use_cases,omitempty"`
-	Decisions     []string   `yaml:"decisions,omitempty" json:"decisions,omitempty"`
-	OpenQuestions []string   `yaml:"open_questions,omitempty" json:"open_questions,omitempty"`
-	Risks         []string   `yaml:"risks,omitempty" json:"risks,omitempty"`
-	Validation    []string   `yaml:"validation,omitempty" json:"validation,omitempty"`
+	Decisions     ProseList  `yaml:"decisions,omitempty" json:"decisions,omitempty"`
+	OpenQuestions ProseList  `yaml:"open_questions,omitempty" json:"open_questions,omitempty"`
+	Risks         ProseList  `yaml:"risks,omitempty" json:"risks,omitempty"`
+	Validation    ProseList  `yaml:"validation,omitempty" json:"validation,omitempty"`
 	Notes         *string    `yaml:"notes,omitempty" json:"notes,omitempty"`
 	DevCommand    *string    `yaml:"dev_command,omitempty" json:"dev_command,omitempty"`
 	BaseURL       *string    `yaml:"base_url,omitempty" json:"base_url,omitempty"`

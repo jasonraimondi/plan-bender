@@ -23,9 +23,10 @@ why: testing
 outcome: ok
 `
 
-// malformedIssue triggers the colon-in-list footgun: a list item with `: `
-// mid-prose decodes as a !!map, not a string. yaml.v3 reports it on the
-// affected list-item line.
+// malformedIssue puts a string into blocked_by (declared as []int). yaml.v3
+// reports the offending list-item line as a TypeError, which exercises the
+// same line-attribution path the colon-in-list footgun used to before the
+// lenient list decoder accepted that case as valid prose.
 const malformedTestIssue = `id: 1
 slug: bad
 name: Bad Issue
@@ -34,16 +35,15 @@ status: todo
 priority: high
 points: 1
 labels: []
-blocked_by: []
+blocked_by:
+  - not-an-int
 blocking: []
 created: "2026-01-01"
 updated: "2026-01-02"
 outcome: done
 scope: small
 acceptance_criteria: []
-steps:
-  - first step
-  - some/path/file.ts — implement methodName: when X is true do Y
+steps: []
 use_cases: []
 `
 

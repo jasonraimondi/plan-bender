@@ -71,11 +71,11 @@ func TestOpen_MalformedIssueErrors(t *testing.T) {
 	require.Contains(t, parseErr.File, "1-broken.yaml")
 }
 
-func TestOpen_ColonInListItem_ReportsLine(t *testing.T) {
-	// Reproduces the colon-in-list YAML footgun: a list item containing
-	// `: ` mid-prose decodes as a !!map. yaml.v3 reports the line; the
-	// loader must propagate it on the ParseError so callers can render
-	// file:line.
+func TestOpen_ColonInListItem_PreservesProse(t *testing.T) {
+	// A list item written as `- some prose: more prose` without quotes
+	// decodes through yaml.v3 as a single-key mapping. Authors hit this
+	// constantly when writing PRD/issue prose that contains a colon, so
+	// the loader flattens such mappings back into "key: value" strings.
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	issue := `id: 1
 slug: bad
@@ -102,13 +102,16 @@ use_cases: []
 	})
 
 	repo := NewProd(plansDir)
-	_, err := repo.Open("bad")
-	require.Error(t, err)
+	sess, err := repo.Open("bad")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
 
-	var parseErr *ParseError
-	require.ErrorAs(t, err, &parseErr)
-	require.Contains(t, parseErr.File, "1-bad.yaml")
-	require.Greater(t, parseErr.Line, 0, "expected yaml.v3 to report a line; got %q", parseErr.Err)
+	snap := sess.Snapshot()
+	require.Len(t, snap.Issues, 1)
+	require.Equal(t, []string{
+		"first step",
+		"some/path/file.ts — implement methodName: when X is true do Y",
+	}, []string(snap.Issues[0].Steps))
 }
 
 func TestOpen_NoIssuesDir(t *testing.T) {
