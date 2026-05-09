@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -150,6 +151,72 @@ func TestSelfUpdate_DirectBinary_PermissionDenied(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, os.ErrPermission)
 	assert.Contains(t, errOut.String(), "Permission denied. Try: sudo pb self-update")
+}
+
+func TestSelfUpdate_SyncCalledOnSuccess(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.0.0")
+	sc := selfUpdateFromCmd(cmd)
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
+		return "1.2.3", true, nil
+	}
+	sc.detectInstallMethod = func() (update.InstallMethod, error) {
+		return update.InstallMethodDirect, nil
+	}
+	sc.downloadAndReplace = func(version string) error { return nil }
+	sc.fetchReleaseNotes = func(version string) (string, error) { return "", nil }
+
+	var syncCalled bool
+	sc.syncPlanFiles = func(root string, out io.Writer) error {
+		syncCalled = true
+		return nil
+	}
+
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+	assert.True(t, syncCalled, "syncPlanFiles should be called after a successful update")
+}
+
+func TestSelfUpdate_SyncCalledWhenAlreadyLatest(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.2.3")
+	sc := selfUpdateFromCmd(cmd)
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
+		return "1.2.3", false, nil
+	}
+
+	var syncCalled bool
+	sc.syncPlanFiles = func(root string, out io.Writer) error {
+		syncCalled = true
+		return nil
+	}
+
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+	assert.True(t, syncCalled, "syncPlanFiles should be called even when already up to date")
+}
+
+func TestSelfUpdate_SyncNotCalledOnUpdateError(t *testing.T) {
+	cmd := NewSelfUpdateCmd("1.0.0")
+	sc := selfUpdateFromCmd(cmd)
+	sc.checkForUpdate = func(currentVersion string) (string, bool, error) {
+		return "1.2.3", true, nil
+	}
+	sc.detectInstallMethod = func() (update.InstallMethod, error) {
+		return update.InstallMethodDirect, nil
+	}
+	sc.downloadAndReplace = func(version string) error {
+		return errors.New("network failure")
+	}
+
+	var syncCalled bool
+	sc.syncPlanFiles = func(root string, out io.Writer) error {
+		syncCalled = true
+		return nil
+	}
+
+	_ = cmd.Execute()
+	assert.False(t, syncCalled, "syncPlanFiles should not be called when update fails")
 }
 
 func TestSelfUpdate_DirectBinary_DownloadError(t *testing.T) {

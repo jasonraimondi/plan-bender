@@ -3,11 +3,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/update"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +20,7 @@ type selfUpdateCmd struct {
 	detectInstallMethod func() (update.InstallMethod, error)
 	downloadAndReplace  func(version string) error
 	fetchReleaseNotes   func(version string) (string, error)
+	syncPlanFiles       func(root string, out io.Writer) error
 }
 
 // NewSelfUpdateCmd creates the self-update command.
@@ -35,6 +38,7 @@ func NewSelfUpdateCmd(version string) *cobra.Command {
 		fetchReleaseNotes: func(version string) (string, error) {
 			return update.FetchReleaseNotes(client, "https://api.github.com", version)
 		},
+		syncPlanFiles: defaultSyncPlanFiles,
 	}
 
 	cmd := &cobra.Command{
@@ -72,32 +76,58 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 
 	if !isNewer {
 		fmt.Fprintf(out, "pb is up to date (v%s)\n", sc.version)
+	} else {
+		method, err := sc.detectInstallMethod()
+		if err != nil {
+			return fmt.Errorf("detecting install method: %w", err)
+		}
+
+		switch method {
+		case update.InstallMethodNPM:
+			fmt.Fprintf(out, "A newer version is available: %s → %s\n", sc.version, latest)
+			fmt.Fprintln(out, "  Run: npm install -g @jasonraimondi/plan-bender@latest")
+		case update.InstallMethodDirect:
+			fmt.Fprintf(out, "Updating pb to v%s...\n", latest)
+			if err := sc.downloadAndReplace(latest); err != nil {
+				if errors.Is(err, os.ErrPermission) {
+					fmt.Fprintln(cmd.ErrOrStderr(), "Permission denied. Try: sudo pb self-update")
+				}
+				return err
+			}
+			fmt.Fprintf(out, "Updated pb: v%s → v%s\n", sc.version, latest)
+			if notes, err := sc.fetchReleaseNotes(latest); err == nil && notes != "" {
+				fmt.Fprintf(out, "\nChangelog (v%s):\n%s\n", latest, notes)
+			}
+		}
+	}
+
+	root, _ := os.Getwd()
+	if err := sc.syncPlanFiles(root, out); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not sync plan files: %v\n", err)
+	}
+
+	return nil
+}
+
+func defaultSyncPlanFiles(root string, out io.Writer) error {
+	cfgPath := filepath.Join(root, ".plan-bender.yaml")
+	localPath := filepath.Join(root, ".plan-bender.local.yaml")
+	_, errCfg := os.Stat(cfgPath)
+	_, errLocal := os.Stat(localPath)
+	if errors.Is(errCfg, os.ErrNotExist) && errors.Is(errLocal, os.ErrNotExist) {
 		return nil
 	}
 
-	method, err := sc.detectInstallMethod()
+	cfg, err := config.Load(root)
 	if err != nil {
-		return fmt.Errorf("detecting install method: %w", err)
+		return fmt.Errorf("loading config: %w", err)
 	}
-
-	switch method {
-	case update.InstallMethodNPM:
-		fmt.Fprintf(out, "A newer version is available: %s → %s\n", sc.version, latest)
-		fmt.Fprintln(out, "  Run: npm install -g @jasonraimondi/plan-bender@latest")
-	case update.InstallMethodDirect:
-		fmt.Fprintf(out, "Updating pb to v%s...\n", latest)
-		if err := sc.downloadAndReplace(latest); err != nil {
-			if errors.Is(err, os.ErrPermission) {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Permission denied. Try: sudo pb self-update")
-			}
-			return err
-		}
-		fmt.Fprintf(out, "Updated pb: v%s → v%s\n", sc.version, latest)
-		if notes, err := sc.fetchReleaseNotes(latest); err == nil && notes != "" {
-			fmt.Fprintf(out, "\nChangelog (v%s):\n%s\n", latest, notes)
-		}
+	if _, err := GenerateSkills(root, cfg, out); err != nil {
+		return fmt.Errorf("generating skills: %w", err)
 	}
-
+	if _, err := symlinkSkills(root, cfg); err != nil {
+		return fmt.Errorf("symlinking skills: %w", err)
+	}
 	return nil
 }
 
