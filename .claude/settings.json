@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "main=$(git rev-parse --show-toplevel 2>/dev/null); wt=$(jq -r '.path // .worktree_path // .worktree // empty' 2>/dev/null); [ -n \"$wt\" ] && [ -n \"$main\" ] && mkdir -p \"$wt/.claude\" && cp \"$main/.claude/settings.local.json\" \"$wt/.claude/settings.local.json\" 2>/dev/null; true",
+            "timeout": 5,
+            "statusMessage": "Propagating local settings to worktree..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
