@@ -82,7 +82,6 @@ func TestAgentValidate_InvalidPlan_StructuredErrors(t *testing.T) {
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
 
-	// PRD with empty required fields
 	prd := `{
   "name": "",
   "slug": "bad",
@@ -95,7 +94,6 @@ func TestAgentValidate_InvalidPlan_StructuredErrors(t *testing.T) {
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(prd), 0o644))
 
-	// Issue with empty required fields
 	issue := `{
   "id": 1,
   "slug": "",
@@ -138,7 +136,6 @@ func TestAgentValidate_InvalidPlan_StructuredErrors(t *testing.T) {
 	assert.False(t, result.Valid)
 	assert.NotEmpty(t, result.Errors)
 
-	// PRD errors should reference prd.json
 	var prdErrors []agentValidationError
 	for _, e := range result.Errors {
 		if e.File == "bad/prd.json" {
@@ -151,7 +148,6 @@ func TestAgentValidate_InvalidPlan_StructuredErrors(t *testing.T) {
 		assert.NotEmpty(t, e.Message)
 	}
 
-	// Issue errors should reference the issue filename
 	var issueErrors []agentValidationError
 	for _, e := range result.Errors {
 		if strings.Contains(e.File, "issues/") {
@@ -185,7 +181,6 @@ func TestAgentValidate_CrossRefErrors_HaveFileContext(t *testing.T) {
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(prd), 0o644))
 
-	// Issue that references a non-existent dependency (issue #99 doesn't exist)
 	issue := `{
   "id": 1,
   "slug": "orphan",

@@ -38,7 +38,6 @@ func NewArchiveCmd() *cobra.Command {
 				return openErrorToAgent(slug, err)
 			}
 
-			// Check for active issues
 			if !force {
 				var active []string
 				for _, iss := range issues {
@@ -51,14 +50,12 @@ func NewArchiveCmd() *cobra.Command {
 				}
 			}
 
-			// Generate summary
 			summary := buildSummary(slug, issues)
 			summaryPath := filepath.Join(planDir, "summary.md")
 			if err := os.WriteFile(summaryPath, []byte(summary), 0o644); err != nil {
 				return fmt.Errorf("writing summary: %w", err)
 			}
 
-			// Move to archive
 			archiveDir := filepath.Join(cfg.PlansDir, ".archive")
 			if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 				return err

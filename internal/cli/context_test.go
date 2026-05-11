@@ -125,22 +125,18 @@ func TestContextCmd_WithSlug_ReturnsFullContext(t *testing.T) {
 	var ctx contextFullJSON
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &ctx))
 
-	// PRD
 	require.NotNil(t, ctx.Prd)
 	assert.Equal(t, "Test Plan", ctx.Prd.Name)
 	assert.Equal(t, "active", ctx.Prd.Status)
 
-	// Issues
 	require.Len(t, ctx.Issues, 2)
 	assert.Equal(t, 1, ctx.Issues[0].ID)
 	assert.Equal(t, 2, ctx.Issues[1].ID)
 
-	// Dependencies
 	require.Len(t, ctx.Dependencies.Nodes, 2)
 	require.Len(t, ctx.Dependencies.Edges, 1)
 	assert.Equal(t, plan.GraphEdge{From: 1, To: 2}, ctx.Dependencies.Edges[0])
 
-	// Stats
 	assert.Equal(t, 2, ctx.Stats.Total)
 	assert.Equal(t, 1, ctx.Stats.Done)
 	assert.Equal(t, 5, ctx.Stats.TotalPoints)

@@ -83,7 +83,6 @@ func TestValidate_JSON_WithErrors(t *testing.T) {
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
 
-	// PRD missing required fields
 	prd := `{
   "name": "",
   "slug": "bad-plan",

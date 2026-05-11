@@ -14,11 +14,9 @@ func TestReplaceBinary(t *testing.T) {
 	t.Run("replaces target with new binary content", func(t *testing.T) {
 		dir := t.TempDir()
 
-		// Create "old" binary
 		targetPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(targetPath, []byte("old-binary"), 0o755))
 
-		// Create "new" binary in a separate temp dir
 		srcDir := t.TempDir()
 		newBinaryPath := filepath.Join(srcDir, "plan-bender")
 		require.NoError(t, os.WriteFile(newBinaryPath, []byte("new-binary-v2"), 0o755))
@@ -57,7 +55,6 @@ func TestReplaceBinary(t *testing.T) {
 		newBinaryPath := filepath.Join(srcDir, "plan-bender")
 		require.NoError(t, os.WriteFile(newBinaryPath, []byte("new"), 0o755))
 
-		// Make target directory read-only so temp file creation fails
 		require.NoError(t, os.Chmod(dir, 0o555))
 		t.Cleanup(func() { os.Chmod(dir, 0o755) })
 
@@ -101,7 +98,6 @@ func TestRecreateSymlink(t *testing.T) {
 		binaryPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(binaryPath, []byte("binary"), 0o755))
 
-		// Create existing symlink pointing elsewhere
 		symlinkPath := filepath.Join(dir, "pb")
 		require.NoError(t, os.Symlink("old-target", symlinkPath))
 
@@ -118,7 +114,6 @@ func TestRecreateSymlink(t *testing.T) {
 		binaryPath := filepath.Join(dir, "plan-bender")
 		require.NoError(t, os.WriteFile(binaryPath, []byte("binary"), 0o755))
 
-		// Create existing regular file named pb
 		symlinkPath := filepath.Join(dir, "pb")
 		require.NoError(t, os.WriteFile(symlinkPath, []byte("not-a-symlink"), 0o755))
 

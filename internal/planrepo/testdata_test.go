@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mustValidPRD returns a valid PRD struct with the given slug.
 func mustValidPRD(slug string) schema.PRD {
 	return schema.PRD{
 		Name:        "Fresh Plan",

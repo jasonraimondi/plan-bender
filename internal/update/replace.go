@@ -52,7 +52,6 @@ func ReplaceBinary(newBinaryPath, targetPath string) error {
 func RecreateSymlink(binaryDir, target, linkName string) error {
 	symlinkPath := filepath.Join(binaryDir, linkName)
 
-	// Remove whatever is there (symlink, file, or nothing)
 	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing old symlink: %w", err)
 	}

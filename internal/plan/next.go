@@ -74,7 +74,7 @@ func ReadyAFK(issues []schema.Issue) []schema.Issue {
 }
 
 // Resolve picks the single recommended next issue from a plan's issues.
-// Pure read — no I/O, no mutation. See PRD next-issue-resolver for ordering rules.
+// Pure read — no I/O, no mutation.
 func Resolve(issues []schema.Issue) Result {
 	byID := make(map[int]*schema.Issue, len(issues))
 	for i := range issues {

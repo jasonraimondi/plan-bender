@@ -43,7 +43,6 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.base.RoundTrip(req)
 }
 
-// Project types
 type Project struct {
 	ID   string
 	Name string

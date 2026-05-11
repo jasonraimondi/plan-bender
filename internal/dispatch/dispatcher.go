@@ -421,7 +421,7 @@ func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug strin
 
 	issues, err := snapshotPlanIssues(plans, slug)
 	if err != nil {
-		// fall back to result order if we can't load (tests covered)
+		// fall back to result order if snapshot fails
 		out := make([]SubResult, 0, len(successByID))
 		for _, r := range results {
 			if _, ok := successByID[r.IssueID]; ok {

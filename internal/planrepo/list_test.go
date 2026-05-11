@@ -74,7 +74,6 @@ func TestList_ReturnsValidPlans(t *testing.T) {
 func TestList_SkipsMalformedPrdAndDoesNotFailWholeListing(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 
-	// Good plan.
 	writePlan(t, plansDir, "good", `{
   "name": "Good",
   "slug": "good",
@@ -88,10 +87,8 @@ func TestList_SkipsMalformedPrdAndDoesNotFailWholeListing(t *testing.T) {
 		"1-only.json": issueYAML(1, "only"),
 	})
 
-	// Plan with malformed PRD (invalid JSON).
 	writePlan(t, plansDir, "broken-prd", "::not json::", nil)
 
-	// Plan with malformed issue file.
 	writePlan(t, plansDir, "broken-issue", `{
   "name": "Broken Issue",
   "slug": "broken-issue",

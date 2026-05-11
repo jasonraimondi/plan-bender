@@ -62,7 +62,6 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	cfgPath := filepath.Join(root, ".plan-bender.json")
 	localPath := filepath.Join(root, ".plan-bender.local.json")
 
-	// 1. Write defaults if no config exists.
 	// Skip creation when .plan-bender.local.json already exists — the user is
 	// intentionally using only the local layer, and the config loader handles
 	// the merge correctly without a project-level file.
@@ -85,14 +84,12 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		}
 	}
 
-	// 2. Handle --linear
 	if useLinear {
 		if err := setupLinear(root, deps, yes); err != nil {
 			return err
 		}
 	}
 
-	// 3. Load merged config
 	cfg, err := config.Load(root)
 	if err != nil {
 		var cfgErr *config.ConfigError
@@ -103,7 +100,6 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		return err
 	}
 
-	// 4. Generate + symlink skills
 	if _, err := GenerateSkills(root, cfg, out); err != nil {
 		return err
 	}
@@ -119,7 +115,6 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		}
 	}
 
-	// 5. Output summary
 	switch {
 	case created:
 		fmt.Fprintf(out, "Config:  .plan-bender.json (created)\n")
@@ -140,7 +135,6 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	fmt.Fprintf(out, "Skills:  %d installed\n", count)
 	fmt.Fprintf(out, "Plans:   %s\n", cfg.PlansDir)
 
-	// 6. Inline doctor checks (warnings only, don't block)
 	fmt.Fprintf(out, "\nHealth:\n")
 	results := RunChecks(root, cfg, deps.version)
 	for _, r := range results {
@@ -173,7 +167,6 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 	cfgPath := filepath.Join(root, ".plan-bender.json")
 	localPath := filepath.Join(root, ".plan-bender.local.json")
 
-	// Get credentials from env vars or prompts
 	apiKey := os.Getenv("LINEAR_API_KEY")
 	team := os.Getenv("LINEAR_TEAM")
 
@@ -202,7 +195,6 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 		return fmt.Errorf("linear API key and team are required")
 	}
 
-	// Validate credentials
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -211,14 +203,12 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 		return fmt.Errorf("linear credential validation failed: %w", err)
 	}
 
-	// Write linear.enabled: true to project config
 	if err := mergeJSONFile(cfgPath, map[string]any{
 		"linear": map[string]any{"enabled": true},
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
 
-	// Write credentials to local config (gitignored)
 	if err := mergeJSONFile(localPath, map[string]any{
 		"linear": map[string]any{"api_key": apiKey, "team": team},
 	}); err != nil {

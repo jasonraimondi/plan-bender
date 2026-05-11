@@ -53,7 +53,6 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
 
-	// Config file created with only the fields worth surfacing
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"plans_dir"`)
@@ -118,7 +117,6 @@ func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
 
-	// .plan-bender.json must NOT have been created
 	_, err := os.Stat(filepath.Join(dir, ".plan-bender.json"))
 	assert.True(t, os.IsNotExist(err), ".plan-bender.json should not be created when .plan-bender.local.json exists")
 
@@ -151,20 +149,17 @@ func TestSetup_LinearWithEnvVars(t *testing.T) {
 	})
 	require.NoError(t, h.execute("--linear"))
 
-	// Project config has linear.enabled: true
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
 	require.NoError(t, err)
 	content := string(data)
 	assert.Contains(t, content, `"enabled": true`)
 
-	// Local config has credentials
 	localData, err := os.ReadFile(filepath.Join(dir, ".plan-bender.local.json"))
 	require.NoError(t, err)
 	localContent := string(localData)
 	assert.Contains(t, localContent, `"api_key": "lin_test_key"`)
 	assert.Contains(t, localContent, `"team": "ENG"`)
 
-	// Credentials NOT in project config
 	assert.NotContains(t, content, "lin_test_key")
 	assert.NotContains(t, content, "api_key")
 
@@ -212,7 +207,6 @@ func TestSetup_LinearWithInvalidCreds(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "credential validation failed")
 
-	// Nothing written
 	_, err = os.Stat(filepath.Join(dir, ".plan-bender.local.json"))
 	assert.True(t, os.IsNotExist(err))
 }
@@ -245,7 +239,6 @@ func TestSetup_RerunRegeneratesSkills(t *testing.T) {
 		0o644,
 	))
 
-	// Run twice — should succeed both times
 	for i := 0; i < 2; i++ {
 		h := testSetupCmd(setupDeps{})
 		require.NoError(t, h.execute(), "run %d should not error", i+1)
@@ -311,7 +304,6 @@ func TestSetup_ManageGitignoreFalseSkipsGitignoreWrite(t *testing.T) {
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
 
-	// No .gitignore should have been written
 	_, err := os.Stat(filepath.Join(dir, ".gitignore"))
 	assert.True(t, os.IsNotExist(err), ".gitignore should not be created when manage_gitignore: false")
 }
@@ -320,7 +312,6 @@ func TestSetup_ManageGitignoreFalsePreservesExistingGitignore(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Pre-existing .gitignore the user manages themselves
 	original := "# managed by user\nnode_modules/\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(original), 0o644))
 
@@ -376,7 +367,6 @@ func TestMergeJSONFile_RejectsMalformedJSON(t *testing.T) {
 	})
 	require.Error(t, err, "must surface parse failure rather than silently overwriting user config")
 
-	// Original file content must be preserved when parse fails.
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, `{"linear": [unterminated`, string(data))

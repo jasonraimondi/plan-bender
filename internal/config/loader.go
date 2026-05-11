@@ -11,7 +11,6 @@ import (
 	"strings"
 )
 
-// Load reads config from 3 layers (global, project, local) and merges them over defaults.
 func Load(root string) (Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -96,15 +95,10 @@ func readPartial(path string) (PartialConfig, error) {
 }
 
 // migrateDeprecatedKeys rewrites removed config keys in raw JSON before typed unmarshal.
-// install_target → hard error (user must fix manually).
-// backend: linear → linear.enabled: true (silent migration).
-// backend: yaml-fs → dropped (default behavior).
-// agents: [seq] → agents: {name: true, ...} (silent migration to map format).
-// review_with_user: [seq] → review_with_user: <bool> (silent migration; non-empty → true).
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return data, nil // let the caller handle parse errors
+		return data, nil
 	}
 	if _, ok := raw["install_target"]; ok {
 		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  \"claude-code\": true\nin your .plan-bender.json")
@@ -112,7 +106,6 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 
 	modified := false
 
-	// Migrate old agents array format to map format
 	if agentsVal, ok := raw["agents"]; ok {
 		if agentsList, ok := agentsVal.([]any); ok {
 			agentsMap := make(map[string]any, len(agentsList))
@@ -126,7 +119,6 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 		}
 	}
 
-	// Migrate old review_with_user []string to bool (any non-empty list → true).
 	if rwuVal, ok := raw["review_with_user"]; ok {
 		if rwuList, ok := rwuVal.([]any); ok {
 			raw["review_with_user"] = len(rwuList) > 0

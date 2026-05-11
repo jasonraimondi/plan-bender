@@ -5,12 +5,10 @@ import (
 	"strings"
 )
 
-// ConfigError represents a configuration validation failure.
 type ConfigError struct {
 	Errors []FieldError
 }
 
-// FieldError is a single field-level validation error.
 type FieldError struct {
 	Field   string
 	Message string
@@ -24,7 +22,6 @@ func (e *ConfigError) Error() string {
 	return "config validation failed: " + strings.Join(msgs, "; ")
 }
 
-// FormatHuman returns a bulleted list suitable for human CLI output.
 func (e *ConfigError) FormatHuman() string {
 	var b strings.Builder
 	b.WriteString("Config errors:\n")
@@ -34,5 +31,4 @@ func (e *ConfigError) FormatHuman() string {
 	return b.String()
 }
 
-// ErrInvalidConfig is the sentinel for configuration errors.
 var ErrInvalidConfig = fmt.Errorf("invalid config")

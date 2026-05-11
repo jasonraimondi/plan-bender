@@ -60,12 +60,10 @@ var defaultPipelinePhases = []PipelinePhase{
 func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any {
 	ctx := make(map[string]any)
 
-	// Flat-merge agent extra options first so built-ins can override on collision
 	for k, v := range agent.Extra {
 		ctx[k] = v
 	}
 
-	// Track descriptions
 	tds := make([]map[string]string, len(cfg.Tracks))
 	for i, t := range cfg.Tracks {
 		desc, ok := defaultTrackDescriptions[t]
@@ -75,7 +73,6 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 		tds[i] = map[string]string{"name": t, "description": desc}
 	}
 
-	// Pipeline phases (filter out skipped)
 	skipSet := make(map[string]bool, len(cfg.Pipeline.Skip))
 	for _, s := range cfg.Pipeline.Skip {
 		skipSet[s] = true
@@ -95,7 +92,6 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 		})
 	}
 
-	// Custom fields
 	cfs := make([]map[string]any, len(cfg.IssueSchema.CustomFields))
 	for i, f := range cfg.IssueSchema.CustomFields {
 		cfs[i] = map[string]any{
@@ -106,7 +102,6 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 		}
 	}
 
-	// Built-in keys overwrite any extra keys with the same name
 	ctx["plans_dir"] = cfg.PlansDir
 	ctx["tracks"] = cfg.Tracks
 	ctx["workflow_states"] = cfg.WorkflowStates

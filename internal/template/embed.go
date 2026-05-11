@@ -17,7 +17,6 @@ var embeddedFS embed.FS
 func LoadTemplates(projectRoot string) (map[string]string, error) {
 	templates := make(map[string]string)
 
-	// Load embedded templates
 	entries, err := fs.ReadDir(embeddedFS, "embedded")
 	if err != nil {
 		return nil, err
@@ -33,7 +32,6 @@ func LoadTemplates(projectRoot string) (map[string]string, error) {
 		templates[e.Name()] = string(data)
 	}
 
-	// Load local overrides
 	overrideDir := filepath.Join(projectRoot, ".plan-bender", "templates")
 	entries2, err := os.ReadDir(overrideDir)
 	if err != nil {

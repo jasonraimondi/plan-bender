@@ -62,7 +62,6 @@ func setupDispatch(t *testing.T) *dispatchFixture {
 		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
 	}
-	// First commit so HEAD is valid for branch/worktree creation.
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# repo\n"), 0o644))
 	for _, args := range [][]string{
 		{"add", "README.md"},
@@ -262,13 +261,12 @@ func TestEnsureIntegrationBranch_DirectStrategyUsesDefault(t *testing.T) {
 
 func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *testing.T) {
 	fix := setupDispatch(t)
-	d := newDispatcher(fix) // defaults branch_strategy = integration
+	d := newDispatcher(fix)
 
 	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "tester/demo", branch)
 
-	// branch should exist in the repo
 	out, err := exec.Command("git", "-C", fix.root, "branch", "--list", "tester/demo").Output()
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "tester/demo")
@@ -311,7 +309,6 @@ func TestDefaultBranch_RejectsDetachedHEAD(t *testing.T) {
 
 func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {
 	fix := setupDispatch(t)
-	// blocker 1 is blocked status → 2 can never start
 	blocker := mkAFKIssue(1, "ghost", "blocked")
 	dependent := mkAFKIssue(2, "needsghost", "todo", 1)
 	writeIssue(t, fix.plansDir, blocker)
@@ -416,7 +413,6 @@ exit 0
 func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
-	// Note: deliberately NOT calling installSkillFile so BuildPrompt fails.
 
 	installClaudeStub(t, "exit 0\n")
 
@@ -563,7 +559,3 @@ exit 1
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
 }
-
-// quiet a couple of vet/staticcheck unused imports on environments where we
-// trim them — left in for explicit signaling.
-var _ = strings.HasPrefix

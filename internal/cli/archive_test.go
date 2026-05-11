@@ -33,7 +33,6 @@ func setupPlanDir(t *testing.T, slug string, issues []schema.Issue) string {
 		require.NoError(t, os.WriteFile(filename, data, 0o644))
 	}
 
-	// Write config pointing to this plans dir
 	cfgData := []byte(`{"plans_dir": "` + filepath.Join(dir, "plans") + `/"}`)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), cfgData, 0o644))
 
@@ -69,7 +68,6 @@ func TestArchive_SucceedsWithForce(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 	assert.Contains(t, out.String(), "archived test")
 
-	// Verify moved to .archive/
 	_, err := os.Stat(filepath.Join(dir, "plans", ".archive", "test", "prd.json"))
 	assert.NoError(t, err)
 }

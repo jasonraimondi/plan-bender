@@ -50,7 +50,7 @@ func (m *mockBackend) PullProject(ctx context.Context, projectID string) (PullPr
 
 // syncFixture bundles the plan repository and on-disk plansDir produced by
 // setupSyncTest, so individual tests can both invoke SyncPush/SyncPull (which
-// take *planrepo.Plans) and read the post-write YAML directly to verify
+// take *planrepo.Plans) and read the post-write JSON directly to verify
 // behavior parity through observable files.
 type syncFixture struct {
 	plans    *planrepo.Plans
@@ -126,7 +126,6 @@ func TestSyncPush_AllCreate(t *testing.T) {
 	assert.Empty(t, result.Errors)
 	assert.Equal(t, 3, createCount)
 
-	// Verify linear_id was written back for each issue
 	i1 := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "lin-1", *i1.LinearID)
 
@@ -194,7 +193,6 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	assert.Equal(t, 2, result.Errors[0].IssueID)
 	assert.Contains(t, result.Errors[0].Err.Error(), "api error")
 
-	// Verify linear_id written for successes only
 	i1 := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.NotNil(t, i1.LinearID)
 	assert.Equal(t, "lin-1", *i1.LinearID)
@@ -203,7 +201,6 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	assert.NotNil(t, i3.LinearID)
 	assert.Equal(t, "lin-3", *i3.LinearID)
 
-	// Issue 2 should NOT have linear_id
 	i2 := readIssueFromDisk(t, fix.plansDir, "test", 2, "issue-two")
 	assert.Nil(t, i2.LinearID)
 }
@@ -214,8 +211,8 @@ func TestSyncPush_Idempotent(t *testing.T) {
 
 	linID := "existing-1"
 	issues := []*schema.Issue{testIssue(1), testIssue(2)}
-	issues[0].LinearID = &linID // already synced
-	issues[1].Slug = "issue-two" // not yet synced
+	issues[0].LinearID = &linID
+	issues[1].Slug = "issue-two"
 
 	fix := setupSyncTest(t, prd, issues)
 
@@ -237,15 +234,12 @@ func TestSyncPush_Idempotent(t *testing.T) {
 	assert.Equal(t, 1, result.Updated)
 	assert.Empty(t, result.Errors)
 
-	// Issue 1 (has linear_id) → UpdateIssue, not CreateIssue
 	assert.Equal(t, []int{1}, updateCalls)
-	// Issue 2 (no linear_id) → CreateIssue
 	assert.Equal(t, []int{2}, createCalls)
 }
 
 func TestSyncPush_CreatesProject(t *testing.T) {
 	prd := testPrd()
-	// No Linear ref — should trigger CreateProject
 
 	fix := setupSyncTest(t, prd, nil)
 
@@ -262,13 +256,10 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 	assert.True(t, projectCreated)
 	assert.Equal(t, 0, result.Created)
 
-	// Verify project_id was written back to PRD
 	updatedPrd := readPrdFromDisk(t, fix.plansDir, "test")
 	require.NotNil(t, updatedPrd.Linear)
 	assert.Equal(t, "new-proj", updatedPrd.Linear.ProjectID)
 }
-
-// --- SyncPull tests ---
 
 func TestSyncPull_StatusUpdate(t *testing.T) {
 	prd := testPrd()
@@ -340,7 +331,6 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
 	issue := testIssue(1)
-	// No linear_id — should be skipped
 
 	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
@@ -358,12 +348,9 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 	assert.Equal(t, 0, result.Updated)
 	assert.Empty(t, result.Errors)
 
-	// Issue should be unchanged
 	unchanged := readIssueFromDisk(t, fix.plansDir, "test", 1, "test-issue")
 	assert.Equal(t, "backlog", unchanged.Status)
 }
-
-// --- Marshal/write error propagation tests ---
 
 // failingWritePlans wraps a fixture's plans dir in a planrepo.Plans whose
 // Write adapter always fails. Reads still hit the real filesystem so an
@@ -391,11 +378,11 @@ func TestSyncPush_WriteIssueError(t *testing.T) {
 	}
 
 	result, err := SyncPush(context.Background(), failingWritePlans(fix.plansDir), be, "test", fix.cfg)
-	require.NoError(t, err) // SyncPush itself succeeds (continue-on-error)
+	require.NoError(t, err)
 	require.Len(t, result.Errors, 1)
 	assert.Equal(t, 1, result.Errors[0].IssueID)
 	assert.Contains(t, result.Errors[0].Err.Error(), "write failed")
-	assert.Equal(t, 0, result.Created) // not counted as created since write-back failed
+	assert.Equal(t, 0, result.Created)
 }
 
 func TestSyncPull_WriteIssueError(t *testing.T) {
@@ -416,9 +403,9 @@ func TestSyncPull_WriteIssueError(t *testing.T) {
 	}
 
 	result, err := SyncPull(context.Background(), failingWritePlans(fix.plansDir), be, "test", fix.cfg)
-	require.NoError(t, err) // SyncPull itself succeeds (continue-on-error)
+	require.NoError(t, err)
 	require.Len(t, result.Errors, 1)
 	assert.Equal(t, 1, result.Errors[0].IssueID)
 	assert.Contains(t, result.Errors[0].Err.Error(), "write failed")
-	assert.Equal(t, 0, result.Updated) // not counted as updated since write failed
+	assert.Equal(t, 0, result.Updated)
 }

@@ -31,7 +31,6 @@ func TestMerge_ArrayReplacement(t *testing.T) {
 		Tracks: []string{"alpha", "beta"},
 	})
 	assert.Equal(t, []string{"alpha", "beta"}, result.Tracks)
-	// default workflow_states untouched
 	assert.Equal(t, Defaults().WorkflowStates, result.WorkflowStates)
 }
 
@@ -90,7 +89,6 @@ func TestMerge_LinearStatusMap(t *testing.T) {
 			StatusMap: map[string]string{"done": "Done"},
 		},
 	})
-	// map merges: both keys present
 	assert.Equal(t, "To Do", result.Linear.StatusMap["todo"])
 	assert.Equal(t, "Done", result.Linear.StatusMap["done"])
 }
@@ -144,7 +142,6 @@ func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	result := merge(base, PartialConfig{
 		Agents: map[string]*AgentEntry{"pi": {Enabled: true}},
 	})
-	// Both claude-code (from base) and pi (from layer) are present
 	assert.NotNil(t, result.rawAgents["claude-code"])
 	assert.NotNil(t, result.rawAgents["pi"])
 }
@@ -206,7 +203,6 @@ func TestMerge_BranchStrategyOverride(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{Pipeline: &PipelineConfig{BranchStrategy: "direct"}})
 	assert.Equal(t, "direct", result.Pipeline.BranchStrategy)
-	// existing skip preserved
 	assert.Equal(t, []string{}, result.Pipeline.Skip)
 }
 

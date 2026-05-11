@@ -18,8 +18,8 @@ package status
 //	blocked → todo:          cli/retry resets a blocked issue.
 //	blocked → in-progress:   resume after a manual unblock.
 //
-// The table is intentionally hardcoded — the PRD documents that workflow
-// transitions are semantic invariants, not configuration.
+// The table is intentionally hardcoded — workflow transitions are semantic
+// invariants, not configuration.
 var allowed = map[Status][]Status{
 	StatusTodo:       {StatusInProgress, StatusInReview, StatusBlocked, StatusCanceled},
 	StatusInProgress: {StatusInReview, StatusBlocked, StatusCanceled},

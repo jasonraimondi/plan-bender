@@ -107,7 +107,6 @@ func defaultDownloadAndReplace(version string) error {
 		return fmt.Errorf("finding executable path: %w", err)
 	}
 
-	// Resolve symlinks to get the real binary path
 	realPath, err := filepath.EvalSymlinks(execPath)
 	if err != nil {
 		return fmt.Errorf("resolving symlinks: %w", err)

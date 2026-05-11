@@ -31,7 +31,6 @@ func DetectCycles(issues []Issue) []string {
 		}
 	}
 
-	// BFS from zero in-degree nodes
 	var queue []int
 	for id, deg := range inDegree {
 		if deg == 0 {
@@ -56,7 +55,6 @@ func DetectCycles(issues []Issue) []string {
 		return nil
 	}
 
-	// Collect cycle participants
 	var cycleIDs []int
 	for id, deg := range inDegree {
 		if deg > 0 {

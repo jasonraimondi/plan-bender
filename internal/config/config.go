@@ -8,7 +8,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 )
 
-// defaultSubprocessTimeout is the cap applied when PipelineConfig.SubprocessTimeout is empty.
 const defaultSubprocessTimeout = 30 * time.Minute
 
 // ResolvedSubprocessTimeout returns the parsed timeout, falling back to
@@ -25,7 +24,6 @@ func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
 	return d
 }
 
-// CustomFieldDef defines a custom field on issue JSON.
 type CustomFieldDef struct {
 	Name       string   `json:"name"`
 	Type       string   `json:"type"` // "string", "number", "boolean", "enum"
@@ -33,7 +31,6 @@ type CustomFieldDef struct {
 	EnumValues []string `json:"enum_values,omitempty"`
 }
 
-// LinearConfig holds Linear integration settings.
 type LinearConfig struct {
 	Enabled   bool              `json:"enabled,omitempty"`
 	APIKey    string            `json:"api_key,omitempty"`
@@ -42,7 +39,6 @@ type LinearConfig struct {
 	StatusMap map[string]string `json:"status_map,omitempty"`
 }
 
-// PipelineConfig controls which pipeline steps to skip and how dispatch branches issues.
 type PipelineConfig struct {
 	Skip           []string `json:"skip,omitempty"`
 	BranchStrategy string   `json:"branch_strategy,omitempty"`
@@ -52,14 +48,12 @@ type PipelineConfig struct {
 	SubprocessTimeout string `json:"subprocess_timeout,omitempty"`
 }
 
-// HooksConfig declares shell hooks invoked around dispatch lifecycle events.
 type HooksConfig struct {
 	BeforeIssue string `json:"before_issue,omitempty"`
 	AfterIssue  string `json:"after_issue,omitempty"`
 	AfterBatch  string `json:"after_batch,omitempty"`
 }
 
-// IssueSchemaConfig controls custom fields on issues.
 type IssueSchemaConfig struct {
 	CustomFields []CustomFieldDef `json:"custom_fields,omitempty"`
 }
@@ -109,7 +103,6 @@ func (e AgentEntry) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// UnmarshalJSON implements a custom JSON unmarshaler that handles bool and object values.
 func (e *AgentEntry) UnmarshalJSON(data []byte) error {
 	var b bool
 	if err := json.Unmarshal(data, &b); err == nil {
@@ -122,8 +115,6 @@ func (e *AgentEntry) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("agents entry must be bool or object: %w", err)
 	}
 
-	// Pull known fields off explicitly; unknown keys land in Extra so the
-	// CLI can surface them to custom-field code paths.
 	getStr := func(key string) (*string, error) {
 		v, ok := raw[key]
 		if !ok {
@@ -185,8 +176,6 @@ func (e *AgentEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ResolvedAgent is a fully resolved agent configuration with registry defaults merged
-// with any per-agent overrides. Only enabled agents appear as ResolvedAgent values.
 type ResolvedAgent struct {
 	Name             string
 	ProjectDir       string
@@ -196,7 +185,6 @@ type ResolvedAgent struct {
 	Extra            map[string]any
 }
 
-// Config is the fully resolved configuration.
 type Config struct {
 	Tracks          []string          `json:"tracks"`
 	WorkflowStates  []string          `json:"workflow_states"`
@@ -214,7 +202,6 @@ type Config struct {
 	ReportBugs      bool              `json:"report_bugs"`
 }
 
-// PartialConfig is used for JSON layer loading — all fields optional.
 type PartialConfig struct {
 	Tracks          []string               `json:"tracks,omitempty"`
 	WorkflowStates  []string               `json:"workflow_states,omitempty"`

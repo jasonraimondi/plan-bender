@@ -59,7 +59,6 @@ func TestAgentEntry_UnmarshalJSON_ObjectWithKnownAndExtraKeys(t *testing.T) {
 	assert.True(t, e.Enabled)
 	require.NotNil(t, e.Options.ProjectDir)
 	assert.Equal(t, ".custom/", *e.Options.ProjectDir)
-	// project_dir should NOT appear in Extra — it's consumed by the known field
 	assert.Nil(t, e.Options.Extra["project_dir"])
 	assert.Equal(t, "AskUserQuestion", e.Options.Extra["question_tool"])
 }

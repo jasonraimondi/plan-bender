@@ -19,7 +19,6 @@ type localFS struct {
 	cfg   config.Config
 }
 
-// NewLocalFS creates a local-fs backend from config.
 func NewLocalFS(cfg config.Config) Backend {
 	return &localFS{plans: planrepo.NewProd(cfg.PlansDir), cfg: cfg}
 }

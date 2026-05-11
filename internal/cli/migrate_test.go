@@ -33,7 +33,6 @@ func TestMigrate_ConvertsConfigAndPlanFiles(t *testing.T) {
 	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
 
-	// Originals removed, JSON written.
 	for _, removed := range []string{
 		filepath.Join(dir, ".plan-bender.yaml"),
 		filepath.Join(planDir, "prd.yaml"),
@@ -69,7 +68,6 @@ func TestMigrate_IsIdempotent_SkipsWhenJSONExists(t *testing.T) {
 	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
 
-	// Both files still present.
 	_, err := os.Stat(filepath.Join(dir, ".plan-bender.yaml"))
 	assert.NoError(t, err, "yaml must not be removed when json sibling exists")
 	jsonData, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
@@ -161,7 +159,6 @@ steps:
 	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
 
-	// PRD must round-trip through strict decoder.
 	prdData, err := os.ReadFile(filepath.Join(planDir, "prd.json"))
 	require.NoError(t, err)
 	var prd schema.PRD
@@ -171,7 +168,6 @@ steps:
 	assert.Equal(t, []string{"M1: introduce widget", "M2: ship widget"}, prd.Decisions)
 	assert.Equal(t, []string{"Latency: spikes under load"}, prd.Risks)
 
-	// Issue must round-trip through strict decoder.
 	issueData, err := os.ReadFile(filepath.Join(planDir, "issues", "1-thing.json"))
 	require.NoError(t, err)
 	var issue schema.Issue
@@ -205,7 +201,6 @@ func TestMigrate_UpdatesGitignoreEntry(t *testing.T) {
 	assert.Contains(t, string(updated), ".plan-bender.local.json")
 	assert.NotContains(t, string(updated), ".plan-bender.local.yaml",
 		"stale yaml line must be replaced — secrets file would otherwise be committable")
-	// Surrounding entries preserved.
 	assert.Contains(t, string(updated), "node_modules/")
 	assert.Contains(t, string(updated), ".env")
 }

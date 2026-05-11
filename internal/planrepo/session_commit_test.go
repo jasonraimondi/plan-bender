@@ -53,8 +53,6 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return data
 }
 
-// --- Mutations ---
-
 func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
@@ -139,8 +137,6 @@ func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- Commit preflight ---
-
 func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
@@ -155,7 +151,7 @@ func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 
 	bad := sess.Snapshot().Issues[0]
-	bad.Slug = "" // violates required
+	bad.Slug = ""
 	require.NoError(t, sess.UpdateIssue(bad))
 
 	err = sess.Commit(testCfg())
@@ -207,8 +203,6 @@ func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 	res = sess.Validate(testCfg())
 	assert.False(t, res.Valid, "in-session mutation invalidating a field must surface in Validate without disk reread")
 }
-
-// --- Commit success cases ---
 
 func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
@@ -263,7 +257,7 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	// Only mutate issue #1.
-	iss := sess.Snapshot().Issues[0] // sorted by filename: 1-a, 2-b
+	iss := sess.Snapshot().Issues[0]
 	iss.Status = "in-progress"
 	require.NoError(t, sess.UpdateIssue(iss))
 
@@ -293,8 +287,6 @@ func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-brand-new.json"))
 	require.NoError(t, err, "create issue must write {id}-{slug}.json")
 }
-
-// --- Slug rename ---
 
 func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
@@ -330,8 +322,6 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	}
 	assert.Equal(t, 1, jsonCount, "rename must not leave both files behind")
 }
-
-// --- Best-effort rollback ---
 
 func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
@@ -428,8 +418,6 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "create rollback must remove the new file")
 }
 
-// --- Lock lifetime ---
-
 func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
@@ -480,7 +468,6 @@ func TestConcurrentOpen_SerializesThroughLock(t *testing.T) {
 
 	select {
 	case <-opened:
-		// good
 	case <-time.After(2 * time.Second):
 		t.Fatal("second Open never unblocked after first Close released the lock")
 	}

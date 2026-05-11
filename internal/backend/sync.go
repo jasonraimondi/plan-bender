@@ -9,7 +9,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-// SyncError records a per-issue failure during sync.
 type SyncError struct {
 	IssueID int
 	Err     error
@@ -19,7 +18,6 @@ func (e SyncError) Error() string {
 	return fmt.Sprintf("issue #%d: %v", e.IssueID, e.Err)
 }
 
-// SyncResult reports the outcome of a push or pull operation.
 type SyncResult struct {
 	Created int
 	Updated int

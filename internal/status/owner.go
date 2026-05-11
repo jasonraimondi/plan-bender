@@ -37,9 +37,6 @@ func New(store Store) *Owner {
 //  5. Save the mutated issue through the session, append a structured note
 //     when reason is non-empty, update the Updated date, and emit a single
 //     slog.Info audit line.
-//
-// The ctx is currently used only for cancellation symmetry with future
-// callers; the backend store does not yet take a ctx.
 func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Status, to Status, reason string) error {
 	_ = ctx
 

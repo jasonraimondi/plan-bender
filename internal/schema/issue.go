@@ -43,7 +43,6 @@ type Issue struct {
 func (i *Issue) Validate(cfg config.Config) []ValidationError {
 	var errs []ValidationError
 
-	// Required fields
 	if i.Slug == "" {
 		errs = append(errs, ValidationError{Field: "slug", Message: "required non-empty string"})
 	}
@@ -75,7 +74,6 @@ func (i *Issue) Validate(cfg config.Config) []ValidationError {
 		errs = append(errs, ValidationError{Field: "scope", Message: "required non-empty string"})
 	}
 
-	// Self-reference checks
 	for _, b := range i.BlockedBy {
 		if b == i.ID {
 			errs = append(errs, ValidationError{Field: "blocked_by", Message: "cannot reference self"})
@@ -89,7 +87,6 @@ func (i *Issue) Validate(cfg config.Config) []ValidationError {
 		}
 	}
 
-	// Duplicate checks
 	if hasDuplicates(i.BlockedBy) {
 		errs = append(errs, ValidationError{Field: "blocked_by", Message: "contains duplicates"})
 	}
@@ -97,7 +94,6 @@ func (i *Issue) Validate(cfg config.Config) []ValidationError {
 		errs = append(errs, ValidationError{Field: "blocking", Message: "contains duplicates"})
 	}
 
-	// Config-dependent validation
 	if i.Track != "" && !contains(cfg.Tracks, i.Track) {
 		errs = append(errs, ValidationError{
 			Field:   "track",
@@ -123,16 +119,12 @@ func (i *Issue) Validate(cfg config.Config) []ValidationError {
 		})
 	}
 
-	// Custom fields validation
 	errs = append(errs, i.validateCustomFields(cfg)...)
 
 	return errs
 }
 
 func (i *Issue) validateCustomFields(cfg config.Config) []ValidationError {
-	// Custom fields are not stored in the typed struct — they would need
-	// to be accessed via a separate raw map. For now this is a placeholder
-	// that will be wired when the backend reads raw JSON with extra fields.
 	return nil
 }
 

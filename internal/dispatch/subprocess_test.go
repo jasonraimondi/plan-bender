@@ -104,7 +104,6 @@ func TestRunSubprocess_SuccessFlipsToInReview(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")
 
-	// Fake claude flips status in-review (mimicking the sub-agent calling pba complete).
 	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
 	body := `echo '{"type":"text","text":"working"}'
 sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
@@ -215,7 +214,6 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")
 
-	// Empty PATH so claude is definitely not found.
 	t.Setenv("PATH", "")
 
 	worktree := t.TempDir()

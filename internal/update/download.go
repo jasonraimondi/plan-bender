@@ -194,14 +194,12 @@ func DownloadAndVerify(version, goos, goarch, baseURL string) (mainBin, agentBin
 	v := stripVPrefix(version)
 	filename := AssetFilename(v, goos, goarch)
 
-	// Download checksums.txt
 	checksumsURL := fmt.Sprintf("%s/%s/checksums.txt", baseURL, tag)
 	checksumsBody, err := httpGet(client, checksumsURL)
 	if err != nil {
 		return "", "", fmt.Errorf("downloading checksums: %w", err)
 	}
 
-	// Download archive to temp file
 	archiveURL := fmt.Sprintf("%s/%s/%s", baseURL, tag, filename)
 	archiveBytes, err := httpGet(client, archiveURL)
 	if err != nil {
@@ -221,13 +219,11 @@ func DownloadAndVerify(version, goos, goarch, baseURL string) (mainBin, agentBin
 	}
 	tmpFile.Close()
 
-	// Verify checksum
 	if err := VerifyChecksum(tmpPath, checksumsBody, filename); err != nil {
 		os.Remove(tmpPath)
 		return "", "", err
 	}
 
-	// Extract binaries to temp directory
 	extractDir, err := os.MkdirTemp("", "plan-bender-extract-*")
 	if err != nil {
 		os.Remove(tmpPath)
