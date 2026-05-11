@@ -23,22 +23,33 @@ func Load(root string) (Config, error) {
 func loadWithHome(root, home string) (Config, error) {
 	base := Defaults()
 
-	paths := []string{
-		filepath.Join(home, ".config", "plan-bender", "defaults.json"),
-		filepath.Join(root, ".plan-bender.json"),
-		filepath.Join(root, ".plan-bender.local.json"),
+	// Legacy-YAML hints are fatal at project/local layers (an unmigrated
+	// project would hide its entire config behind defaults) but only a
+	// warning at the global layer — otherwise a stale `~/.config` yaml
+	// breaks every pb command for users whose project is already migrated.
+	layers := []struct {
+		path  string
+		fatal bool
+	}{
+		{filepath.Join(home, ".config", "plan-bender", "defaults.json"), false},
+		{filepath.Join(root, ".plan-bender.json"), true},
+		{filepath.Join(root, ".plan-bender.local.json"), true},
 	}
 
-	for _, p := range paths {
-		layer, err := readPartial(p)
+	for _, l := range layers {
+		layer, err := readPartial(l.path)
 		if errors.Is(err, fs.ErrNotExist) {
-			if yamlPath := legacyYAMLSibling(p); yamlPath != "" {
-				return Config{}, fmt.Errorf("found legacy %s but no .json sibling — run 'pb migrate' to convert", yamlPath)
+			if yamlPath := legacyYAMLSibling(l.path); yamlPath != "" {
+				msg := fmt.Sprintf("found legacy %s but no .json sibling — run 'pb migrate' to convert", yamlPath)
+				if l.fatal {
+					return Config{}, errors.New(msg)
+				}
+				fmt.Fprintln(os.Stderr, "warning: "+msg)
 			}
 			continue
 		}
 		if err != nil {
-			return Config{}, fmt.Errorf("loading %s: %w", filepath.Base(p), err)
+			return Config{}, fmt.Errorf("loading %s: %w", filepath.Base(l.path), err)
 		}
 		base = merge(base, layer)
 	}

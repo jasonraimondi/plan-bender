@@ -50,6 +50,38 @@ func TestLoad_LegacyYAMLHintsAtMigrate(t *testing.T) {
 	assert.Contains(t, err.Error(), ".plan-bender.yaml")
 }
 
+// TestLoad_LegacyGlobalYAMLDoesNotBlockProjectLoad guards against the regression
+// where a stale `~/.config/plan-bender/defaults.yaml` aborted every pb command
+// even though the project was fully migrated. The global layer must downgrade
+// to a warning so callers with migrated projects keep working.
+func TestLoad_LegacyGlobalYAMLDoesNotBlockProjectLoad(t *testing.T) {
+	dir := t.TempDir()
+	global := filepath.Join(dir, ".config", "plan-bender")
+	require.NoError(t, os.MkdirAll(global, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(global, "defaults.yaml"),
+		[]byte("max_points: 7\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "project"), 0o755))
+	writeJSON(t, filepath.Join(dir, "project", ".plan-bender.json"), `{"max_points": 5}`)
+
+	cfg, err := loadWithHome(filepath.Join(dir, "project"), dir)
+	require.NoError(t, err)
+	assert.Equal(t, 5, cfg.MaxPoints)
+}
+
+// TestLoad_LegacyLocalYAMLFatal ensures the project-local layer still hard-fails
+// on stale yaml — that file would carry overrides (including secrets) and
+// silently ignoring it would mask real misconfiguration.
+func TestLoad_LegacyLocalYAMLFatal(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.local.yaml"),
+		[]byte("max_points: 7\n"), 0o644))
+
+	_, err := Load(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pb migrate")
+	assert.Contains(t, err.Error(), ".plan-bender.local.yaml")
+}
+
 func TestLoad_MalformedJSONReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	writeJSON(t, filepath.Join(dir, ".plan-bender.json"), "{not valid json")
