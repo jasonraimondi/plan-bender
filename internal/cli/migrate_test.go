@@ -150,6 +150,74 @@ steps:
 	assert.Equal(t, []string{"Step 1: design", "Step 2: implement"}, issue.Steps)
 }
 
+// TestMigrate_UpdatesGitignoreEntry guards against the secrets exposure:
+// setup.go used to write `.plan-bender.local.yaml` to .gitignore; migrate
+// produces `.plan-bender.local.json` (containing Linear API keys) which
+// the stale entry no longer covers.
+func TestMigrate_UpdatesGitignoreEntry(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	require.NoError(t, os.WriteFile(gitignorePath,
+		[]byte("node_modules/\n.plan-bender/\n.plan-bender.local.yaml\n.env\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.local.yaml"),
+		[]byte("linear:\n  api_key: secret\n"), 0o644))
+
+	cmd := NewMigrateCmd()
+	cmd.SetOut(&strings.Builder{})
+	require.NoError(t, cmd.Execute())
+
+	updated, err := os.ReadFile(gitignorePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(updated), ".plan-bender.local.json")
+	assert.NotContains(t, string(updated), ".plan-bender.local.yaml",
+		"stale yaml line must be replaced — secrets file would otherwise be committable")
+	// Surrounding entries preserved.
+	assert.Contains(t, string(updated), "node_modules/")
+	assert.Contains(t, string(updated), ".env")
+}
+
+// TestMigrate_GitignoreIdempotent ensures migrate doesn't double-add the json
+// entry when run again (or when the user already had it).
+func TestMigrate_GitignoreIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	require.NoError(t, os.WriteFile(gitignorePath,
+		[]byte(".plan-bender.local.json\n"), 0o644))
+
+	cmd := NewMigrateCmd()
+	cmd.SetOut(&strings.Builder{})
+	require.NoError(t, cmd.Execute())
+
+	updated, err := os.ReadFile(gitignorePath)
+	require.NoError(t, err)
+	assert.Equal(t, ".plan-bender.local.json\n", string(updated),
+		"gitignore must be untouched when only the json entry is present")
+}
+
+// TestMigrate_GitignoreReplacesBothWithJsonOnly drops the stale yaml line
+// when the json entry already exists alongside.
+func TestMigrate_GitignoreReplacesBothWithJsonOnly(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	require.NoError(t, os.WriteFile(gitignorePath,
+		[]byte(".plan-bender.local.yaml\n.plan-bender.local.json\n"), 0o644))
+
+	cmd := NewMigrateCmd()
+	cmd.SetOut(&strings.Builder{})
+	require.NoError(t, cmd.Execute())
+
+	updated, err := os.ReadFile(gitignorePath)
+	require.NoError(t, err)
+	assert.NotContains(t, string(updated), ".plan-bender.local.yaml")
+	assert.Contains(t, string(updated), ".plan-bender.local.json")
+}
+
 func TestMigrate_DryRunDoesNotWrite(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))

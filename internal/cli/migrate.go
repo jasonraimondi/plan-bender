@@ -3,12 +3,15 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/jasonraimondi/plan-bender/internal/backend"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
@@ -82,6 +85,10 @@ Existing .json siblings are skipped — migrate is idempotent and safe to re-run
 				if err != nil {
 					return err
 				}
+			}
+
+			if err := updateGitignoreForMigration(root, dryRun, out); err != nil {
+				return err
 			}
 
 			if dryRun {
@@ -213,6 +220,67 @@ func normalizeForJSON(v any) any {
 func exists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// updateGitignoreForMigration rewrites a `.plan-bender.local.yaml` line in the
+// project .gitignore to `.plan-bender.local.json`. setup.go used to write the
+// yaml form; without this fix, users who run migrate keep a stale gitignore
+// entry while their migrated `.plan-bender.local.json` (containing Linear API
+// keys) becomes un-gitignored. No-op when .gitignore is absent or already
+// only references the json form.
+func updateGitignoreForMigration(root string, dryRun bool, out io.Writer) error {
+	const (
+		oldEntry = ".plan-bender.local.yaml"
+		newEntry = ".plan-bender.local.json"
+	)
+	gitignorePath := filepath.Join(root, ".gitignore")
+	data, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("reading %s: %w", gitignorePath, err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	hasOld, hasNew := false, false
+	for _, line := range lines {
+		switch strings.TrimSpace(line) {
+		case oldEntry:
+			hasOld = true
+		case newEntry:
+			hasNew = true
+		}
+	}
+	if !hasOld {
+		return nil
+	}
+
+	updated := make([]string, 0, len(lines))
+	rewritten := false
+	for _, line := range lines {
+		if strings.TrimSpace(line) == oldEntry {
+			if hasNew || rewritten {
+				continue
+			}
+			updated = append(updated, strings.Replace(line, oldEntry, newEntry, 1))
+			rewritten = true
+			continue
+		}
+		updated = append(updated, line)
+	}
+	newContent := strings.Join(updated, "\n")
+
+	if dryRun {
+		fmt.Fprintf(out, "would update %s — replace %s with %s\n", gitignorePath, oldEntry, newEntry)
+		return nil
+	}
+
+	if err := backend.AtomicWrite(gitignorePath, []byte(newContent), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", gitignorePath, err)
+	}
+	fmt.Fprintf(out, "updated %s — %s → %s\n", gitignorePath, oldEntry, newEntry)
+	return nil
 }
 
 // proseList is a migration-only []string that tolerates YAML list items
