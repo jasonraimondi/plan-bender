@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -114,17 +115,9 @@ func migrateOne(yamlPath string, dryRun bool, out interface{ Write(p []byte) (in
 		return false, fmt.Errorf("reading: %w", err)
 	}
 
-	var raw any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return false, fmt.Errorf("yaml decode: %w", err)
-	}
-	raw = normalizeForJSON(raw)
-
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(raw); err != nil {
-		return false, fmt.Errorf("json encode: %w", err)
+	encoded, err := encodeYAMLToJSON(yamlPath, data)
+	if err != nil {
+		return false, err
 	}
 
 	if dryRun {
@@ -132,7 +125,7 @@ func migrateOne(yamlPath string, dryRun bool, out interface{ Write(p []byte) (in
 		return true, nil
 	}
 
-	if err := os.WriteFile(jsonPath, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(jsonPath, encoded, 0o644); err != nil {
 		return false, fmt.Errorf("writing %s: %w", jsonPath, err)
 	}
 	if err := os.Remove(yamlPath); err != nil {
@@ -140,6 +133,57 @@ func migrateOne(yamlPath string, dryRun bool, out interface{ Write(p []byte) (in
 	}
 	fmt.Fprintf(out, "converted %s → %s\n", yamlPath, jsonPath)
 	return true, nil
+}
+
+// encodeYAMLToJSON dispatches by path: plan files (prd.yaml, issues/*.yaml)
+// flow through the typed schema decoder so bare-colon list items collapse to
+// strings via proseList; config files use the raw any-walk path. Mixing them
+// matters because the typed structs only describe plan files — a config file
+// would lose unknown keys if forced through them.
+func encodeYAMLToJSON(yamlPath string, data []byte) ([]byte, error) {
+	switch {
+	case filepath.Base(yamlPath) == "prd.yaml":
+		return encodePRDYAML(data)
+	case filepath.Base(filepath.Dir(yamlPath)) == "issues":
+		return encodeIssueYAML(data)
+	default:
+		return encodeRawYAML(data)
+	}
+}
+
+func encodeRawYAML(data []byte) ([]byte, error) {
+	var raw any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("yaml decode: %w", err)
+	}
+	raw = normalizeForJSON(raw)
+	return marshalIndentedJSON(raw)
+}
+
+func encodePRDYAML(data []byte) ([]byte, error) {
+	var doc prdYAMLDoc
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("yaml decode prd: %w", err)
+	}
+	return marshalIndentedJSON(doc.toSchema())
+}
+
+func encodeIssueYAML(data []byte) ([]byte, error) {
+	var doc issueYAMLDoc
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("yaml decode issue: %w", err)
+	}
+	return marshalIndentedJSON(doc.toSchema())
+}
+
+func marshalIndentedJSON(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return nil, fmt.Errorf("json encode: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // normalizeForJSON converts map[any]any (yaml.v3's default for mappings) into
@@ -169,4 +213,198 @@ func normalizeForJSON(v any) any {
 func exists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// proseList is a migration-only []string that tolerates YAML list items
+// written as `- some prose: more prose` without surrounding quotes. yaml.v3
+// parses such items as a single-key mapping; without flattening, the post-
+// migration strict JSON decoder rejects the file. Production code never sees
+// this type — once on disk, the format is plain []string in JSON.
+type proseList []string
+
+// flattenMaxDepth bounds recursive descent so circular YAML anchors cannot
+// exhaust the goroutine stack.
+const flattenMaxDepth = 32
+
+func (s *proseList) UnmarshalYAML(value *yaml.Node) error {
+	if value == nil || value.Tag == "!!null" {
+		*s = nil
+		return nil
+	}
+	if value.Kind != yaml.SequenceNode {
+		return fmt.Errorf("line %d: expected a list, got node kind %d", value.Line, value.Kind)
+	}
+	out := make([]string, 0, len(value.Content))
+	for _, item := range value.Content {
+		if isYAMLNull(item) {
+			return fmt.Errorf("line %d: null list item not allowed", item.Line)
+		}
+		v, err := flattenProseItem(item, 0)
+		if err != nil {
+			return err
+		}
+		out = append(out, v)
+	}
+	*s = out
+	return nil
+}
+
+func flattenProseItem(n *yaml.Node, depth int) (string, error) {
+	if depth > flattenMaxDepth {
+		return "", fmt.Errorf("line %d: list item nested too deeply", n.Line)
+	}
+	switch n.Kind {
+	case yaml.ScalarNode:
+		return n.Value, nil
+	case yaml.MappingNode:
+		parts := make([]string, 0, len(n.Content)/2)
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, err := flattenProseItem(n.Content[i], depth+1)
+			if err != nil {
+				return "", err
+			}
+			if isYAMLNull(n.Content[i+1]) {
+				parts = append(parts, k)
+				continue
+			}
+			v, err := flattenProseItem(n.Content[i+1], depth+1)
+			if err != nil {
+				return "", err
+			}
+			if v == "" {
+				parts = append(parts, k)
+			} else {
+				parts = append(parts, k+": "+v)
+			}
+		}
+		return strings.Join(parts, ", "), nil
+	case yaml.SequenceNode:
+		parts := make([]string, 0, len(n.Content))
+		for _, c := range n.Content {
+			s, err := flattenProseItem(c, depth+1)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, s)
+		}
+		return strings.Join(parts, ", "), nil
+	case yaml.AliasNode:
+		if n.Alias == nil {
+			return "", fmt.Errorf("line %d: nil alias target", n.Line)
+		}
+		return flattenProseItem(n.Alias, depth+1)
+	}
+	return "", fmt.Errorf("line %d: unsupported list item kind", n.Line)
+}
+
+func isYAMLNull(n *yaml.Node) bool {
+	return n != nil && n.Kind == yaml.ScalarNode && n.Tag == "!!null"
+}
+
+// prdYAMLDoc mirrors schema.PrdYaml with proseList fields for YAML decode.
+// JSON output matches schema.PrdYaml because toSchema converts every field
+// before encoding — the type lives here only to absorb bare-colon items.
+type prdYAMLDoc struct {
+	Name          string             `yaml:"name"`
+	Slug          string             `yaml:"slug"`
+	Status        string             `yaml:"status"`
+	Created       string             `yaml:"created"`
+	Updated       string             `yaml:"updated"`
+	Description   string             `yaml:"description"`
+	Why           string             `yaml:"why"`
+	Outcome       string             `yaml:"outcome"`
+	InScope       proseList          `yaml:"in_scope,omitempty"`
+	OutOfScope    proseList          `yaml:"out_of_scope,omitempty"`
+	UseCases      []schema.UseCase   `yaml:"use_cases,omitempty"`
+	Decisions     proseList          `yaml:"decisions,omitempty"`
+	OpenQuestions proseList          `yaml:"open_questions,omitempty"`
+	Risks         proseList          `yaml:"risks,omitempty"`
+	Validation    proseList          `yaml:"validation,omitempty"`
+	Notes         *string            `yaml:"notes,omitempty"`
+	DevCommand    *string            `yaml:"dev_command,omitempty"`
+	BaseURL       *string            `yaml:"base_url,omitempty"`
+	Linear        *schema.LinearRef  `yaml:"linear,omitempty"`
+}
+
+func (p *prdYAMLDoc) toSchema() *schema.PrdYaml {
+	return &schema.PrdYaml{
+		Name:          p.Name,
+		Slug:          p.Slug,
+		Status:        p.Status,
+		Created:       p.Created,
+		Updated:       p.Updated,
+		Description:   p.Description,
+		Why:           p.Why,
+		Outcome:       p.Outcome,
+		InScope:       []string(p.InScope),
+		OutOfScope:    []string(p.OutOfScope),
+		UseCases:      p.UseCases,
+		Decisions:     []string(p.Decisions),
+		OpenQuestions: []string(p.OpenQuestions),
+		Risks:         []string(p.Risks),
+		Validation:    []string(p.Validation),
+		Notes:         p.Notes,
+		DevCommand:    p.DevCommand,
+		BaseURL:       p.BaseURL,
+		Linear:        p.Linear,
+	}
+}
+
+// issueYAMLDoc mirrors schema.IssueYaml with proseList fields for YAML decode.
+type issueYAMLDoc struct {
+	ID                 int       `yaml:"id"`
+	Slug               string    `yaml:"slug"`
+	Name               string    `yaml:"name"`
+	Track              string    `yaml:"track"`
+	Status             string    `yaml:"status"`
+	Priority           string    `yaml:"priority"`
+	Points             int       `yaml:"points"`
+	Labels             []string  `yaml:"labels"`
+	Assignee           *string   `yaml:"assignee"`
+	BlockedBy          []int     `yaml:"blocked_by"`
+	Blocking           []int     `yaml:"blocking"`
+	Branch             *string   `yaml:"branch"`
+	PR                 *string   `yaml:"pr"`
+	LinearID           *string   `yaml:"linear_id"`
+	LinearURL          string    `yaml:"linear_url,omitempty"`
+	Created            string    `yaml:"created"`
+	Updated            string    `yaml:"updated"`
+	TDD                bool      `yaml:"tdd"`
+	Headed             *bool     `yaml:"headed,omitempty"`
+	Outcome            string    `yaml:"outcome"`
+	Scope              string    `yaml:"scope"`
+	AcceptanceCriteria proseList `yaml:"acceptance_criteria"`
+	Steps              proseList `yaml:"steps"`
+	UseCases           proseList `yaml:"use_cases"`
+	Notes              *string   `yaml:"notes,omitempty"`
+}
+
+func (i *issueYAMLDoc) toSchema() *schema.IssueYaml {
+	return &schema.IssueYaml{
+		ID:                 i.ID,
+		Slug:               i.Slug,
+		Name:               i.Name,
+		Track:              i.Track,
+		Status:             i.Status,
+		Priority:           i.Priority,
+		Points:             i.Points,
+		Labels:             i.Labels,
+		Assignee:           i.Assignee,
+		BlockedBy:          i.BlockedBy,
+		Blocking:           i.Blocking,
+		Branch:             i.Branch,
+		PR:                 i.PR,
+		LinearID:           i.LinearID,
+		LinearURL:          i.LinearURL,
+		Created:            i.Created,
+		Updated:            i.Updated,
+		TDD:                i.TDD,
+		Headed:             i.Headed,
+		Outcome:            i.Outcome,
+		Scope:              i.Scope,
+		AcceptanceCriteria: []string(i.AcceptanceCriteria),
+		Steps:              []string(i.Steps),
+		UseCases:           []string(i.UseCases),
+		Notes:              i.Notes,
+	}
 }
