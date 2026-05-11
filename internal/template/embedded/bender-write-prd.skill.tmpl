@@ -1,11 +1,11 @@
 ---
 name: bender-write-prd
-description: Create a PRD by interviewing the user, exploring the codebase, and writing a structured YAML plan to {{.plans_dir}}{slug}/prd.yaml. Use when user says "write a PRD", "plan this feature", "create a plan", or wants structured project planning.
+description: Create a PRD by interviewing the user, exploring the codebase, and writing a structured JSON plan to {{.plans_dir}}{slug}/prd.json. Use when user says "write a PRD", "plan this feature", "create a plan", or wants structured project planning.
 ---
 
 # Write a PRD
 
-Create a PRD as a structured YAML file in the project's `{{.plans_dir}}` directory.
+Create a PRD as a structured JSON file in the project's `{{.plans_dir}}` directory.
 
 ## Plan structure
 
@@ -13,7 +13,7 @@ Every PRD lives in its own directory:
 
 ```
 {{.plans_dir}}{project-slug}/
-  prd.yaml
+  prd.json
   issues/          # created later by /bender-prd-to-issues
 ```
 
@@ -55,54 +55,35 @@ Check with the user that:
 
 ### 5. Draft the PRD
 
-Write the PRD as a YAML file using this schema:
+Write the PRD as a JSON file using this schema:
 
-```yaml
-name: "Project Name"
-slug: project-name
-status: draft  # draft | active | complete | archived
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-
-description: |
-  One-line summary.
-
-why: |
-  The problem from the user's perspective and why it matters now.
-
-outcome: |
-  What success looks like.
-
-in_scope:
-  - 'Behavior or surface included'
-
-out_of_scope:
-  - 'What this PRD explicitly does not cover'
-
-use_cases:
-  - id: UC-1
-    description: 'Short actor + action + outcome'
-  - id: UC-2
-    description: 'Short actor + action + outcome'
-
-decisions:
-  - 'Decision that is already settled'
-
-open_questions:
-  - 'Question that materially affects scope or architecture'
-
-risks:
-  - 'Constraint, dependency, or rollout risk'
-
-validation:
-  - 'How we know the work is correct or successful'
-
-notes: |
-  High-signal notes about modules, contracts, schema changes, or testing strategy.
-
-dev_command: "npm run dev"
-base_url: "http://localhost:3000"
+```json
+{
+  "name": "Project Name",
+  "slug": "project-name",
+  "status": "draft",
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "description": "One-line summary.",
+  "why": "The problem from the user's perspective and why it matters now.",
+  "outcome": "What success looks like.",
+  "in_scope": ["Behavior or surface included"],
+  "out_of_scope": ["What this PRD explicitly does not cover"],
+  "use_cases": [
+    {"id": "UC-1", "description": "Short actor + action + outcome"},
+    {"id": "UC-2", "description": "Short actor + action + outcome"}
+  ],
+  "decisions": ["Decision that is already settled"],
+  "open_questions": ["Question that materially affects scope or architecture"],
+  "risks": ["Constraint, dependency, or rollout risk"],
+  "validation": ["How we know the work is correct or successful"],
+  "notes": "High-signal notes about modules, contracts, schema changes, or testing strategy.",
+  "dev_command": "npm run dev",
+  "base_url": "http://localhost:3000"
+}
 ```
+
+`status` is one of: `draft`, `active`, `complete`, `archived`.
 
 Keep it scannable. The PRD should support decomposition into issues — not be a dumping ground for every implementation detail.
 {{if .review_with_user}}
@@ -124,13 +105,15 @@ Iterate until approved.
 ### 6. Write the file
 {{- end}}
 
-Pipe the PRD YAML to `{{.commands.write_prd}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/prd.yaml` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+Pipe the PRD JSON to `{{.commands.write_prd}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/prd.json` — nothing lands on disk until validation passes. Do not stage a temporary file first.
 
 ```bash
 {{.commands.write_prd}} {slug} <<'EOF'
-name: "Project Name"
-slug: {slug}
-# ...rest of PRD YAML
+{
+  "name": "Project Name",
+  "slug": "{slug}"
+  /* ...rest of PRD JSON */
+}
 EOF
 ```
 
@@ -139,7 +122,7 @@ Rules:
 - the `slug` is a kebab-case version of the project name, used as the directory name
 - use_cases are numbered (UC-1, UC-2, ...) so issues can reference them
 - do not include file paths or code snippets in the PRD
-- single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
+- emit valid JSON — strings quoted, no trailing commas, no comments
 
 ### {{if .review_with_user}}8{{else}}7{{end}}. Hand off cleanly
 
@@ -150,5 +133,5 @@ After creation, share:
 {{if .report_bugs}}
 ## Bug reports
 
-If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
 {{end}}

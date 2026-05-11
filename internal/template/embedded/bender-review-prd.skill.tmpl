@@ -9,7 +9,7 @@ Review a PRD and its issues as a principal software engineer. Auto-fix mechanica
 
 ## Execution checklist
 
-1. **Load all plan files** — read `{{.plans_dir}}{slug}/prd.yaml` and all files in `{{.plans_dir}}{slug}/issues/`.
+1. **Load all plan files** — read `{{.plans_dir}}{slug}/prd.json` and all files in `{{.plans_dir}}{slug}/issues/`.
 2. **Load project context** — scan codebase for existing patterns: routes, schema, services, auth, error handling. This grounds the review in reality, not theory.
 3. **Run auto-fix pass** — apply mechanical fixes directly (see auto-fix rules below). Report what changed.
 4. **Run review pass** — evaluate each dimension in the rubric. Collect findings as `fix` (actionable, concrete) or `question` (needs user input).
@@ -121,10 +121,10 @@ After all fixes and questions are resolved:
 - [questions asked and decisions made]
 
 ### PRD updates
-- [changes to decisions, open_questions, or risks in prd.yaml]
+- [changes to decisions, open_questions, or risks in prd.json]
 ```
 {{if .report_bugs}}
 ## Bug reports
 
-If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
 {{end}}

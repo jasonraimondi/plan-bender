@@ -1,11 +1,11 @@
 ---
 name: bender-prd-to-issues
-description: Break a PRD into independently grabbable issues using thin vertical slices, writing structured YAML files to {{.plans_dir}}{slug}/issues/. Use when user says "break this down", "create issues", "decompose the PRD", or wants to convert a PRD into actionable work items.
+description: Break a PRD into independently grabbable issues using thin vertical slices, writing structured JSON files to {{.plans_dir}}{slug}/issues/. Use when user says "break this down", "create issues", "decompose the PRD", or wants to convert a PRD into actionable work items.
 ---
 
 # PRD to Issues
 
-Break a PRD into implementation issues stored as YAML files.
+Break a PRD into implementation issues stored as JSON files.
 
 ## Plan structure
 
@@ -13,60 +13,53 @@ Issues live alongside their PRD:
 
 ```
 {{.plans_dir}}{project-slug}/
-  prd.yaml
+  prd.json
   issues/
-    1-setup-auth-middleware.yaml
-    2-add-token-refresh.yaml
+    1-setup-auth-middleware.json
+    2-add-token-refresh.json
     ...
 ```
 
-Filenames follow `{id}-{slug}.yaml`. IDs are integers starting at 1, assigned in creation order.
+Filenames follow `{id}-{slug}.json`. IDs are integers starting at 1, assigned in creation order.
 
 ## Issue schema
 
-```yaml
-id: 1
-slug: setup-auth-middleware
-name: "Set up authentication middleware"
-track: rules       # {{join " | " .tracks}}
-status: backlog    # {{join " | " .workflow_states}}
-priority: high     # urgent | high | medium | low
-points: 3          # fibonacci: 1, 2, 3 (max {{.max_points}})
-labels:
-  - AFK            # AFK = autonomous, HITL = needs human input
-assignee: null
-blocked_by: []     # issue IDs within this project
-blocking: []       # issue IDs within this project
-branch: null
-pr: null
-linear_id: null       # Linear issue identifier, set by sync
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-tdd: true          # optional — issue has testable behavior
-headed: false      # optional — issue requires browser-visible verification
-{{range .custom_fields}}
-{{.name}}: null     # custom field ({{.type}})
-{{end}}
-
-outcome: |
-  What this slice delivers.
-
-scope: |
-  What is included. Keep it narrow.
-
-acceptance_criteria:
-  - 'Criterion 1'
-  - 'Criterion 2'
-
-steps:
-  - '{{.step_pattern}}'
-
-use_cases:
-  - UC-1
-
-notes: |
-  Relevant context, constraints, or prior art.
+```json
+{
+  "id": 1,
+  "slug": "setup-auth-middleware",
+  "name": "Set up authentication middleware",
+  "track": "rules",
+  "status": "backlog",
+  "priority": "high",
+  "points": 3,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "tdd": true,
+  "headed": false,{{range .custom_fields}}
+  "{{.name}}": null,{{end}}
+  "outcome": "What this slice delivers.",
+  "scope": "What is included. Keep it narrow.",
+  "acceptance_criteria": ["Criterion 1", "Criterion 2"],
+  "steps": ["{{.step_pattern}}"],
+  "use_cases": ["UC-1"],
+  "notes": "Relevant context, constraints, or prior art."
+}
 ```
+
+Enum values:
+- `track`: {{join " | " .tracks}}
+- `status`: {{join " | " .workflow_states}}
+- `priority`: urgent | high | medium | low
+- `points`: fibonacci 1, 2, 3 (max {{.max_points}})
+- `labels`: `AFK` (autonomous) or `HITL` (needs human input)
 
 ### Field reference
 
@@ -82,7 +75,7 @@ Classifies the issue's primary concern. Every issue gets exactly one track.
 
 #### `tdd`
 
-Mark `tdd: true` when the issue has testable behavior:
+Mark `"tdd": true` when the issue has testable behavior:
 
 - `rules` issues — almost always
 - `data` issues — CRUD, cascade, lifecycle behavior
@@ -91,16 +84,16 @@ Mark `tdd: true` when the issue has testable behavior:
 
 Skip for pure UI/styling, configuration-only, or wiring-only issues.
 
-When `tdd: true`, the implementation agent invokes the `testing-tdd` skill and decides the RED→GREEN structure based on the steps.
+When `"tdd": true`, the implementation agent invokes the `testing-tdd` skill and decides the RED→GREEN structure based on the steps.
 
 #### `headed`
 
-Mark `headed: true` when correctness requires browser-visible verification:
+Mark `"headed": true` when correctness requires browser-visible verification:
 
 - `experience` issues — almost always
 - Any issue where visual state, layout, or interaction must be verified
 
-When `headed: true`, include visual verification targets in steps:
+When `"headed": true`, include visual verification targets in steps:
 ```
 Route /dashboard — verify search input renders and filters list on keystrokes
 ```
@@ -111,11 +104,12 @@ The implementation agent invokes the `tooling-agent-browser` skill.
 
 Ordered implementation actions following the `{{.step_pattern}}` pattern:
 
-```yaml
-steps:
-  - 'Route /auth/login — reject expired tokens with 401'
-  - 'Token refresh endpoint — issue new token when refresh token is valid and not revoked'
-  - 'Auth middleware — attach user context to request on valid token'
+```json
+"steps": [
+  "Route /auth/login — reject expired tokens with 401",
+  "Token refresh endpoint — issue new token when refresh token is valid and not revoked",
+  "Auth middleware — attach user context to request on valid token"
+]
 ```
 
 Steps tell the implementation agent **how** to build the issue. Acceptance criteria tell reviewers **what** to verify.
@@ -149,7 +143,7 @@ Allowed values: {{join ", " .enum_values}}
 
 ### 1. Locate the PRD
 
-Ask the user for the project slug or path. Read `{{.plans_dir}}{slug}/prd.yaml`.
+Ask the user for the project slug or path. Read `{{.plans_dir}}{slug}/prd.json`.
 
 ### 2. Explore the codebase
 
@@ -193,7 +187,7 @@ Rules:
 
 - every step includes location context (route, file, service, component)
 - no vague language: "handle errors appropriately", "set up properly", "add necessary validation"
-- `headed: true` steps include visual verification targets
+- `"headed": true` steps include visual verification targets
 - steps are ordered by implementation sequence
 
 ### 5. Review the breakdown with the user
@@ -224,13 +218,15 @@ Iterate until the user approves.
 
 ### 6. Write the issue files
 
-For each issue, pipe the YAML to `{{.commands.write_issue}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.yaml` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+For each issue, pipe the JSON to `{{.commands.write_issue}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.json` — nothing lands on disk until validation passes. Do not stage a temporary file first.
 
 ```bash
 {{.commands.write_issue}} {slug} <<'EOF'
-id: 1
-slug: issue-slug
-# ...rest of issue YAML
+{
+  "id": 1,
+  "slug": "issue-slug"
+  /* ...rest of issue JSON */
+}
 EOF
 ```
 
@@ -238,9 +234,9 @@ Rules:
 
 - `blocked_by` and `blocking` must be kept in sync across issues
 - IDs are sequential integers starting at 1
-- filename is `{id}-{slug}.yaml`
-- structure lives in YAML fields — do not duplicate dependencies or status in prose
-- single-quote all string list items — a bare `foo: bar` is parsed as a YAML map, not a string
+- filename is `{id}-{slug}.json`
+- structure lives in JSON fields — do not duplicate dependencies or status in prose
+- emit valid JSON — strings quoted, no trailing commas, no comments
 {{if .has_backend_sync}}
 
 ### Sync to backend
@@ -250,7 +246,7 @@ After writing issue files, run `{{.commands.sync_push}} {slug}` to push issues t
 
 ### 7. Update the PRD status
 
-Set `status: active` and update the `updated` date in `prd.yaml`.
+Set `"status": "active"` and update the `updated` date in `prd.json`.
 
 ### 8. Confirm the result
 
@@ -265,5 +261,5 @@ After creation, share:
 {{if .report_bugs}}
 ## Bug reports
 
-If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
 {{end}}
