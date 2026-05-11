@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"encoding/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -25,38 +26,44 @@ func newTestOwner(plansDir string) *status.Owner {
 // so cross-ref validation accepts stubIssueYAML — so planrepo.Commit's
 // preflight validation accepts status writes from the owner during
 // subprocess tests.
-const subprocessTestPrd = `name: Ship
-slug: ship
-status: active
-created: "2026-04-30"
-updated: "2026-04-30"
-description: ship it
-why: testing
-outcome: shipped
-use_cases:
-  - id: UC-1
-    description: ship use case
-`
+const subprocessTestPrd = `{
+  "name": "Ship",
+  "slug": "ship",
+  "status": "active",
+  "created": "2026-04-30",
+  "updated": "2026-04-30",
+  "description": "ship it",
+  "why": "testing",
+  "outcome": "shipped",
+  "use_cases": [
+    {"id": "UC-1", "description": "ship use case"}
+  ]
+}`
 
-const stubIssueYAML = `id: 5
-slug: ship-it
-name: Ship it
-track: intent
-status: in-progress
-priority: high
-points: 2
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2026-04-30"
-tdd: true
-outcome: It ships
-scope: Small
-acceptance_criteria: ["It ships"]
-steps: ["Target — ships"]
-use_cases: ["UC-1"]
-`
+const stubIssueYAML = `{
+  "id": 5,
+  "slug": "ship-it",
+  "name": "Ship it",
+  "track": "intent",
+  "status": "in-progress",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-04-30",
+  "tdd": true,
+  "outcome": "It ships",
+  "scope": "Small",
+  "acceptance_criteria": ["It ships"],
+  "steps": ["Target — ships"],
+  "use_cases": ["UC-1"]
+}`
 
 func writeStubIssue(t *testing.T, plansDir, slug, status string) {
 	t.Helper()
@@ -64,10 +71,10 @@ func writeStubIssue(t *testing.T, plansDir, slug, status string) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	body := stubIssueYAML
 	if status != "" {
-		body = strings.Replace(body, "status: in-progress", "status: "+status, 1)
+		body = strings.Replace(body, `"status": "in-progress"`, `"status": "`+status+`"`, 1)
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "5-ship-it.yaml"), []byte(body), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, slug, "prd.yaml"), []byte(subprocessTestPrd), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "5-ship-it.json"), []byte(body), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, slug, "prd.json"), []byte(subprocessTestPrd), 0o644))
 }
 
 // installFakeClaude writes a shell script named `claude` to a fresh dir, prepends
@@ -86,10 +93,10 @@ func installFakeClaude(t *testing.T, body string) string {
 
 func loadIssueFromDisk(t *testing.T, plansDir, slug string, id int) schema.IssueYaml {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(plansDir, slug, "issues", "5-ship-it.yaml"))
+	data, err := os.ReadFile(filepath.Join(plansDir, slug, "issues", "5-ship-it.json"))
 	require.NoError(t, err)
 	var issue schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &issue))
+	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
 
@@ -98,9 +105,9 @@ func TestRunSubprocess_SuccessFlipsToInReview(t *testing.T) {
 	writeStubIssue(t, plansDir, "ship", "")
 
 	// Fake claude flips status in-review (mimicking the sub-agent calling pba complete).
-	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
 	body := `echo '{"type":"text","text":"working"}'
-sed -i.bak 's/status: in-progress/status: in-review/' "` + issuePath + `"
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
 echo '{"type":"text","text":"done"}'
 exit 0
 `
@@ -181,7 +188,7 @@ func TestRunSubprocess_UnreadablePostFileMarksFailure(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")
 
-	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
 
 	// Fake claude exits 0 but renders the issue file unreadable. Verdict must
 	// classify this as Unreadable rather than Success — the post-run state is
@@ -232,10 +239,10 @@ func TestRunSubprocess_PromptDeliveredOnStdinNotArgs(t *testing.T) {
 	captureDir := t.TempDir()
 	argsFile := filepath.Join(captureDir, "args.txt")
 	stdinFile := filepath.Join(captureDir, "stdin.txt")
-	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.yaml")
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
 	body := `printf '%s\n' "$@" > ` + argsFile + `
 cat > ` + stdinFile + `
-sed -i.bak 's/status: in-progress/status: in-review/' "` + issuePath + `"
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
 exit 0
 `
 	installFakeClaude(t, body)
@@ -295,8 +302,8 @@ func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {
 
 	assert.Contains(t, prompt, "Do the thing.")
 	assert.Contains(t, prompt, "## Issue")
-	assert.Contains(t, prompt, "id: 7")
-	assert.Contains(t, prompt, "slug: do-thing")
+	assert.Contains(t, prompt, `"id": 7`)
+	assert.Contains(t, prompt, `"slug": "do-thing"`)
 }
 
 func TestBuildPrompt_MissingSkillFileReturnsError(t *testing.T) {

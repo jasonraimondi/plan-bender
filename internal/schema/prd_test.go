@@ -1,11 +1,11 @@
 package schema
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func validPrd() PrdYaml {
@@ -64,11 +64,11 @@ func TestPrdValidate_AllStatuses(t *testing.T) {
 
 func TestPrdYaml_RoundTrip(t *testing.T) {
 	prd := validPrd()
-	data, err := yaml.Marshal(&prd)
+	data, err := json.Marshal(&prd)
 	require.NoError(t, err)
 
 	var parsed PrdYaml
-	require.NoError(t, yaml.Unmarshal(data, &parsed))
+	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, prd, parsed)
 }
 

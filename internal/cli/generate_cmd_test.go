@@ -90,7 +90,7 @@ func TestGenerateCmd_InvalidConfigReportsError(t *testing.T) {
 
 	// Invalid YAML forces config load failure
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
+		filepath.Join(dir, ".plan-bender.json"),
 		[]byte("plans_dir: [not-a-string\n"),
 		0o644,
 	))

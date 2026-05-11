@@ -29,26 +29,28 @@ func TestList_EmptyDir(t *testing.T) {
 
 func TestList_ReturnsValidPlans(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
-	prdAlpha := `name: Plan Alpha
-slug: alpha
-status: active
-created: "2026-01-01"
-updated: "2026-01-02"
-description: A
-why: A
-outcome: A
-`
-	prdBeta := `name: Plan Beta
-slug: beta
-status: draft
-created: "2026-01-01"
-updated: "2026-01-02"
-description: B
-why: B
-outcome: B
-`
+	prdAlpha := `{
+  "name": "Plan Alpha",
+  "slug": "alpha",
+  "status": "active",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "A",
+  "why": "A",
+  "outcome": "A"
+}`
+	prdBeta := `{
+  "name": "Plan Beta",
+  "slug": "beta",
+  "status": "draft",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "B",
+  "why": "B",
+  "outcome": "B"
+}`
 	writePlan(t, plansDir, "alpha", prdAlpha, map[string]string{
-		"1-one.yaml": issueYAML(1, "one"),
+		"1-one.json": issueYAML(1, "one"),
 	})
 	writePlan(t, plansDir, "beta", prdBeta, nil)
 
@@ -73,32 +75,34 @@ func TestList_SkipsMalformedPrdAndDoesNotFailWholeListing(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 
 	// Good plan.
-	writePlan(t, plansDir, "good", `name: Good
-slug: good
-status: active
-created: "2026-01-01"
-updated: "2026-01-02"
-description: G
-why: G
-outcome: G
-`, map[string]string{
-		"1-only.yaml": issueYAML(1, "only"),
+	writePlan(t, plansDir, "good", `{
+  "name": "Good",
+  "slug": "good",
+  "status": "active",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "G",
+  "why": "G",
+  "outcome": "G"
+}`, map[string]string{
+		"1-only.json": issueYAML(1, "only"),
 	})
 
-	// Plan with malformed PRD (invalid YAML).
-	writePlan(t, plansDir, "broken-prd", "::not yaml::", nil)
+	// Plan with malformed PRD (invalid JSON).
+	writePlan(t, plansDir, "broken-prd", "::not json::", nil)
 
 	// Plan with malformed issue file.
-	writePlan(t, plansDir, "broken-issue", `name: Broken Issue
-slug: broken-issue
-status: active
-created: "2026-01-01"
-updated: "2026-01-02"
-description: X
-why: X
-outcome: X
-`, map[string]string{
-		"1-broken.yaml": "::not yaml::",
+	writePlan(t, plansDir, "broken-issue", `{
+  "name": "Broken Issue",
+  "slug": "broken-issue",
+  "status": "active",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "X",
+  "why": "X",
+  "outcome": "X"
+}`, map[string]string{
+		"1-broken.json": "::not json::",
 	})
 
 	repo := NewProd(plansDir)

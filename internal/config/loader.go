@@ -1,13 +1,13 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Load reads config from 3 layers (global, project, local) and merges them over defaults.
@@ -23,9 +23,9 @@ func loadWithHome(root, home string) (Config, error) {
 	base := Defaults()
 
 	paths := []string{
-		filepath.Join(home, ".config", "plan-bender", "defaults.yaml"),
-		filepath.Join(root, ".plan-bender.yaml"),
-		filepath.Join(root, ".plan-bender.local.yaml"),
+		filepath.Join(home, ".config", "plan-bender", "defaults.json"),
+		filepath.Join(root, ".plan-bender.json"),
+		filepath.Join(root, ".plan-bender.local.json"),
 	}
 
 	for _, p := range paths {
@@ -60,14 +60,15 @@ func readPartial(path string) (PartialConfig, error) {
 	}
 
 	var partial PartialConfig
-	if err := yaml.Unmarshal(data, &partial); err != nil {
-		return PartialConfig{}, fmt.Errorf("parsing YAML: %w", err)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&partial); err != nil {
+		return PartialConfig{}, fmt.Errorf("parsing JSON: %w", err)
 	}
 
 	return partial, nil
 }
 
-// migrateDeprecatedKeys rewrites removed config keys in raw YAML before typed unmarshal.
+// migrateDeprecatedKeys rewrites removed config keys in raw JSON before typed unmarshal.
 // install_target → hard error (user must fix manually).
 // backend: linear → linear.enabled: true (silent migration).
 // backend: yaml-fs → dropped (default behavior).
@@ -75,11 +76,11 @@ func readPartial(path string) (PartialConfig, error) {
 // review_with_user: [seq] → review_with_user: <bool> (silent migration; non-empty → true).
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return data, nil // let the caller handle parse errors
 	}
 	if _, ok := raw["install_target"]; ok {
-		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  claude-code: true\nin your .plan-bender.yaml")
+		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  \"claude-code\": true\nin your .plan-bender.json")
 	}
 
 	modified := false
@@ -126,7 +127,7 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 		return data, nil
 	}
 
-	out, err := yaml.Marshal(raw)
+	out, err := json.Marshal(raw)
 	if err != nil {
 		return data, nil
 	}

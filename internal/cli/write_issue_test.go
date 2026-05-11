@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,40 +12,43 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
-const validIssueYAML = `id: 1
-slug: do-the-thing
-name: Do the thing
-track: intent
-status: backlog
-priority: medium
-points: 2
-labels: []
-blocked_by: []
-blocking: []
-created: "2026-03-26"
-updated: "2026-03-26"
-tdd: false
-outcome: Something works
-scope: Small change
-acceptance_criteria:
-  - It works
-steps:
-  - "Target — does the thing"
-use_cases: []
-`
+const validIssueYAML = `{
+  "id": 1,
+  "slug": "do-the-thing",
+  "name": "Do the thing",
+  "track": "intent",
+  "status": "backlog",
+  "priority": "medium",
+  "points": 2,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-03-26",
+  "updated": "2026-03-26",
+  "tdd": false,
+  "outcome": "Something works",
+  "scope": "Small change",
+  "acceptance_criteria": ["It works"],
+  "steps": ["Target — does the thing"],
+  "use_cases": []
+}`
 
-const validPrdYAML = `name: Test Plan
-slug: test-plan
-status: active
-created: "2026-03-26"
-updated: "2026-03-26"
-description: A test
-why: Because
-outcome: Success
-`
+const validPrdYAML = `{
+  "name": "Test Plan",
+  "slug": "test-plan",
+  "status": "active",
+  "created": "2026-03-26",
+  "updated": "2026-03-26",
+  "description": "A test",
+  "why": "Because",
+  "outcome": "Success"
+}`
 
 // seedPlan writes a valid PRD into the plans dir for slug. Issues written
 // after this are committed against a snapshot whose PRD already validates,
@@ -56,7 +60,7 @@ func seedPlan(t *testing.T, root, slug string) {
 	t.Helper()
 	plansDir := filepath.Join(root, ".plan-bender", "plans")
 	var prd schema.PrdYaml
-	require.NoError(t, yaml.Unmarshal([]byte(validPrdYAML), &prd))
+	require.NoError(t, json.Unmarshal([]byte(validPrdYAML), &prd))
 	prd.Slug = slug
 
 	sess, err := planrepo.NewProd(plansDir).OpenOrCreate(slug)
@@ -71,7 +75,7 @@ func TestWriteIssue_ValidIssue(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	seedPlan(t, dir, "test-plan")
 
-	inputFile := filepath.Join(dir, "issue.yaml")
+	inputFile := filepath.Join(dir, "issue.json")
 	require.NoError(t, os.WriteFile(inputFile, []byte(validIssueYAML), 0o644))
 
 	cmd := NewWriteIssueCmd()
@@ -81,7 +85,7 @@ func TestWriteIssue_ValidIssue(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	assert.Contains(t, out.String(), "wrote")
-	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.yaml"))
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.json"))
 	assert.NoError(t, err)
 }
 
@@ -98,7 +102,7 @@ func TestWriteIssue_StdinPipe(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	assert.Contains(t, out.String(), "wrote")
-	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.yaml"))
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.json"))
 	assert.NoError(t, err)
 }
 
@@ -113,7 +117,7 @@ func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 	seedPlan(t, dir, "test-plan")
 
-	forwardRefIssue := strings.Replace(validIssueYAML, "blocking: []", "blocking: [2, 3, 9]", 1)
+	forwardRefIssue := strings.Replace(validIssueYAML, `"blocking": []`, `"blocking": [2, 3, 9]`, 1)
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan"})
@@ -123,7 +127,7 @@ func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 	cmd.SetErr(&errBuf)
 	require.NoError(t, cmd.Execute(), "stderr: %s", errBuf.String())
 
-	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.yaml"))
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.json"))
 	assert.NoError(t, err)
 }
 
@@ -142,16 +146,16 @@ func TestWriteIssue_UpdatesExisting(t *testing.T) {
 	cmd.SetOut(&strings.Builder{})
 	require.NoError(t, cmd.Execute())
 
-	updated := strings.Replace(validIssueYAML, "slug: do-the-thing", "slug: renamed", 1)
-	updated = strings.Replace(updated, "name: Do the thing", "name: Renamed", 1)
+	updated := strings.Replace(validIssueYAML, `"slug": "do-the-thing"`, `"slug": "renamed"`, 1)
+	updated = strings.Replace(updated, `"name": "Do the thing"`, `"name": "Renamed"`, 1)
 	cmd2 := NewWriteIssueCmd()
 	cmd2.SetArgs([]string{"test-plan"})
 	cmd2.SetIn(strings.NewReader(updated))
 	cmd2.SetOut(&strings.Builder{})
 	require.NoError(t, cmd2.Execute())
 
-	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-renamed.yaml"))
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-renamed.json"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.yaml"))
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test-plan", "issues", "1-do-the-thing.json"))
 	assert.True(t, os.IsNotExist(err), "old slug filename must be cleaned up after rename")
 }

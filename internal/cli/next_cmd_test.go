@@ -13,53 +13,66 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const minimalPRD = `name: Test
-slug: test
-status: active
-created: "2025-01-01"
-updated: "2025-01-02"
-description: T
-why: T
-outcome: T
-`
+const minimalPRD = `{
+  "name": "Test",
+  "slug": "test",
+  "status": "active",
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "description": "T",
+  "why": "T",
+  "outcome": "T"
+}`
 
-const issueTodoHigh = `id: 1
-slug: first
-name: First
-track: intent
-status: todo
-priority: high
-points: 1
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: out
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
+const issueTodoHigh = `{
+  "id": 1,
+  "slug": "first",
+  "name": "First",
+  "track": "intent",
+  "status": "todo",
+  "priority": "high",
+  "points": 1,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "out",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
 
-const issueDone = `id: 2
-slug: done-one
-name: Done One
-track: intent
-status: done
-priority: high
-points: 1
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: out
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
+const issueDone = `{
+  "id": 2,
+  "slug": "done-one",
+  "name": "Done One",
+  "track": "intent",
+  "status": "done",
+  "priority": "high",
+  "points": 1,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "out",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
 
 func setupPlan(t *testing.T, slug string, issueFiles map[string]string) {
 	t.Helper()
@@ -67,7 +80,7 @@ func setupPlan(t *testing.T, slug string, issueFiles map[string]string) {
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", slug)
 	issuesDir := filepath.Join(plansDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(minimalPRD), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(minimalPRD), 0o644))
 	for name, body := range issueFiles {
 		require.NoError(t, os.WriteFile(filepath.Join(issuesDir, name), []byte(body), 0o644))
 	}
@@ -76,7 +89,7 @@ func setupPlan(t *testing.T, slug string, issueFiles map[string]string) {
 
 func TestNextCmd_AgentMode_EmitsJSON(t *testing.T) {
 	setupPlan(t, "test", map[string]string{
-		"1.yaml": issueTodoHigh,
+		"1.json": issueTodoHigh,
 	})
 
 	root := NewAgentRootCmd("test")
@@ -96,7 +109,7 @@ func TestNextCmd_AgentMode_EmitsJSON(t *testing.T) {
 
 func TestNextCmd_HumanMode_EmitsText(t *testing.T) {
 	setupPlan(t, "test", map[string]string{
-		"1.yaml": issueTodoHigh,
+		"1.json": issueTodoHigh,
 	})
 
 	cmd := NewNextCmd()
@@ -117,7 +130,7 @@ func TestNextCmd_HumanMode_EmitsText(t *testing.T) {
 
 func TestNextCmd_AllDone_AgentMode(t *testing.T) {
 	setupPlan(t, "test", map[string]string{
-		"2.yaml": issueDone,
+		"2.json": issueDone,
 	})
 
 	root := NewAgentRootCmd("test")
@@ -136,7 +149,7 @@ func TestNextCmd_AllDone_AgentMode(t *testing.T) {
 
 func TestNextCmd_AllDone_HumanMode(t *testing.T) {
 	setupPlan(t, "test", map[string]string{
-		"2.yaml": issueDone,
+		"2.json": issueDone,
 	})
 
 	cmd := NewNextCmd()

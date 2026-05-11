@@ -1,6 +1,7 @@
 package planrepo
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
-	"gopkg.in/yaml.v3"
 )
 
 // Commit applies in-session mutations to disk under the held plan lock. It
@@ -94,7 +94,7 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 			return commitPlan{}, fmt.Errorf("marshal prd: %w", err)
 		}
 		plan.writes = append(plan.writes, fileWrite{
-			path: filepath.Join(planDir, "prd.yaml"),
+			path: filepath.Join(planDir, "prd.json"),
 			data: data,
 			perm: 0o644,
 		})
@@ -261,13 +261,14 @@ func (s *PlanSession) findIssueByID(id int) *schema.IssueYaml {
 
 // marshalAndProbe marshals v and re-parses the bytes through probe to catch
 // non-roundtripping output (e.g. duplicate keys from a future custom
-// MarshalYAML). The probe runs before any disk write so a regression here
-// surfaces as a preflight error rather than corrupting on-disk YAML.
+// MarshalJSON). The probe runs before any disk write so a regression here
+// surfaces as a preflight error rather than corrupting on-disk JSON.
 func marshalAndProbe(v any, probe func([]byte) error) ([]byte, error) {
-	data, err := yaml.Marshal(v)
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, err
 	}
+	data = append(data, '\n')
 	if err := probe(data); err != nil {
 		return nil, fmt.Errorf("roundtrip check: %w", err)
 	}

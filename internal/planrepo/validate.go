@@ -39,7 +39,7 @@ func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationRe
 // broken file (PRD or issue) so `agent validate` points editors at the right
 // place; everything else is reported against the PRD path.
 func openErrorAsValidationResult(slug string, err error) schema.PlanValidationResult {
-	prdPath := filepath.Join(slug, "prd.yaml")
+	prdPath := filepath.Join(slug, "prd.json")
 	var parseErr *ParseError
 	if errors.As(err, &parseErr) {
 		if parseErr.File == prdPath {
@@ -63,7 +63,7 @@ func openErrorAsValidationResult(slug string, err error) schema.PlanValidationRe
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config, crossRefMode schema.CrossRefMode) schema.PlanValidationResult {
-	prdPath := filepath.Join(snap.Slug, "prd.yaml")
+	prdPath := filepath.Join(snap.Slug, "prd.json")
 
 	var prdErrs []string
 	for _, ve := range snap.PRD.Validate() {
@@ -119,5 +119,5 @@ func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) 
 }
 
 func canonicalIssueFilename(iss *schema.IssueYaml) string {
-	return fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug)
+	return fmt.Sprintf("%d-%s.json", iss.ID, iss.Slug)
 }

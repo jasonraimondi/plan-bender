@@ -6,7 +6,7 @@ import (
 )
 
 // TestMain isolates HOME and backend-related env vars so that a developer's
-// local ~/.config/plan-bender/defaults.yaml and $LINEAR_* exports do not leak
+// local ~/.config/plan-bender/defaults.json and $LINEAR_* exports do not leak
 // into tests that transitively call config.Load via setup/doctor/generate.
 func TestMain(m *testing.M) {
 	tmpHome, err := os.MkdirTemp("", "pb-testhome-*")

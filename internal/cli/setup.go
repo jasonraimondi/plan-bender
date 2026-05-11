@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -15,7 +17,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/linear"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // linearValidator validates Linear credentials.
@@ -58,11 +59,11 @@ func newSetupCmd(deps setupDeps) *cobra.Command {
 func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	root, _ := os.Getwd()
 	out := cmd.OutOrStdout()
-	cfgPath := filepath.Join(root, ".plan-bender.yaml")
-	localPath := filepath.Join(root, ".plan-bender.local.yaml")
+	cfgPath := filepath.Join(root, ".plan-bender.json")
+	localPath := filepath.Join(root, ".plan-bender.local.json")
 
 	// 1. Write defaults if no config exists.
-	// Skip creation when .plan-bender.local.yaml already exists — the user is
+	// Skip creation when .plan-bender.local.json already exists — the user is
 	// intentionally using only the local layer, and the config loader handles
 	// the merge correctly without a project-level file.
 	created := false
@@ -71,16 +72,13 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		if _, localErr := os.Stat(localPath); localErr == nil {
 			localOnly = true
 		} else {
-			var buf strings.Builder
-			enc := yaml.NewEncoder(&buf)
-			enc.SetIndent(2)
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.SetIndent("", "  ")
 			if err := enc.Encode(config.StarterConfig()); err != nil {
 				return err
 			}
-			if err := enc.Close(); err != nil {
-				return err
-			}
-			if err := backend.AtomicWrite(cfgPath, []byte(buf.String()), 0o644); err != nil {
+			if err := backend.AtomicWrite(cfgPath, buf.Bytes(), 0o644); err != nil {
 				return err
 			}
 			created = true
@@ -124,13 +122,13 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	// 5. Output summary
 	switch {
 	case created:
-		fmt.Fprintf(out, "Config:  .plan-bender.yaml (created)\n")
+		fmt.Fprintf(out, "Config:  .plan-bender.json (created)\n")
 	case localOnly:
-		fmt.Fprintf(out, "Config:  .plan-bender.local.yaml (local only — no project file written)\n")
+		fmt.Fprintf(out, "Config:  .plan-bender.local.json (local only — no project file written)\n")
 		fmt.Fprintf(out, "         If teammates clone this repo they'll get the starter config; your\n")
-		fmt.Fprintf(out, "         local overrides stay in .plan-bender.local.yaml.\n")
+		fmt.Fprintf(out, "         local overrides stay in .plan-bender.local.json.\n")
 	default:
-		fmt.Fprintf(out, "Config:  .plan-bender.yaml (exists)\n")
+		fmt.Fprintf(out, "Config:  .plan-bender.json (exists)\n")
 	}
 
 	if cfg.Linear.Enabled {
@@ -172,8 +170,8 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 }
 
 func setupLinear(root string, deps setupDeps, yes bool) error {
-	cfgPath := filepath.Join(root, ".plan-bender.yaml")
-	localPath := filepath.Join(root, ".plan-bender.local.yaml")
+	cfgPath := filepath.Join(root, ".plan-bender.json")
+	localPath := filepath.Join(root, ".plan-bender.local.json")
 
 	// Get credentials from env vars or prompts
 	apiKey := os.Getenv("LINEAR_API_KEY")
@@ -214,14 +212,14 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 	}
 
 	// Write linear.enabled: true to project config
-	if err := mergeYAMLFile(cfgPath, map[string]any{
+	if err := mergeJSONFile(cfgPath, map[string]any{
 		"linear": map[string]any{"enabled": true},
 	}); err != nil {
 		return fmt.Errorf("updating config: %w", err)
 	}
 
 	// Write credentials to local config (gitignored)
-	if err := mergeYAMLFile(localPath, map[string]any{
+	if err := mergeJSONFile(localPath, map[string]any{
 		"linear": map[string]any{"api_key": apiKey, "team": team},
 	}); err != nil {
 		return fmt.Errorf("updating local config: %w", err)
@@ -230,15 +228,15 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 	return nil
 }
 
-// mergeYAMLFile reads an existing YAML file (or starts empty), deep-merges the updates, and writes back.
-func mergeYAMLFile(path string, updates map[string]any) error {
+// mergeJSONFile reads an existing JSON file (or starts empty), deep-merges the updates, and writes back.
+func mergeJSONFile(path string, updates map[string]any) error {
 	raw := make(map[string]any)
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 	if err == nil && len(data) > 0 {
-		if err := yaml.Unmarshal(data, &raw); err != nil {
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return fmt.Errorf("parsing existing %s: %w", path, err)
 		}
 		if raw == nil {
@@ -259,15 +257,17 @@ func mergeYAMLFile(path string, updates map[string]any) error {
 		}
 	}
 
-	out, err := yaml.Marshal(raw)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(raw); err != nil {
 		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return backend.AtomicWrite(path, out, 0o644)
+	return backend.AtomicWrite(path, buf.Bytes(), 0o644)
 }
 
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.
@@ -338,7 +338,7 @@ func expandHome(path string) (string, error) {
 
 // ensureGitignoreForAgents writes registry-driven gitignore patterns for project-scoped agents.
 func ensureGitignoreForAgents(root string, agts []config.ResolvedAgent) error {
-	entries := []string{".plan-bender/", ".plan-bender.local.yaml"}
+	entries := []string{".plan-bender/", ".plan-bender.local.json"}
 
 	for _, agent := range agts {
 		if agent.Scope == agents.UserOnly {

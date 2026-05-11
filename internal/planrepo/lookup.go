@@ -42,7 +42,7 @@ func (p *Plans) FindIssueProject(id int) (string, error) {
 			continue
 		}
 		for _, e := range issueEntries {
-			if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) && strings.HasSuffix(e.Name(), ".yaml") {
+			if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) && strings.HasSuffix(e.Name(), ".json") {
 				return slug, nil
 			}
 		}

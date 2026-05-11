@@ -14,10 +14,10 @@ func TestOpen_LoadsSnapshotWithDeterministicIssueOrder(t *testing.T) {
 	// Write issues in non-sorted insertion order with filenames that exercise
 	// numeric vs lexicographic sort. We expect lexicographic sort by filename.
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"10-tenth.yaml":     issueYAML(10, "tenth"),
-		"2-second.yaml":     issueYAML(2, "second"),
-		"1-first.yaml":      issueYAML(1, "first"),
-		"20-twentieth.yaml": issueYAML(20, "twentieth"),
+		"10-tenth.json":     issueYAML(10, "tenth"),
+		"2-second.json":     issueYAML(2, "second"),
+		"1-first.json":      issueYAML(1, "first"),
+		"20-twentieth.json": issueYAML(20, "twentieth"),
 	})
 
 	repo := NewProd(plansDir)
@@ -48,7 +48,7 @@ func TestOpen_PlanDirMissing(t *testing.T) {
 
 func TestOpen_PrdMissing(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
-	// Plan directory exists but has no prd.yaml.
+	// Plan directory exists but has no prd.json.
 	require.NoError(t, mkdirAll(t, filepath.Join(plansDir, "broken", "issues")))
 
 	repo := NewProd(plansDir)
@@ -59,7 +59,7 @@ func TestOpen_PrdMissing(t *testing.T) {
 func TestOpen_MalformedIssueErrors(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-broken.yaml": "::not yaml::",
+		"1-broken.json": "::not json::",
 	})
 
 	repo := NewProd(plansDir)
@@ -67,51 +67,8 @@ func TestOpen_MalformedIssueErrors(t *testing.T) {
 	require.Error(t, err)
 
 	var parseErr *ParseError
-	require.ErrorAs(t, err, &parseErr, "open should surface yaml decode failures as *ParseError")
-	require.Contains(t, parseErr.File, "1-broken.yaml")
-}
-
-func TestOpen_ColonInListItem_PreservesProse(t *testing.T) {
-	// A list item written as `- some prose: more prose` without quotes
-	// decodes through yaml.v3 as a single-key mapping. Authors hit this
-	// constantly when writing PRD/issue prose that contains a colon, so
-	// the loader flattens such mappings back into "key: value" strings.
-	plansDir := filepath.Join(t.TempDir(), "plans")
-	issue := `id: 1
-slug: bad
-name: Bad
-track: intent
-status: todo
-priority: high
-points: 1
-labels: []
-blocked_by: []
-blocking: []
-created: "2026-01-01"
-updated: "2026-01-02"
-outcome: ok
-scope: small
-acceptance_criteria: []
-steps:
-  - first step
-  - some/path/file.ts — implement methodName: when X is true do Y
-use_cases: []
-`
-	writePlan(t, plansDir, "bad", validPrd, map[string]string{
-		"1-bad.yaml": issue,
-	})
-
-	repo := NewProd(plansDir)
-	sess, err := repo.Open("bad")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sess.Close() })
-
-	snap := sess.Snapshot()
-	require.Len(t, snap.Issues, 1)
-	require.Equal(t, []string{
-		"first step",
-		"some/path/file.ts — implement methodName: when X is true do Y",
-	}, []string(snap.Issues[0].Steps))
+	require.ErrorAs(t, err, &parseErr, "open should surface json decode failures as *ParseError")
+	require.Contains(t, parseErr.File, "1-broken.json")
 }
 
 func TestOpen_NoIssuesDir(t *testing.T) {
@@ -119,7 +76,7 @@ func TestOpen_NoIssuesDir(t *testing.T) {
 	// Plan directory with PRD but no issues dir at all.
 	planDir := filepath.Join(plansDir, "no-issues")
 	require.NoError(t, mkdirAll(t, planDir))
-	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.yaml"), validPrd))
+	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.json"), validPrd))
 
 	repo := NewProd(plansDir)
 	_, err := repo.Open("no-issues")
@@ -129,7 +86,7 @@ func TestOpen_NoIssuesDir(t *testing.T) {
 func TestClose_Idempotent(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-first.yaml": issueYAML(1, "first"),
+		"1-first.json": issueYAML(1, "first"),
 	})
 
 	repo := NewProd(plansDir)
@@ -143,7 +100,7 @@ func TestClose_Idempotent(t *testing.T) {
 func TestClose_ReleasesLockSoNextOpenSucceeds(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-first.yaml": issueYAML(1, "first"),
+		"1-first.json": issueYAML(1, "first"),
 	})
 
 	repo := NewProd(plansDir)
@@ -165,7 +122,7 @@ func TestOpen_FailedLoadReleasesLock(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	// Plan exists but issue is malformed: load fails after lock is taken.
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-broken.yaml": "::not yaml::",
+		"1-broken.json": "::not json::",
 	})
 
 	repo := NewProd(plansDir)
@@ -175,7 +132,7 @@ func TestOpen_FailedLoadReleasesLock(t *testing.T) {
 	// A subsequent Open of an unrelated, valid plan must not block on a
 	// leaked lock. Use a fresh slug.
 	writePlan(t, plansDir, "good", validPrd, map[string]string{
-		"1-first.yaml": issueYAML(1, "first"),
+		"1-first.json": issueYAML(1, "first"),
 	})
 	sess, err := repo.Open("good")
 	require.NoError(t, err)

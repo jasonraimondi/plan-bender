@@ -2,22 +2,21 @@ package planrepo
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
-	"gopkg.in/yaml.v3"
 )
 
-// ParseError wraps a YAML decode failure with the offending file path and the
-// first line number reported by the decoder (0 when none was reported). The
-// CLI surfaces these as an INVALID_PLAN structured error rather than letting
-// the raw yaml.v3 message leak as an INTERNAL fault.
+// ParseError wraps a JSON decode failure with the offending file path and the
+// 1-based line number derived from the decoder's byte offset (0 when none was
+// available). The CLI surfaces these as an INVALID_PLAN structured error
+// rather than letting the raw decoder message leak as an INTERNAL fault.
 type ParseError struct {
 	File string
 	Line int
@@ -33,53 +32,49 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return e.Err }
 
-// yamlLineRe matches "line N:" or "yaml: line N:" prefixes that yaml.v3
-// embeds in TypeError messages and parse errors. We pull the first line
-// number out so tooling can present a file:line pointer.
-var yamlLineRe = regexp.MustCompile(`line (\d+):`)
-
-func newParseError(file string, err error) *ParseError {
-	return &ParseError{File: file, Line: extractYAMLLine(err), Err: err}
+func newParseError(file string, data []byte, err error) *ParseError {
+	return &ParseError{File: file, Line: extractJSONLine(data, err), Err: err}
 }
 
-// extractYAMLLine returns the first line number embedded in err.Error(), or 0.
-// yaml.v3 reports line numbers via the message string for both yaml.TypeError
-// (one line per Errors entry) and other parse failures.
-func extractYAMLLine(err error) int {
+// extractJSONLine returns the 1-based line containing the decoder's byte
+// offset. SyntaxError exposes the offset directly; UnmarshalTypeError exposes
+// it via the Offset field. Other errors fall back to line 0.
+func extractJSONLine(data []byte, err error) int {
 	if err == nil {
 		return 0
 	}
-	if te, ok := err.(*yaml.TypeError); ok {
-		for _, msg := range te.Errors {
-			if n := matchLine(msg); n > 0 {
-				return n
-			}
-		}
+	var offset int64
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &syntaxErr):
+		offset = syntaxErr.Offset
+	case errors.As(err, &typeErr):
+		offset = typeErr.Offset
+	default:
 		return 0
 	}
-	return matchLine(err.Error())
+	if offset <= 0 || int(offset) > len(data) {
+		return 0
+	}
+	return bytes.Count(data[:offset], []byte{'\n'}) + 1
 }
 
-func matchLine(s string) int {
-	m := yamlLineRe.FindStringSubmatch(s)
-	if len(m) < 2 {
-		return 0
-	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil {
-		return 0
-	}
-	return n
-}
-
-// strictUnmarshal parses YAML into out with strict field checking. yaml.v3's
-// plain Unmarshal silently accepts garbage like "::not yaml::" as a mapping
-// with one unknown key; KnownFields(true) rejects any field not declared on
-// the target struct so malformed plan files surface as errors.
+// strictUnmarshal parses JSON into out with strict field checking. The default
+// json.Unmarshal silently accepts unknown fields; DisallowUnknownFields rejects
+// any field not declared on the target struct so malformed plan files surface
+// as errors.
 func strictUnmarshal(data []byte, out any) error {
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	return dec.Decode(out)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(out); err != nil {
+		return err
+	}
+	// Reject trailing garbage after the top-level value.
+	if dec.More() {
+		return fmt.Errorf("unexpected data after top-level JSON value")
+	}
+	return nil
 }
 
 // loadSnapshot reads and parses one plan's PRD and issue files through fsys
@@ -92,7 +87,7 @@ func loadSnapshot(fsys fs.FS, slug string) (*Snapshot, error) {
 
 // loadSnapshotWithFilenames also returns a map from issue ID to original
 // on-disk filename. Sessions use this to detect slug renames at commit time
-// (canonical filename derives from {id}-{slug}.yaml).
+// (canonical filename derives from {id}-{slug}.json).
 func loadSnapshotWithFilenames(fsys fs.FS, slug string) (*Snapshot, map[int]string, error) {
 	prd, err := loadPRD(fsys, slug)
 	if err != nil {
@@ -110,14 +105,14 @@ func loadSnapshotWithFilenames(fsys fs.FS, slug string) (*Snapshot, map[int]stri
 }
 
 func loadPRD(fsys fs.FS, slug string) (*schema.PrdYaml, error) {
-	path := filepath.Join(slug, "prd.yaml")
+	path := filepath.Join(slug, "prd.json")
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("reading prd %s: %w", path, err)
 	}
 	var prd schema.PrdYaml
 	if err := strictUnmarshal(data, &prd); err != nil {
-		return nil, newParseError(path, err)
+		return nil, newParseError(path, data, err)
 	}
 	return &prd, nil
 }
@@ -134,7 +129,7 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
 
 	var names []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
 			names = append(names, e.Name())
 		}
 	}
@@ -149,7 +144,7 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
 		}
 		var issue schema.IssueYaml
 		if err := strictUnmarshal(data, &issue); err != nil {
-			return nil, nil, newParseError(path, err)
+			return nil, nil, newParseError(path, data, err)
 		}
 		issues = append(issues, issue)
 	}

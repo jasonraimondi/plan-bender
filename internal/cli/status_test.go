@@ -11,74 +11,92 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const statusPrdYAML = `name: Ship It
-slug: ship
-status: active
-`
+const statusPrdYAML = `{
+  "name": "Ship It",
+  "slug": "ship",
+  "status": "active",
+  "created": "2026-04-30",
+  "updated": "2026-05-01",
+  "description": "Ship it",
+  "why": "Tests",
+  "outcome": "Shipped"
+}`
 
-const statusIssueOneDoneYAML = `id: 1
-slug: setup-config
-name: Setup config
-track: intent
-status: done
-priority: high
-points: 1
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2026-05-01"
-tdd: true
-outcome: Configured
-scope: Small
-acceptance_criteria: ["It works"]
-steps: ["Target — works"]
-use_cases: ["UC-1"]
-`
+const statusIssueOneDoneYAML = `{
+  "id": 1,
+  "slug": "setup-config",
+  "name": "Setup config",
+  "track": "intent",
+  "status": "done",
+  "priority": "high",
+  "points": 1,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-05-01",
+  "tdd": true,
+  "outcome": "Configured",
+  "scope": "Small",
+  "acceptance_criteria": ["It works"],
+  "steps": ["Target — works"],
+  "use_cases": ["UC-1"]
+}`
 
-const statusIssueTwoBlockedYAML = `id: 2
-slug: add-middleware
-name: Add middleware
-track: intent
-status: blocked
-priority: high
-points: 2
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2026-05-01"
-tdd: true
-outcome: Middleware
-scope: Small
-acceptance_criteria: ["It works"]
-steps: ["Target — works"]
-use_cases: ["UC-1"]
-notes: |
-  subprocess timed out after 30m
+const statusIssueTwoBlockedYAML = `{
+  "id": 2,
+  "slug": "add-middleware",
+  "name": "Add middleware",
+  "track": "intent",
+  "status": "blocked",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-05-01",
+  "tdd": true,
+  "outcome": "Middleware",
+  "scope": "Small",
+  "acceptance_criteria": ["It works"],
+  "steps": ["Target — works"],
+  "use_cases": ["UC-1"],
+  "notes": "subprocess timed out after 30m\n\nfollow-up failure detail"
+}`
 
-  follow-up failure detail
-`
-
-const statusIssueThreeTodoYAML = `id: 3
-slug: deploy
-name: Deploy it
-track: intent
-status: todo
-priority: medium
-points: 1
-labels: [HITL]
-blocked_by: [2]
-blocking: []
-created: "2026-04-30"
-updated: "2026-05-01"
-tdd: true
-outcome: Deployed
-scope: Small
-acceptance_criteria: ["It works"]
-steps: ["Target — works"]
-use_cases: ["UC-1"]
-`
+const statusIssueThreeTodoYAML = `{
+  "id": 3,
+  "slug": "deploy",
+  "name": "Deploy it",
+  "track": "intent",
+  "status": "todo",
+  "priority": "medium",
+  "points": 1,
+  "labels": ["HITL"],
+  "assignee": null,
+  "blocked_by": [2],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-05-01",
+  "tdd": true,
+  "outcome": "Deployed",
+  "scope": "Small",
+  "acceptance_criteria": ["It works"],
+  "steps": ["Target — works"],
+  "use_cases": ["UC-1"]
+}`
 
 func setupStatusPlan(t *testing.T) string {
 	t.Helper()
@@ -87,10 +105,10 @@ func setupStatusPlan(t *testing.T) string {
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(statusPrdYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "1-setup-config.yaml"), []byte(statusIssueOneDoneYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "2-add-middleware.yaml"), []byte(statusIssueTwoBlockedYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-deploy.yaml"), []byte(statusIssueThreeTodoYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(statusPrdYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "1-setup-config.json"), []byte(statusIssueOneDoneYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "2-add-middleware.json"), []byte(statusIssueTwoBlockedYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-deploy.json"), []byte(statusIssueThreeTodoYAML), 0o644))
 	return dir
 }
 

@@ -6,7 +6,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	"encoding/json"
 )
 
 func defaultConfig() config.Config {
@@ -129,10 +129,10 @@ func TestIssueValidate_AllValidPriorities(t *testing.T) {
 
 func TestIssueYaml_RoundTrip(t *testing.T) {
 	issue := validIssue()
-	data, err := yaml.Marshal(&issue)
+	data, err := json.Marshal(&issue)
 	require.NoError(t, err)
 
 	var parsed IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &parsed))
+	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, issue, parsed)
 }

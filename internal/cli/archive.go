@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // NewArchiveCmd creates the archive command.
@@ -121,8 +121,14 @@ func buildSummary(slug string, issues []schema.IssueYaml) string {
 	b.WriteString(fmt.Sprintf("Points: %d / %d\n\n", donePoints, totalPoints))
 	b.WriteString("## By Status\n\n")
 
-	data, _ := yaml.Marshal(byStatus)
-	b.Write(data)
+	statuses := make([]string, 0, len(byStatus))
+	for s := range byStatus {
+		statuses = append(statuses, s)
+	}
+	sort.Strings(statuses)
+	for _, s := range statuses {
+		fmt.Fprintf(&b, "- %s: %d\n", s, byStatus[s])
+	}
 
 	return b.String()
 }

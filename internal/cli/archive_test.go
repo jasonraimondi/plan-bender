@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func setupPlanDir(t *testing.T, slug string, issues []schema.IssueYaml) string {
@@ -24,18 +24,18 @@ func setupPlanDir(t *testing.T, slug string, issues []schema.IssueYaml) string {
 		Created: "2026-03-26", Updated: "2026-03-26",
 		Description: "Test", Why: "Test", Outcome: "Test",
 	}
-	data, _ := yaml.Marshal(&prd)
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), data, 0o644))
+	data, _ := json.Marshal(&prd)
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), data, 0o644))
 
 	for _, iss := range issues {
-		data, _ := yaml.Marshal(&iss)
-		filename := filepath.Join(issuesDir, strings.ReplaceAll(iss.Slug, " ", "-")+".yaml")
+		data, _ := json.Marshal(&iss)
+		filename := filepath.Join(issuesDir, strings.ReplaceAll(iss.Slug, " ", "-")+".json")
 		require.NoError(t, os.WriteFile(filename, data, 0o644))
 	}
 
 	// Write config pointing to this plans dir
-	cfgData := []byte("plans_dir: " + filepath.Join(dir, "plans") + "/\n")
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), cfgData, 0o644))
+	cfgData := []byte(`{"plans_dir": "` + filepath.Join(dir, "plans") + `/"}`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), cfgData, 0o644))
 
 	return dir
 }
@@ -70,7 +70,7 @@ func TestArchive_SucceedsWithForce(t *testing.T) {
 	assert.Contains(t, out.String(), "archived test")
 
 	// Verify moved to .archive/
-	_, err := os.Stat(filepath.Join(dir, "plans", ".archive", "test", "prd.yaml"))
+	_, err := os.Stat(filepath.Join(dir, "plans", ".archive", "test", "prd.json"))
 	assert.NoError(t, err)
 }
 

@@ -2,7 +2,7 @@ package config
 
 import "github.com/jasonraimondi/plan-bender/internal/agents"
 
-// StarterConfig returns a minimal PartialConfig for writing a new .plan-bender.yaml.
+// StarterConfig returns a minimal PartialConfig for writing a new .plan-bender.json.
 // Only includes fields worth surfacing to the user; everything else falls back to Defaults().
 func StarterConfig() PartialConfig {
 	plansDir := "./.plan-bender/plans/"

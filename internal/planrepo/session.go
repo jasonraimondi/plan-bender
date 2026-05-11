@@ -24,7 +24,7 @@ type PlanSession struct {
 	snapshot *Snapshot
 
 	// baselineFilenames is the on-disk filename for each issue ID at Open
-	// time. Commit compares the current canonical {id}-{slug}.yaml against
+	// time. Commit compares the current canonical {id}-{slug}.json against
 	// this map to detect slug renames.
 	baselineFilenames map[int]string
 
@@ -64,7 +64,7 @@ func (p *Plans) Open(slug string) (*PlanSession, error) {
 // OpenOrCreate behaves like Open when the plan exists. When the plan
 // directory is missing entirely, it returns a session with an empty in-session
 // snapshot so callers can stage a fresh PRD and Commit. A plan dir that exists
-// but is incomplete (missing prd.yaml or issues dir) still returns the load
+// but is incomplete (missing prd.json or issues dir) still returns the load
 // error from Open so half-written state surfaces loudly rather than silently
 // being treated as fresh.
 func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {

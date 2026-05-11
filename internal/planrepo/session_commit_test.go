@@ -58,7 +58,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -76,7 +76,7 @@ func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -94,7 +94,7 @@ func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -109,7 +109,7 @@ func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -127,7 +127,7 @@ func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -144,10 +144,10 @@ func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
-	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml"))
-	originalPrd := mustReadFile(t, filepath.Join(plansDir, "p", "prd.yaml"))
+	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
+	originalPrd := mustReadFile(t, filepath.Join(plansDir, "p", "prd.json"))
 
 	repo := NewProd(plansDir)
 	sess, err := repo.Open("p")
@@ -162,14 +162,14 @@ func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	require.Error(t, err)
 
 	// On-disk files unchanged.
-	assert.Equal(t, originalIssue, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml")))
-	assert.Equal(t, originalPrd, mustReadFile(t, filepath.Join(plansDir, "p", "prd.yaml")))
+	assert.Equal(t, originalIssue, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json")))
+	assert.Equal(t, originalPrd, mustReadFile(t, filepath.Join(plansDir, "p", "prd.json")))
 }
 
 func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -189,7 +189,7 @@ func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -213,7 +213,7 @@ func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -243,8 +243,8 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
-		"2-b.yaml": issueYAML(2, "b"),
+		"1-a.json": issueYAML(1, "a"),
+		"2-b.json": issueYAML(2, "b"),
 	})
 
 	var writes []string
@@ -270,15 +270,15 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	require.NoError(t, sess.Commit(testCfg()))
 	require.NoError(t, sess.Close())
 
-	// Only one file write: 1-a.yaml. PRD untouched, issue #2 untouched.
+	// Only one file write: 1-a.json. PRD untouched, issue #2 untouched.
 	require.Len(t, writes, 1, "only dirty issue should be written, got %v", writes)
-	assert.Contains(t, writes[0], "1-a.yaml")
+	assert.Contains(t, writes[0], "1-a.json")
 }
 
 func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -290,8 +290,8 @@ func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 	require.NoError(t, sess.Close())
 
 	// File for the new issue must exist on disk with the canonical name.
-	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-brand-new.yaml"))
-	require.NoError(t, err, "create issue must write {id}-{slug}.yaml")
+	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-brand-new.json"))
+	require.NoError(t, err, "create issue must write {id}-{slug}.json")
 }
 
 // --- Slug rename ---
@@ -299,7 +299,7 @@ func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-original.yaml": issueYAML(1, "original"),
+		"1-original.json": issueYAML(1, "original"),
 	})
 
 	repo := NewProd(plansDir)
@@ -314,21 +314,21 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	require.NoError(t, sess.Close())
 
 	// Old filename gone, new filename present, single issue file in dir.
-	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "1-original.yaml"))
+	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "1-original.json"))
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "old filename must be removed after slug rename")
 
-	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "1-renamed.yaml"))
+	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "1-renamed.json"))
 	require.NoError(t, err, "new canonical filename must exist after slug rename")
 
 	entries, err := os.ReadDir(filepath.Join(plansDir, "p", "issues"))
 	require.NoError(t, err)
-	yamlCount := 0
+	jsonCount := 0
 	for _, e := range entries {
-		if filepath.Ext(e.Name()) == ".yaml" {
-			yamlCount++
+		if filepath.Ext(e.Name()) == ".json" {
+			jsonCount++
 		}
 	}
-	assert.Equal(t, 1, yamlCount, "rename must not leave both files behind")
+	assert.Equal(t, 1, jsonCount, "rename must not leave both files behind")
 }
 
 // --- Best-effort rollback ---
@@ -336,13 +336,13 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
-		"2-b.yaml": issueYAML(2, "b"),
+		"1-a.json": issueYAML(1, "a"),
+		"2-b.json": issueYAML(2, "b"),
 	})
 
-	originalA := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml"))
-	originalB := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "2-b.yaml"))
-	originalPrd := mustReadFile(t, filepath.Join(plansDir, "p", "prd.yaml"))
+	originalA := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
+	originalB := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "2-b.json"))
+	originalPrd := mustReadFile(t, filepath.Join(plansDir, "p", "prd.json"))
 
 	// Fail the third write. With PRD + 2 issues all dirty, the first two succeed
 	// and the third fails — exercising rollback over the prior writes.
@@ -380,18 +380,18 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	require.Error(t, err)
 
 	// Best effort: prior successful writes are restored to original bytes.
-	assert.Equal(t, originalPrd, mustReadFile(t, filepath.Join(plansDir, "p", "prd.yaml")), "prd should be rolled back")
-	assert.Equal(t, originalA, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml")), "issue 1 should be rolled back")
-	assert.Equal(t, originalB, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "2-b.yaml")), "issue 2 should be rolled back")
+	assert.Equal(t, originalPrd, mustReadFile(t, filepath.Join(plansDir, "p", "prd.json")), "prd should be rolled back")
+	assert.Equal(t, originalA, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json")), "issue 1 should be rolled back")
+	assert.Equal(t, originalB, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "2-b.json")), "issue 2 should be rolled back")
 }
 
 func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
-	// Fail the second write so the first (new file 2-fresh.yaml) succeeds
+	// Fail the second write so the first (new file 2-fresh.json) succeeds
 	// and rollback exercises the os.Remove undo branch for create.
 	var writeCount int
 	failingWrite := func(path string, data []byte, perm fs.FileMode) error {
@@ -424,7 +424,7 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 
 	// The freshly-created file must be cleaned up by rollback so the plan
 	// dir lands back at its pre-commit state.
-	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-fresh.yaml"))
+	_, err = os.Stat(filepath.Join(plansDir, "p", "issues", "2-fresh.json"))
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "create rollback must remove the new file")
 }
 
@@ -433,9 +433,9 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
-	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml"))
+	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
 
 	repo := NewProd(plansDir)
 	sess, err := repo.Open("p")
@@ -448,13 +448,13 @@ func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	require.NoError(t, sess.Close())
 
 	// File is unchanged: no commit happened.
-	assert.Equal(t, originalIssue, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.yaml")))
+	assert.Equal(t, originalIssue, mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json")))
 }
 
 func TestConcurrentOpen_SerializesThroughLock(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)

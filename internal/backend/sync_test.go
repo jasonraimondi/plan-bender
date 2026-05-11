@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"encoding/json"
+
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 // syncTestCfg returns a config compatible with the schema validation
@@ -81,20 +82,20 @@ func setupSyncTest(t *testing.T, prd *schema.PrdYaml, issues []*schema.IssueYaml
 
 func readIssueFromDisk(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
 	t.Helper()
-	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.yaml", id, issueSlug))
+	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.json", id, issueSlug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var issue schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &issue))
+	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
 
 func readPrdFromDisk(t *testing.T, plansDir, slug string) schema.PrdYaml {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(plansDir, slug, "prd.yaml"))
+	data, err := os.ReadFile(filepath.Join(plansDir, slug, "prd.json"))
 	require.NoError(t, err)
 	var prd schema.PrdYaml
-	require.NoError(t, yaml.Unmarshal(data, &prd))
+	require.NoError(t, json.Unmarshal(data, &prd))
 	return prd
 }
 

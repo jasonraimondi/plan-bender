@@ -24,55 +24,68 @@ func setupContextTestDir(t *testing.T) string {
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
 
-	prd := `name: Test Plan
-slug: test-plan
-status: active
-created: "2025-01-01"
-updated: "2025-01-02"
-description: A test plan
-why: Testing
-outcome: Tests pass
-`
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), []byte(prd), 0o644))
+	prd := `{
+  "name": "Test Plan",
+  "slug": "test-plan",
+  "status": "active",
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "description": "A test plan",
+  "why": "Testing",
+  "outcome": "Tests pass"
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(prd), 0o644))
 
-	issue1 := `id: 1
-slug: first
-name: First Issue
-track: intent
-status: done
-priority: high
-points: 2
-labels: []
-blocked_by: []
-blocking: [2]
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: done
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
-	issue2 := `id: 2
-slug: second
-name: Second Issue
-track: experience
-status: in-progress
-priority: medium
-points: 3
-labels: []
-blocked_by: [1]
-blocking: []
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: done
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
-	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.yaml"), []byte(issue1), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "002-second.yaml"), []byte(issue2), 0o644))
+	issue1 := `{
+  "id": 1,
+  "slug": "first",
+  "name": "First Issue",
+  "track": "intent",
+  "status": "done",
+  "priority": "high",
+  "points": 2,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [2],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "done",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
+	issue2 := `{
+  "id": 2,
+  "slug": "second",
+  "name": "Second Issue",
+  "track": "experience",
+  "status": "in-progress",
+  "priority": "medium",
+  "points": 3,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": [1],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "done",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "002-second.json"), []byte(issue2), 0o644))
 
 	require.NoError(t, os.Chdir(dir))
 	return dir

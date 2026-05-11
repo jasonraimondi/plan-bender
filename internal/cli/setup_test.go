@@ -54,21 +54,21 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	require.NoError(t, h.execute())
 
 	// Config file created with only the fields worth surfacing
-	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "plans_dir")
-	assert.Contains(t, string(data), "agents:")
-	assert.Contains(t, string(data), "claude-code: true")
-	assert.Contains(t, string(data), "pi: true")
-	assert.NotContains(t, string(data), "max_points")
-	assert.NotContains(t, string(data), "options:")
-	assert.NotContains(t, string(data), "tracks:")
-	assert.NotContains(t, string(data), "workflow_states:")
-	assert.NotContains(t, string(data), "pipeline:")
-	assert.NotContains(t, string(data), "issue_schema:")
+	assert.Contains(t, string(data), `"plans_dir"`)
+	assert.Contains(t, string(data), `"agents"`)
+	assert.Contains(t, string(data), `"claude-code": true`)
+	assert.Contains(t, string(data), `"pi": true`)
+	assert.NotContains(t, string(data), `"max_points"`)
+	assert.NotContains(t, string(data), `"options"`)
+	assert.NotContains(t, string(data), `"tracks"`)
+	assert.NotContains(t, string(data), `"workflow_states"`)
+	assert.NotContains(t, string(data), `"pipeline"`)
+	assert.NotContains(t, string(data), `"issue_schema"`)
 
 	output := h.output()
-	assert.Contains(t, output, "Config:  .plan-bender.yaml (created)")
+	assert.Contains(t, output, "Config:  .plan-bender.json (created)")
 	assert.Contains(t, output, "Linear:  disabled")
 	assert.Contains(t, output, "Ready!")
 }
@@ -91,7 +91,7 @@ func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
+		filepath.Join(dir, ".plan-bender.json"),
 		[]byte("{}"),
 		0o644,
 	))
@@ -100,7 +100,7 @@ func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	require.NoError(t, h.execute())
 
 	output := h.output()
-	assert.Contains(t, output, "Config:  .plan-bender.yaml (exists)")
+	assert.Contains(t, output, "Config:  .plan-bender.json (exists)")
 	assert.NotContains(t, output, "(created)")
 }
 
@@ -108,22 +108,22 @@ func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Only .plan-bender.local.yaml exists — user is intentionally local-only
+	// Only .plan-bender.local.json exists — user is intentionally local-only
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.local.yaml"),
-		[]byte("max_points: 2\n"),
+		filepath.Join(dir, ".plan-bender.local.json"),
+		[]byte(`{"max_points": 2}`),
 		0o644,
 	))
 
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
 
-	// .plan-bender.yaml must NOT have been created
-	_, err := os.Stat(filepath.Join(dir, ".plan-bender.yaml"))
-	assert.True(t, os.IsNotExist(err), ".plan-bender.yaml should not be created when .plan-bender.local.yaml exists")
+	// .plan-bender.json must NOT have been created
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender.json"))
+	assert.True(t, os.IsNotExist(err), ".plan-bender.json should not be created when .plan-bender.local.json exists")
 
 	output := h.output()
-	assert.Contains(t, output, "Config:  .plan-bender.local.yaml (local only")
+	assert.Contains(t, output, "Config:  .plan-bender.local.json (local only")
 	assert.Contains(t, output, "no project file written", "users hitting the local-only branch should be told why")
 	assert.NotContains(t, output, "(created)")
 }
@@ -152,17 +152,17 @@ func TestSetup_LinearWithEnvVars(t *testing.T) {
 	require.NoError(t, h.execute("--linear"))
 
 	// Project config has linear.enabled: true
-	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
 	require.NoError(t, err)
 	content := string(data)
-	assert.Contains(t, content, "enabled: true")
+	assert.Contains(t, content, `"enabled": true`)
 
 	// Local config has credentials
-	localData, err := os.ReadFile(filepath.Join(dir, ".plan-bender.local.yaml"))
+	localData, err := os.ReadFile(filepath.Join(dir, ".plan-bender.local.json"))
 	require.NoError(t, err)
 	localContent := string(localData)
-	assert.Contains(t, localContent, "api_key: lin_test_key")
-	assert.Contains(t, localContent, "team: ENG")
+	assert.Contains(t, localContent, `"api_key": "lin_test_key"`)
+	assert.Contains(t, localContent, `"team": "ENG"`)
 
 	// Credentials NOT in project config
 	assert.NotContains(t, content, "lin_test_key")
@@ -213,7 +213,7 @@ func TestSetup_LinearWithInvalidCreds(t *testing.T) {
 	assert.Contains(t, err.Error(), "credential validation failed")
 
 	// Nothing written
-	_, err = os.Stat(filepath.Join(dir, ".plan-bender.local.yaml"))
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender.local.json"))
 	assert.True(t, os.IsNotExist(err))
 }
 
@@ -240,7 +240,7 @@ func TestSetup_RerunRegeneratesSkills(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
+		filepath.Join(dir, ".plan-bender.json"),
 		[]byte("{}"),
 		0o644,
 	))
@@ -257,8 +257,8 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("agents:\n  - claude-code\n"),
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"agents": ["claude-code"]}`),
 		0o644,
 	))
 
@@ -282,8 +282,8 @@ func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("manage_gitignore: true\nagents:\n  - claude-code\n"),
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"manage_gitignore": true, "agents": ["claude-code"]}`),
 		0o644,
 	))
 
@@ -294,7 +294,7 @@ func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 	require.NoError(t, err)
 	content := string(data)
 	assert.Contains(t, content, ".plan-bender/")
-	assert.Contains(t, content, ".plan-bender.local.yaml")
+	assert.Contains(t, content, ".plan-bender.local.json")
 	assert.Contains(t, content, ".claude/skills/bender-*")
 }
 
@@ -303,8 +303,8 @@ func TestSetup_ManageGitignoreFalseSkipsGitignoreWrite(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("manage_gitignore: false\nagents:\n  - claude-code\n"),
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"manage_gitignore": false, "agents": ["claude-code"]}`),
 		0o644,
 	))
 
@@ -325,8 +325,8 @@ func TestSetup_ManageGitignoreFalsePreservesExistingGitignore(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(original), 0o644))
 
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("manage_gitignore: false\nagents:\n  - claude-code\n"),
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"manage_gitignore": false, "agents": ["claude-code"]}`),
 		0o644,
 	))
 
@@ -347,32 +347,31 @@ func TestEnsureGitignoreForAgents_SkipsUserOnlyAgents(t *testing.T) {
 	require.NoError(t, err)
 	content := string(data)
 	assert.Contains(t, content, ".plan-bender/")
-	assert.Contains(t, content, ".plan-bender.local.yaml")
+	assert.Contains(t, content, ".plan-bender.local.json")
 	assert.NotContains(t, content, "bender-*")
 }
 
-func TestMergeYAMLFile_CreatesNewFile(t *testing.T) {
+func TestMergeJSONFile_CreatesNewFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "test.yaml")
+	path := filepath.Join(dir, "test.json")
 
-	err := mergeYAMLFile(path, map[string]any{
+	err := mergeJSONFile(path, map[string]any{
 		"linear": map[string]any{"enabled": true},
 	})
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "enabled: true")
+	assert.Contains(t, string(data), `"enabled": true`)
 }
 
-func TestMergeYAMLFile_RejectsMalformedYAML(t *testing.T) {
+func TestMergeJSONFile_RejectsMalformedJSON(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "test.yaml")
+	path := filepath.Join(dir, "test.json")
 
-	// Unbalanced bracket: yaml.Unmarshal returns an error on this input.
-	require.NoError(t, os.WriteFile(path, []byte("linear: [unterminated\n"), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(`{"linear": [unterminated`), 0o644))
 
-	err := mergeYAMLFile(path, map[string]any{
+	err := mergeJSONFile(path, map[string]any{
 		"linear": map[string]any{"enabled": true},
 	})
 	require.Error(t, err, "must surface parse failure rather than silently overwriting user config")
@@ -380,16 +379,16 @@ func TestMergeYAMLFile_RejectsMalformedYAML(t *testing.T) {
 	// Original file content must be preserved when parse fails.
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, "linear: [unterminated\n", string(data))
+	assert.Equal(t, `{"linear": [unterminated`, string(data))
 }
 
-func TestMergeYAMLFile_PreservesExistingKeys(t *testing.T) {
+func TestMergeJSONFile_PreservesExistingKeys(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "test.yaml")
+	path := filepath.Join(dir, "test.json")
 
-	require.NoError(t, os.WriteFile(path, []byte("max_points: 5\nlinear:\n  team: OLD\n"), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte(`{"max_points": 5, "linear": {"team": "OLD"}}`), 0o644))
 
-	err := mergeYAMLFile(path, map[string]any{
+	err := mergeJSONFile(path, map[string]any{
 		"linear": map[string]any{"enabled": true},
 	})
 	require.NoError(t, err)
@@ -397,7 +396,7 @@ func TestMergeYAMLFile_PreservesExistingKeys(t *testing.T) {
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	content := string(data)
-	assert.Contains(t, content, "max_points: 5")
-	assert.Contains(t, content, "enabled: true")
-	assert.Contains(t, content, "team: OLD")
+	assert.Contains(t, content, `"max_points": 5`)
+	assert.Contains(t, content, `"enabled": true`)
+	assert.Contains(t, content, `"team": "OLD"`)
 }

@@ -12,14 +12,13 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // NewWritePrdCmd creates the write-prd command.
 func NewWritePrdCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "write-prd <slug> [file]",
-		Short: "Validate and write a PRD YAML file",
+		Short: "Validate and write a PRD JSON file",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
@@ -36,8 +35,8 @@ func NewWritePrdCmd() *cobra.Command {
 			}
 
 			var prd schema.PrdYaml
-			if err := yaml.Unmarshal(data, &prd); err != nil {
-				return fmt.Errorf("invalid YAML: %w", err)
+			if err := json.Unmarshal(data, &prd); err != nil {
+				return fmt.Errorf("invalid JSON: %w", err)
 			}
 
 			errs := prd.Validate()
@@ -62,7 +61,7 @@ func NewWritePrdCmd() *cobra.Command {
 				return reportCommitError(cmd, err)
 			}
 
-			outPath := filepath.Join(cfg.PlansDir, slug, "prd.yaml")
+			outPath := filepath.Join(cfg.PlansDir, slug, "prd.json")
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
 					"status": "ok",
@@ -106,7 +105,7 @@ func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
 	}
 	if f, ok := cmd.InOrStdin().(*os.File); ok {
 		if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-			return nil, fmt.Errorf("no input — pipe YAML or pass a file path")
+			return nil, fmt.Errorf("no input — pipe JSON or pass a file path")
 		}
 	}
 	return io.ReadAll(cmd.InOrStdin())

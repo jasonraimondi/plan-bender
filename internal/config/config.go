@@ -1,11 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
-	"gopkg.in/yaml.v3"
 )
 
 // defaultSubprocessTimeout is the cap applied when PipelineConfig.SubprocessTimeout is empty.
@@ -25,53 +25,53 @@ func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
 	return d
 }
 
-// CustomFieldDef defines a custom field on issue YAML.
+// CustomFieldDef defines a custom field on issue JSON.
 type CustomFieldDef struct {
-	Name       string   `yaml:"name"`
-	Type       string   `yaml:"type"` // "string", "number", "boolean", "enum"
-	Required   bool     `yaml:"required"`
-	EnumValues []string `yaml:"enum_values,omitempty"`
+	Name       string   `json:"name"`
+	Type       string   `json:"type"` // "string", "number", "boolean", "enum"
+	Required   bool     `json:"required"`
+	EnumValues []string `json:"enum_values,omitempty"`
 }
 
 // LinearConfig holds Linear integration settings.
 type LinearConfig struct {
-	Enabled   bool              `yaml:"enabled,omitempty"`
-	APIKey    string            `yaml:"api_key,omitempty"`
-	Team      string            `yaml:"team,omitempty"`
-	ProjectID string            `yaml:"project_id,omitempty"`
-	StatusMap map[string]string `yaml:"status_map,omitempty"`
+	Enabled   bool              `json:"enabled,omitempty"`
+	APIKey    string            `json:"api_key,omitempty"`
+	Team      string            `json:"team,omitempty"`
+	ProjectID string            `json:"project_id,omitempty"`
+	StatusMap map[string]string `json:"status_map,omitempty"`
 }
 
 // PipelineConfig controls which pipeline steps to skip and how dispatch branches issues.
 type PipelineConfig struct {
-	Skip           []string `yaml:"skip,omitempty"`
-	BranchStrategy string   `yaml:"branch_strategy,omitempty"`
+	Skip           []string `json:"skip,omitempty"`
+	BranchStrategy string   `json:"branch_strategy,omitempty"`
 	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
 	// otherwise blocks dispatch indefinitely. Stored as a Go duration string
 	// ("30m", "2h"); empty means use defaultSubprocessTimeout.
-	SubprocessTimeout string `yaml:"subprocess_timeout,omitempty"`
+	SubprocessTimeout string `json:"subprocess_timeout,omitempty"`
 }
 
 // HooksConfig declares shell hooks invoked around dispatch lifecycle events.
 type HooksConfig struct {
-	BeforeIssue string `yaml:"before_issue,omitempty"`
-	AfterIssue  string `yaml:"after_issue,omitempty"`
-	AfterBatch  string `yaml:"after_batch,omitempty"`
+	BeforeIssue string `json:"before_issue,omitempty"`
+	AfterIssue  string `json:"after_issue,omitempty"`
+	AfterBatch  string `json:"after_batch,omitempty"`
 }
 
 // IssueSchemaConfig controls custom fields on issues.
 type IssueSchemaConfig struct {
-	CustomFields []CustomFieldDef `yaml:"custom_fields,omitempty"`
+	CustomFields []CustomFieldDef `json:"custom_fields,omitempty"`
 }
 
 // AgentOptions holds per-agent overrides for registry fields and arbitrary extra options.
 // Known registry override fields are declared explicitly; all other keys are captured in Extra.
 type AgentOptions struct {
-	ProjectDir       *string        `yaml:"project_dir,omitempty"`
-	UserDir          *string        `yaml:"user_dir,omitempty"`
-	Scope            *string        `yaml:"scope,omitempty"`
-	GitignorePattern *string        `yaml:"gitignore_pattern,omitempty"`
-	Extra            map[string]any `yaml:",inline"`
+	ProjectDir       *string        `json:"project_dir,omitempty"`
+	UserDir          *string        `json:"user_dir,omitempty"`
+	Scope            *string        `json:"scope,omitempty"`
+	GitignorePattern *string        `json:"gitignore_pattern,omitempty"`
+	Extra            map[string]any `json:"-"`
 }
 
 // AgentEntry is a bool|object union type for the agents config map.
@@ -82,10 +82,10 @@ type AgentEntry struct {
 	Options AgentOptions
 }
 
-// MarshalYAML emits AgentEntry as a scalar bool when no options are set, or a
+// MarshalJSON emits AgentEntry as a scalar bool when no options are set, or a
 // mapping {enabled, ...options} when options exist. Keeps default configs
-// minimal (`agent-name: true`) while preserving the full form for overrides.
-func (e AgentEntry) MarshalYAML() (any, error) {
+// minimal (`"agent-name": true`) while preserving the full form for overrides.
+func (e AgentEntry) MarshalJSON() ([]byte, error) {
 	out := map[string]any{}
 	if e.Options.ProjectDir != nil {
 		out["project_dir"] = *e.Options.ProjectDir
@@ -103,31 +103,86 @@ func (e AgentEntry) MarshalYAML() (any, error) {
 		out[k] = v
 	}
 	if len(out) == 0 {
-		return e.Enabled, nil
+		return json.Marshal(e.Enabled)
 	}
 	out["enabled"] = e.Enabled
-	return out, nil
+	return json.Marshal(out)
 }
 
-// UnmarshalYAML implements a custom YAML unmarshaler that handles bool and object values.
-func (e *AgentEntry) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		var b bool
-		if err := value.Decode(&b); err != nil {
-			return fmt.Errorf("agents entry must be bool or object: %w", err)
-		}
+// UnmarshalJSON implements a custom JSON unmarshaler that handles bool and object values.
+func (e *AgentEntry) UnmarshalJSON(data []byte) error {
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
 		e.Enabled = b
 		return nil
-	case yaml.MappingNode:
-		if err := value.Decode(&e.Options); err != nil {
-			return fmt.Errorf("decoding agent options: %w", err)
-		}
-		e.Enabled = true
-		return nil
-	default:
-		return fmt.Errorf("agents entry must be bool or object, got YAML tag %q", value.Tag)
 	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("agents entry must be bool or object: %w", err)
+	}
+
+	// Pull known fields off explicitly; unknown keys land in Extra so the
+	// CLI can surface them to custom-field code paths.
+	getStr := func(key string) (*string, error) {
+		v, ok := raw[key]
+		if !ok {
+			return nil, nil
+		}
+		var s string
+		if err := json.Unmarshal(v, &s); err != nil {
+			return nil, fmt.Errorf("decoding agent option %q: %w", key, err)
+		}
+		delete(raw, key)
+		return &s, nil
+	}
+
+	enabled := true
+	if v, ok := raw["enabled"]; ok {
+		if err := json.Unmarshal(v, &enabled); err != nil {
+			return fmt.Errorf("decoding agent enabled: %w", err)
+		}
+		delete(raw, "enabled")
+	}
+
+	pd, err := getStr("project_dir")
+	if err != nil {
+		return err
+	}
+	ud, err := getStr("user_dir")
+	if err != nil {
+		return err
+	}
+	sc, err := getStr("scope")
+	if err != nil {
+		return err
+	}
+	gp, err := getStr("gitignore_pattern")
+	if err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if len(raw) > 0 {
+		extra = make(map[string]any, len(raw))
+		for k, v := range raw {
+			var any any
+			if err := json.Unmarshal(v, &any); err != nil {
+				return fmt.Errorf("decoding agent option %q: %w", k, err)
+			}
+			extra[k] = any
+		}
+	}
+
+	e.Enabled = enabled
+	e.Options = AgentOptions{
+		ProjectDir:       pd,
+		UserDir:          ud,
+		Scope:            sc,
+		GitignorePattern: gp,
+		Extra:            extra,
+	}
+	return nil
 }
 
 // ResolvedAgent is a fully resolved agent configuration with registry defaults merged
@@ -143,35 +198,35 @@ type ResolvedAgent struct {
 
 // Config is the fully resolved configuration.
 type Config struct {
-	Tracks          []string          `yaml:"tracks"`
-	WorkflowStates  []string          `yaml:"workflow_states"`
-	PlansDir        string            `yaml:"plans_dir"`
-	MaxPoints       int               `yaml:"max_points"`
-	Agents          []ResolvedAgent   `yaml:"agents"`
+	Tracks          []string          `json:"tracks"`
+	WorkflowStates  []string          `json:"workflow_states"`
+	PlansDir        string            `json:"plans_dir"`
+	MaxPoints       int               `json:"max_points"`
+	Agents          []ResolvedAgent   `json:"agents"`
 	rawAgents       map[string]*AgentEntry
-	Pipeline        PipelineConfig    `yaml:"pipeline"`
-	IssueSchema     IssueSchemaConfig `yaml:"issue_schema"`
-	Linear          LinearConfig      `yaml:"linear"`
-	Hooks           HooksConfig       `yaml:"hooks"`
-	UpdateCheck     bool              `yaml:"update_check"`
-	ManageGitignore bool              `yaml:"manage_gitignore"`
-	ReviewWithUser  bool              `yaml:"review_with_user"`
-	ReportBugs      bool              `yaml:"report_bugs"`
+	Pipeline        PipelineConfig    `json:"pipeline"`
+	IssueSchema     IssueSchemaConfig `json:"issue_schema"`
+	Linear          LinearConfig      `json:"linear"`
+	Hooks           HooksConfig       `json:"hooks"`
+	UpdateCheck     bool              `json:"update_check"`
+	ManageGitignore bool              `json:"manage_gitignore"`
+	ReviewWithUser  bool              `json:"review_with_user"`
+	ReportBugs      bool              `json:"report_bugs"`
 }
 
-// PartialConfig is used for YAML layer loading — all fields optional.
+// PartialConfig is used for JSON layer loading — all fields optional.
 type PartialConfig struct {
-	Tracks          []string               `yaml:"tracks,omitempty"`
-	WorkflowStates  []string               `yaml:"workflow_states,omitempty"`
-	PlansDir        *string                `yaml:"plans_dir,omitempty"`
-	MaxPoints       *int                   `yaml:"max_points,omitempty"`
-	Agents          map[string]*AgentEntry `yaml:"agents,omitempty"`
-	Pipeline        *PipelineConfig        `yaml:"pipeline,omitempty"`
-	IssueSchema     *IssueSchemaConfig     `yaml:"issue_schema,omitempty"`
-	Linear          *LinearConfig          `yaml:"linear,omitempty"`
-	Hooks           *HooksConfig           `yaml:"hooks,omitempty"`
-	UpdateCheck     *bool                  `yaml:"update_check,omitempty"`
-	ManageGitignore *bool                  `yaml:"manage_gitignore,omitempty"`
-	ReviewWithUser  *bool                  `yaml:"review_with_user,omitempty"`
-	ReportBugs      *bool                  `yaml:"report_bugs,omitempty"`
+	Tracks          []string               `json:"tracks,omitempty"`
+	WorkflowStates  []string               `json:"workflow_states,omitempty"`
+	PlansDir        *string                `json:"plans_dir,omitempty"`
+	MaxPoints       *int                   `json:"max_points,omitempty"`
+	Agents          map[string]*AgentEntry `json:"agents,omitempty"`
+	Pipeline        *PipelineConfig        `json:"pipeline,omitempty"`
+	IssueSchema     *IssueSchemaConfig     `json:"issue_schema,omitempty"`
+	Linear          *LinearConfig          `json:"linear,omitempty"`
+	Hooks           *HooksConfig           `json:"hooks,omitempty"`
+	UpdateCheck     *bool                  `json:"update_check,omitempty"`
+	ManageGitignore *bool                  `json:"manage_gitignore,omitempty"`
+	ReviewWithUser  *bool                  `json:"review_with_user,omitempty"`
+	ReportBugs      *bool                  `json:"report_bugs,omitempty"`
 }
