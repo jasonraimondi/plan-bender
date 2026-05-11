@@ -24,8 +24,8 @@ func testCfg() config.Config {
 }
 
 // validIssue returns a fully-populated valid issue for use in tests.
-func validIssue(id int, slug string) schema.IssueYaml {
-	return schema.IssueYaml{
+func validIssue(id int, slug string) schema.Issue {
+	return schema.Issue{
 		ID:                 id,
 		Slug:               slug,
 		Name:               "Issue " + slug,

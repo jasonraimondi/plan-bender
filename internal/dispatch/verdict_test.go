@@ -26,9 +26,9 @@ func runForExitErr(t *testing.T, code int) error {
 }
 
 func TestVerdict(t *testing.T) {
-	inReview := &schema.IssueYaml{Status: "in-review"}
-	inProgress := &schema.IssueYaml{Status: "in-progress"}
-	todo := &schema.IssueYaml{Status: "todo"}
+	inReview := &schema.Issue{Status: "in-review"}
+	inProgress := &schema.Issue{Status: "in-progress"}
+	todo := &schema.Issue{Status: "todo"}
 
 	exit1 := runForExitErr(t, 1)
 	exit137 := runForExitErr(t, 137)
@@ -39,7 +39,7 @@ func TestVerdict(t *testing.T) {
 		name      string
 		exitErr   error
 		loadErr   error
-		post      *schema.IssueYaml
+		post      *schema.Issue
 		want      Outcome
 		reasonHas []string
 	}{

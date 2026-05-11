@@ -32,9 +32,9 @@ type PullProjectResult struct {
 
 // Backend is the tracking backend interface.
 type Backend interface {
-	CreateProject(ctx context.Context, prd *schema.PrdYaml) (RemoteProject, error)
-	CreateIssue(ctx context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error)
-	UpdateIssue(ctx context.Context, issue *schema.IssueYaml) (RemoteIssue, error)
+	CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error)
+	CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error)
+	UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error)
 	PullIssue(ctx context.Context, remoteID string) (RemoteIssue, error)
 	PullProject(ctx context.Context, projectID string) (PullProjectResult, error)
 }

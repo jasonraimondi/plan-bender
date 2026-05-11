@@ -27,7 +27,7 @@ const (
 // use_case existence. See CrossRefMode for the strict/lax distinction.
 // use_case validation is unaffected by mode — the PRD is always written
 // before issues, so unknown use cases are always errors.
-func ValidateCrossRefs(prd *PrdYaml, issues []IssueYaml, mode CrossRefMode) []ValidationError {
+func ValidateCrossRefs(prd *PRD, issues []Issue, mode CrossRefMode) []ValidationError {
 	var errs []ValidationError
 
 	ids := make(map[int]bool, len(issues))

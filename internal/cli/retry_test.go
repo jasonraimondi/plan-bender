@@ -66,11 +66,11 @@ func setupRetryPlan(t *testing.T, status string, withNotes bool) string {
 	return dir
 }
 
-func loadRetryIssue(t *testing.T, dir string) schema.IssueYaml {
+func loadRetryIssue(t *testing.T, dir string) schema.Issue {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "4-ship-cli.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
+	var issue schema.Issue
 	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }

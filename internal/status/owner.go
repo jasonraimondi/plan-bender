@@ -194,7 +194,7 @@ func containsStatus(set []Status, s Status) bool {
 // preserving any pre-existing notes with a single newline separator. The
 // single-line shape is required so SyncPull and template rendering tolerate
 // repeated transitions piling notes onto the same issue.
-func appendNote(issue *schema.IssueYaml, from, to Status, reason string) {
+func appendNote(issue *schema.Issue, from, to Status, reason string) {
 	line := fmt.Sprintf("[%s] %s→%s: %s", time.Now().Format("2006-01-02 15:04"), from, to, reason)
 	if issue.Notes == nil || *issue.Notes == "" {
 		issue.Notes = &line

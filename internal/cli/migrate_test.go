@@ -164,7 +164,7 @@ steps:
 	// PRD must round-trip through strict decoder.
 	prdData, err := os.ReadFile(filepath.Join(planDir, "prd.json"))
 	require.NoError(t, err)
-	var prd schema.PrdYaml
+	var prd schema.PRD
 	dec := json.NewDecoder(bytes.NewReader(prdData))
 	dec.DisallowUnknownFields()
 	require.NoError(t, dec.Decode(&prd), "strict decode must accept migrated PRD JSON: %s", string(prdData))
@@ -174,7 +174,7 @@ steps:
 	// Issue must round-trip through strict decoder.
 	issueData, err := os.ReadFile(filepath.Join(planDir, "issues", "1-thing.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
+	var issue schema.Issue
 	dec = json.NewDecoder(bytes.NewReader(issueData))
 	dec.DisallowUnknownFields()
 	require.NoError(t, dec.Decode(&issue), "strict decode must accept migrated issue JSON: %s", string(issueData))

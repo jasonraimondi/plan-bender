@@ -10,9 +10,8 @@ var validPriorities = map[string]bool{
 	"urgent": true, "high": true, "medium": true, "low": true,
 }
 
-// IssueYaml represents an issue JSON file. (Name kept for source-compat; the
-// on-disk format is JSON.)
-type IssueYaml struct {
+// Issue represents an issue JSON file.
+type Issue struct {
 	ID                 int      `json:"id"`
 	Slug               string   `json:"slug"`
 	Name               string   `json:"name"`
@@ -41,7 +40,7 @@ type IssueYaml struct {
 }
 
 // Validate checks structural rules and config-dependent rules.
-func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
+func (i *Issue) Validate(cfg config.Config) []ValidationError {
 	var errs []ValidationError
 
 	// Required fields
@@ -130,7 +129,7 @@ func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
 	return errs
 }
 
-func (i *IssueYaml) validateCustomFields(cfg config.Config) []ValidationError {
+func (i *Issue) validateCustomFields(cfg config.Config) []ValidationError {
 	// Custom fields are not stored in the typed struct — they would need
 	// to be accessed via a separate raw map. For now this is a placeholder
 	// that will be wired when the backend reads raw JSON with extra fields.

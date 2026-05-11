@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func validPrd() PrdYaml {
-	return PrdYaml{
+func validPrd() PRD {
+	return PRD{
 		Name:        "Test",
 		Slug:        "test",
 		Status:      "active",
@@ -28,7 +28,7 @@ func TestPrdValidate_Valid(t *testing.T) {
 }
 
 func TestPrdValidate_MissingRequired(t *testing.T) {
-	prd := PrdYaml{Slug: "x"}
+	prd := PRD{Slug: "x"}
 	errs := prd.Validate()
 	assert.NotEmpty(t, errs)
 	assertHasFieldError(t, errs, "name")
@@ -67,7 +67,7 @@ func TestPrdYaml_RoundTrip(t *testing.T) {
 	data, err := json.Marshal(&prd)
 	require.NoError(t, err)
 
-	var parsed PrdYaml
+	var parsed PRD
 	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, prd, parsed)
 }

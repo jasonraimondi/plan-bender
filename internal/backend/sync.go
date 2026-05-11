@@ -129,14 +129,14 @@ func SyncPull(ctx context.Context, plans *planrepo.Plans, be Backend, slug strin
 // readSnapshot opens a short session, returns copies of the PRD and issues,
 // then closes — guaranteeing the plan lock is no longer held when remote
 // API calls begin.
-func readSnapshot(plans *planrepo.Plans, slug string) (schema.PrdYaml, []schema.IssueYaml, error) {
+func readSnapshot(plans *planrepo.Plans, slug string) (schema.PRD, []schema.Issue, error) {
 	sess, err := plans.Open(slug)
 	if err != nil {
-		return schema.PrdYaml{}, nil, err
+		return schema.PRD{}, nil, err
 	}
 	defer sess.Close()
 	prd := sess.Snapshot().PRD
-	issues := append([]schema.IssueYaml{}, sess.Snapshot().Issues...)
+	issues := append([]schema.Issue{}, sess.Snapshot().Issues...)
 	return prd, issues, nil
 }
 
@@ -144,7 +144,7 @@ func readSnapshot(plans *planrepo.Plans, slug string) (schema.PrdYaml, []schema.
 // PRD already has a Linear ProjectID it is used as-is; otherwise CreateProject
 // is called (no lock held) and the returned ID is written back to the PRD via
 // a fresh session.
-func ensureRemoteProject(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, prd *schema.PrdYaml, cfg config.Config) (string, error) {
+func ensureRemoteProject(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, prd *schema.PRD, cfg config.Config) (string, error) {
 	if prd.Linear != nil && prd.Linear.ProjectID != "" {
 		return prd.Linear.ProjectID, nil
 	}
@@ -164,7 +164,7 @@ func ensureRemoteProject(ctx context.Context, plans *planrepo.Plans, be Backend,
 
 // applyRemoteFields mirrors a remote issue's mutable fields into the local
 // copy, returning true when anything changed (i.e. a write-back is needed).
-func applyRemoteFields(local *schema.IssueYaml, remote RemoteIssue) bool {
+func applyRemoteFields(local *schema.Issue, remote RemoteIssue) bool {
 	dirty := false
 	if remote.Status != "" && remote.Status != local.Status {
 		local.Status = remote.Status
@@ -184,7 +184,7 @@ func applyRemoteFields(local *schema.IssueYaml, remote RemoteIssue) bool {
 	return dirty
 }
 
-func commitPRD(plans *planrepo.Plans, slug string, prd schema.PrdYaml, cfg config.Config) error {
+func commitPRD(plans *planrepo.Plans, slug string, prd schema.PRD, cfg config.Config) error {
 	sess, err := plans.Open(slug)
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func commitPRD(plans *planrepo.Plans, slug string, prd schema.PrdYaml, cfg confi
 // this commit. UpdateIssue may surface "id not in session snapshot" if the
 // issue was deleted out from under us; the caller turns that into a
 // per-issue SyncError so one disappearance doesn't abort the whole run.
-func commitIssue(plans *planrepo.Plans, slug string, issue schema.IssueYaml, cfg config.Config) error {
+func commitIssue(plans *planrepo.Plans, slug string, issue schema.Issue, cfg config.Config) error {
 	sess, err := plans.Open(slug)
 	if err != nil {
 		return err

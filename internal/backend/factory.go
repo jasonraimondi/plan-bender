@@ -11,5 +11,5 @@ func New(ctx context.Context, cfg config.Config) (Backend, error) {
 	if cfg.Linear.Enabled {
 		return NewLinear(ctx, cfg)
 	}
-	return NewYAMLFS(cfg), nil
+	return NewLocalFS(cfg), nil
 }

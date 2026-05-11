@@ -104,13 +104,13 @@ func loadSnapshotWithFilenames(fsys fs.FS, slug string) (*Snapshot, map[int]stri
 	return &Snapshot{Slug: slug, PRD: *prd, Issues: issues}, filenames, nil
 }
 
-func loadPRD(fsys fs.FS, slug string) (*schema.PrdYaml, error) {
+func loadPRD(fsys fs.FS, slug string) (*schema.PRD, error) {
 	path := filepath.Join(slug, "prd.json")
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("reading prd %s: %w", path, err)
 	}
-	var prd schema.PrdYaml
+	var prd schema.PRD
 	if err := strictUnmarshal(data, &prd); err != nil {
 		return nil, newParseError(path, data, err)
 	}
@@ -120,7 +120,7 @@ func loadPRD(fsys fs.FS, slug string) (*schema.PrdYaml, error) {
 // loadIssues returns parsed issues alongside the on-disk filenames in the
 // same order. Sessions need the filenames so a slug rename can replace the
 // original file rather than orphaning it.
-func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
+func loadIssues(fsys fs.FS, slug string) ([]schema.Issue, []string, error) {
 	issuesDir := filepath.Join(slug, "issues")
 	entries, err := fs.ReadDir(fsys, issuesDir)
 	if err != nil {
@@ -135,14 +135,14 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.IssueYaml, []string, error) {
 	}
 	sort.Strings(names)
 
-	issues := make([]schema.IssueYaml, 0, len(names))
+	issues := make([]schema.Issue, 0, len(names))
 	for _, name := range names {
 		path := filepath.Join(issuesDir, name)
 		data, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return nil, nil, fmt.Errorf("reading issue %s: %w", path, err)
 		}
-		var issue schema.IssueYaml
+		var issue schema.Issue
 		if err := strictUnmarshal(data, &issue); err != nil {
 			return nil, nil, newParseError(path, data, err)
 		}

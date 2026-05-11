@@ -411,8 +411,8 @@ func isYAMLNull(n *yaml.Node) bool {
 	return n != nil && n.Kind == yaml.ScalarNode && n.Tag == "!!null"
 }
 
-// prdYAMLDoc mirrors schema.PrdYaml with proseList fields for YAML decode.
-// JSON output matches schema.PrdYaml because toSchema converts every field
+// prdYAMLDoc mirrors schema.PRD with proseList fields for YAML decode.
+// JSON output matches schema.PRD because toSchema converts every field
 // before encoding — the type lives here only to absorb bare-colon items.
 type prdYAMLDoc struct {
 	Name          string             `yaml:"name"`
@@ -436,8 +436,8 @@ type prdYAMLDoc struct {
 	Linear        *schema.LinearRef  `yaml:"linear,omitempty"`
 }
 
-func (p *prdYAMLDoc) toSchema() *schema.PrdYaml {
-	return &schema.PrdYaml{
+func (p *prdYAMLDoc) toSchema() *schema.PRD {
+	return &schema.PRD{
 		Name:          p.Name,
 		Slug:          p.Slug,
 		Status:        p.Status,
@@ -460,7 +460,7 @@ func (p *prdYAMLDoc) toSchema() *schema.PrdYaml {
 	}
 }
 
-// issueYAMLDoc mirrors schema.IssueYaml with proseList fields for YAML decode.
+// issueYAMLDoc mirrors schema.Issue with proseList fields for YAML decode.
 type issueYAMLDoc struct {
 	ID                 int       `yaml:"id"`
 	Slug               string    `yaml:"slug"`
@@ -489,8 +489,8 @@ type issueYAMLDoc struct {
 	Notes              *string   `yaml:"notes,omitempty"`
 }
 
-func (i *issueYAMLDoc) toSchema() *schema.IssueYaml {
-	return &schema.IssueYaml{
+func (i *issueYAMLDoc) toSchema() *schema.Issue {
+	return &schema.Issue{
 		ID:                 i.ID,
 		Slug:               i.Slug,
 		Name:               i.Name,

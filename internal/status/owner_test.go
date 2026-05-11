@@ -26,8 +26,8 @@ func newTestOwner(t *testing.T) (*Owner, *inMemStore, *bytes.Buffer) {
 	return o, store, buf
 }
 
-func issueAt(id int, status string) schema.IssueYaml {
-	return schema.IssueYaml{ID: id, Slug: "x", Name: "x", Status: status}
+func issueAt(id int, status string) schema.Issue {
+	return schema.Issue{ID: id, Slug: "x", Name: "x", Status: status}
 }
 
 func TestTransition_AllAllowedEdgesSucceed(t *testing.T) {

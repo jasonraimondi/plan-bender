@@ -185,8 +185,8 @@ func TestContextCmd_NoSlug_EmptyPlans(t *testing.T) {
 
 func TestContextFullJSON_MarshalShape(t *testing.T) {
 	ctx := contextFullJSON{
-		Prd:    &schema.PrdYaml{Name: "Test"},
-		Issues: []schema.IssueYaml{{ID: 1}},
+		Prd:    &schema.PRD{Name: "Test"},
+		Issues: []schema.Issue{{ID: 1}},
 		Dependencies: plan.Graph{
 			Nodes: []plan.GraphNode{{ID: 1, Name: "A", Status: "done"}},
 			Edges: []plan.GraphEdge{{From: 1, To: 2}},

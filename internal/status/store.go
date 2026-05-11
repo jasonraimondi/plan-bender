@@ -15,11 +15,11 @@ type Store interface {
 type Session interface {
 	// Issues returns the issues loaded at session open time. Owners read this
 	// once per call; the returned slice is treated as read-only.
-	Issues() []schema.IssueYaml
+	Issues() []schema.Issue
 	// Save commits one mutated issue back to disk under the session lock.
 	// Owner mutates exactly one issue per Transition/Claim, so a single
 	// staged-write-and-commit per session is sufficient.
-	Save(issue schema.IssueYaml) error
+	Save(issue schema.Issue) error
 	// Close releases the session lock. Safe to call multiple times.
 	Close() error
 }

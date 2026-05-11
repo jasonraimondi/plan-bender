@@ -71,18 +71,18 @@ func (d *Dispatcher) plansRepo() *planrepo.Plans {
 // and closes the session before returning. The lock is released before the
 // caller proceeds so subsequent status writes (or batch goroutines) can take
 // the same lock without deadlocking.
-func (d *Dispatcher) snapshotIssues(slug string) ([]schema.IssueYaml, error) {
+func (d *Dispatcher) snapshotIssues(slug string) ([]schema.Issue, error) {
 	return snapshotPlanIssues(d.plansRepo(), slug)
 }
 
-func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.IssueYaml, error) {
+func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.Issue, error) {
 	sess, err := plans.Open(slug)
 	if err != nil {
 		return nil, err
 	}
 	defer sess.Close()
 	issues := sess.Snapshot().Issues
-	cp := make([]schema.IssueYaml, len(issues))
+	cp := make([]schema.Issue, len(issues))
 	copy(cp, issues)
 	return cp, nil
 }
@@ -195,7 +195,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 // RunBatch fans out one goroutine per issue, each creating a worktree off
 // integrationBranch, rendering a prompt, and running a claude subprocess.
 // Results come back via a buffered channel and are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.IssueYaml, integrationBranch string) ([]SubResult, error) {
+func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) ([]SubResult, error) {
 	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
 
 	results := make([]SubResult, len(issues))
@@ -203,7 +203,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 
 	for i := range issues {
 		wg.Add(1)
-		go func(idx int, issue schema.IssueYaml) {
+		go func(idx int, issue schema.Issue) {
 			defer wg.Done()
 			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
 		}(i, issues[i])
@@ -213,7 +213,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 	return results, nil
 }
 
-func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.IssueYaml, logDir, integrationBranch string) SubResult {
+func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {
 	d.gitMu.Lock()
 	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
@@ -445,8 +445,8 @@ func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug strin
 	return successful
 }
 
-func computeDepth(issues []schema.IssueYaml) map[int]int {
-	byID := make(map[int]schema.IssueYaml, len(issues))
+func computeDepth(issues []schema.Issue) map[int]int {
+	byID := make(map[int]schema.Issue, len(issues))
 	for _, iss := range issues {
 		byID[iss.ID] = iss
 	}
@@ -489,7 +489,7 @@ func computeDepth(issues []schema.IssueYaml) map[int]int {
 //
 // In-review issues without a branch are skipped — those imply a human flipped
 // status by hand and there's no branch to merge.
-func pendingMergeBack(issues []schema.IssueYaml) []SubResult {
+func pendingMergeBack(issues []schema.Issue) []SubResult {
 	var results []SubResult
 	for _, iss := range issues {
 		if iss.Status != "in-review" {
@@ -507,7 +507,7 @@ func pendingMergeBack(issues []schema.IssueYaml) []SubResult {
 	return results
 }
 
-func hitlOnlyRemaining(issues []schema.IssueYaml) bool {
+func hitlOnlyRemaining(issues []schema.Issue) bool {
 	hasHITL := false
 	for _, iss := range issues {
 		switch iss.Status {
@@ -533,7 +533,7 @@ func hasLabel(labels []string, want string) bool {
 	return false
 }
 
-func (d *Dispatcher) printHITLSummary(issues []schema.IssueYaml) {
+func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
 	fmt.Fprintln(d.out(), "HITL: the following issues require human input:")
 	for _, iss := range issues {
 		switch iss.Status {

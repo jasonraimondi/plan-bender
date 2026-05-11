@@ -87,7 +87,7 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 	// 2. Marshal + roundtrip-check the PRD if dirty.
 	if s.dirtyPRD {
 		data, err := marshalAndProbe(&s.snapshot.PRD, func(b []byte) error {
-			var probe schema.PrdYaml
+			var probe schema.PRD
 			return strictUnmarshal(b, &probe)
 		})
 		if err != nil {
@@ -122,7 +122,7 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 		seenFilenames[filename] = id
 
 		data, err := marshalAndProbe(iss, func(b []byte) error {
-			var probe schema.IssueYaml
+			var probe schema.Issue
 			return strictUnmarshal(b, &probe)
 		})
 		if err != nil {
@@ -250,7 +250,7 @@ func (s *PlanSession) markClean() {
 	}
 }
 
-func (s *PlanSession) findIssueByID(id int) *schema.IssueYaml {
+func (s *PlanSession) findIssueByID(id int) *schema.Issue {
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == id {
 			return &s.snapshot.Issues[i]

@@ -108,12 +108,12 @@ func TestWorktreeCreate_HumanMode(t *testing.T) {
 	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch)
 }
 
-func loadWorktreeIssue(t *testing.T, root string) schema.IssueYaml {
+func loadWorktreeIssue(t *testing.T, root string) schema.Issue {
 	t.Helper()
 	path := filepath.Join(root, ".plan-bender", "plans", "auth", "issues", "7-middleware.json")
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
+	var iss schema.Issue
 	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }

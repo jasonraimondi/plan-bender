@@ -25,20 +25,20 @@ func syncTestCfg() config.Config {
 
 // mockBackend implements Backend with per-method function fields.
 type mockBackend struct {
-	createProject func(ctx context.Context, prd *schema.PrdYaml) (RemoteProject, error)
-	createIssue   func(ctx context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error)
-	updateIssue   func(ctx context.Context, issue *schema.IssueYaml) (RemoteIssue, error)
+	createProject func(ctx context.Context, prd *schema.PRD) (RemoteProject, error)
+	createIssue   func(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error)
+	updateIssue   func(ctx context.Context, issue *schema.Issue) (RemoteIssue, error)
 	pullIssue     func(ctx context.Context, remoteID string) (RemoteIssue, error)
 	pullProject   func(ctx context.Context, projectID string) (PullProjectResult, error)
 }
 
-func (m *mockBackend) CreateProject(ctx context.Context, prd *schema.PrdYaml) (RemoteProject, error) {
+func (m *mockBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
 	return m.createProject(ctx, prd)
 }
-func (m *mockBackend) CreateIssue(ctx context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error) {
+func (m *mockBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
 	return m.createIssue(ctx, issue, projectID)
 }
-func (m *mockBackend) UpdateIssue(ctx context.Context, issue *schema.IssueYaml) (RemoteIssue, error) {
+func (m *mockBackend) UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error) {
 	return m.updateIssue(ctx, issue)
 }
 func (m *mockBackend) PullIssue(ctx context.Context, remoteID string) (RemoteIssue, error) {
@@ -61,7 +61,7 @@ type syncFixture struct {
 // setupSyncTest seeds plansDir with prd + issues using the production plan
 // repository so subsequent SyncPush/SyncPull calls hit the same on-disk
 // contract a real CLI invocation would.
-func setupSyncTest(t *testing.T, prd *schema.PrdYaml, issues []*schema.IssueYaml) syncFixture {
+func setupSyncTest(t *testing.T, prd *schema.PRD, issues []*schema.Issue) syncFixture {
 	t.Helper()
 	dir := t.TempDir()
 	slug := prd.Slug
@@ -80,21 +80,21 @@ func setupSyncTest(t *testing.T, prd *schema.PrdYaml, issues []*schema.IssueYaml
 	return syncFixture{plans: plans, plansDir: dir, cfg: cfg}
 }
 
-func readIssueFromDisk(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
+func readIssueFromDisk(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.Issue {
 	t.Helper()
 	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.json", id, issueSlug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var issue schema.IssueYaml
+	var issue schema.Issue
 	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
 
-func readPrdFromDisk(t *testing.T, plansDir, slug string) schema.PrdYaml {
+func readPrdFromDisk(t *testing.T, plansDir, slug string) schema.PRD {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(plansDir, slug, "prd.json"))
 	require.NoError(t, err)
-	var prd schema.PrdYaml
+	var prd schema.PRD
 	require.NoError(t, json.Unmarshal(data, &prd))
 	return prd
 }
@@ -103,7 +103,7 @@ func TestSyncPush_AllCreate(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
-	issues := []*schema.IssueYaml{testIssue(1), testIssue(2), testIssue(3)}
+	issues := []*schema.Issue{testIssue(1), testIssue(2), testIssue(3)}
 	issues[1].Slug = "issue-two"
 	issues[1].Name = "Issue two"
 	issues[2].Slug = "issue-three"
@@ -113,7 +113,7 @@ func TestSyncPush_AllCreate(t *testing.T) {
 
 	createCount := 0
 	be := &mockBackend{
-		createIssue: func(_ context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
 			createCount++
 			return RemoteIssue{ID: fmt.Sprintf("lin-%d", issue.ID)}, nil
 		},
@@ -142,7 +142,7 @@ func TestSyncPush_AllUpdate(t *testing.T) {
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
 	linID1, linID2, linID3 := "existing-1", "existing-2", "existing-3"
-	issues := []*schema.IssueYaml{testIssue(1), testIssue(2), testIssue(3)}
+	issues := []*schema.Issue{testIssue(1), testIssue(2), testIssue(3)}
 	issues[0].LinearID = &linID1
 	issues[1].Slug = "issue-two"
 	issues[1].LinearID = &linID2
@@ -153,7 +153,7 @@ func TestSyncPush_AllUpdate(t *testing.T) {
 
 	updateCount := 0
 	be := &mockBackend{
-		updateIssue: func(_ context.Context, issue *schema.IssueYaml) (RemoteIssue, error) {
+		updateIssue: func(_ context.Context, issue *schema.Issue) (RemoteIssue, error) {
 			updateCount++
 			return RemoteIssue{ID: *issue.LinearID}, nil
 		},
@@ -171,14 +171,14 @@ func TestSyncPush_PartialFailure(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
-	issues := []*schema.IssueYaml{testIssue(1), testIssue(2), testIssue(3)}
+	issues := []*schema.Issue{testIssue(1), testIssue(2), testIssue(3)}
 	issues[1].Slug = "issue-two"
 	issues[2].Slug = "issue-three"
 
 	fix := setupSyncTest(t, prd, issues)
 
 	be := &mockBackend{
-		createIssue: func(_ context.Context, issue *schema.IssueYaml, _ string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, issue *schema.Issue, _ string) (RemoteIssue, error) {
 			if issue.ID == 2 {
 				return RemoteIssue{}, fmt.Errorf("api error")
 			}
@@ -213,7 +213,7 @@ func TestSyncPush_Idempotent(t *testing.T) {
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
 
 	linID := "existing-1"
-	issues := []*schema.IssueYaml{testIssue(1), testIssue(2)}
+	issues := []*schema.Issue{testIssue(1), testIssue(2)}
 	issues[0].LinearID = &linID // already synced
 	issues[1].Slug = "issue-two" // not yet synced
 
@@ -221,11 +221,11 @@ func TestSyncPush_Idempotent(t *testing.T) {
 
 	var createCalls, updateCalls []int
 	be := &mockBackend{
-		createIssue: func(_ context.Context, issue *schema.IssueYaml, _ string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, issue *schema.Issue, _ string) (RemoteIssue, error) {
 			createCalls = append(createCalls, issue.ID)
 			return RemoteIssue{ID: fmt.Sprintf("lin-%d", issue.ID)}, nil
 		},
-		updateIssue: func(_ context.Context, issue *schema.IssueYaml) (RemoteIssue, error) {
+		updateIssue: func(_ context.Context, issue *schema.Issue) (RemoteIssue, error) {
 			updateCalls = append(updateCalls, issue.ID)
 			return RemoteIssue{ID: *issue.LinearID}, nil
 		},
@@ -251,7 +251,7 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 
 	projectCreated := false
 	be := &mockBackend{
-		createProject: func(_ context.Context, prd *schema.PrdYaml) (RemoteProject, error) {
+		createProject: func(_ context.Context, prd *schema.PRD) (RemoteProject, error) {
 			projectCreated = true
 			return RemoteProject{ID: "new-proj"}, nil
 		},
@@ -279,7 +279,7 @@ func TestSyncPull_StatusUpdate(t *testing.T) {
 	issue.LinearID = &linID
 	issue.Status = "backlog"
 
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -311,7 +311,7 @@ func TestSyncPull_PriorityAndAssignee(t *testing.T) {
 	issue.Priority = "low"
 	issue.Assignee = nil
 
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -342,7 +342,7 @@ func TestSyncPull_SkipWithoutLinearID(t *testing.T) {
 	issue := testIssue(1)
 	// No linear_id — should be skipped
 
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {
@@ -382,10 +382,10 @@ func failingWritePlans(plansDir string) *planrepo.Plans {
 func TestSyncPush_WriteIssueError(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{testIssue(1)})
+	fix := setupSyncTest(t, prd, []*schema.Issue{testIssue(1)})
 
 	be := &mockBackend{
-		createIssue: func(_ context.Context, _ *schema.IssueYaml, _ string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, _ *schema.Issue, _ string) (RemoteIssue, error) {
 			return RemoteIssue{ID: "lin-1"}, nil
 		},
 	}
@@ -404,7 +404,7 @@ func TestSyncPull_WriteIssueError(t *testing.T) {
 	linID := "lin-1"
 	issue := testIssue(1)
 	issue.LinearID = &linID
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
 	be := &mockBackend{
 		pullProject: func(_ context.Context, _ string) (PullProjectResult, error) {

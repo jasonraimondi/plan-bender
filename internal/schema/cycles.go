@@ -4,7 +4,7 @@ import "fmt"
 
 // DetectCycles uses Kahn's algorithm to detect dependency cycles in issues.
 // Returns error messages listing cycle-participant IDs.
-func DetectCycles(issues []IssueYaml) []string {
+func DetectCycles(issues []Issue) []string {
 	if len(issues) == 0 {
 		return nil
 	}

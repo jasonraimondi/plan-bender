@@ -13,8 +13,8 @@ func defaultConfig() config.Config {
 	return config.Defaults()
 }
 
-func validIssue() IssueYaml {
-	return IssueYaml{
+func validIssue() Issue {
+	return Issue{
 		ID:                 1,
 		Slug:               "test-issue",
 		Name:               "Test issue",
@@ -110,7 +110,7 @@ func TestIssueValidate_DuplicateBlocking(t *testing.T) {
 }
 
 func TestIssueValidate_MissingRequiredFields(t *testing.T) {
-	issue := IssueYaml{ID: 1}
+	issue := Issue{ID: 1}
 	errs := issue.Validate(defaultConfig())
 	assertHasFieldError(t, errs, "slug")
 	assertHasFieldError(t, errs, "name")
@@ -132,7 +132,7 @@ func TestIssueYaml_RoundTrip(t *testing.T) {
 	data, err := json.Marshal(&issue)
 	require.NoError(t, err)
 
-	var parsed IssueYaml
+	var parsed Issue
 	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, issue, parsed)
 }

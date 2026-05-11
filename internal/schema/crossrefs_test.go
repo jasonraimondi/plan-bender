@@ -9,9 +9,9 @@ import (
 func TestCrossRefs_ValidRefs(t *testing.T) {
 	prd := validPrd()
 	prd.UseCases = []UseCase{{ID: "UC-1", Description: "test"}}
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{}; i.Blocking = []int{2}; i.UseCases = []string{"UC-1"}; return i }(),
-		func() IssueYaml { i := validIssue(); i.ID = 2; i.BlockedBy = []int{1}; i.Blocking = []int{}; i.UseCases = []string{}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{}; i.Blocking = []int{2}; i.UseCases = []string{"UC-1"}; return i }(),
+		func() Issue { i := validIssue(); i.ID = 2; i.BlockedBy = []int{1}; i.Blocking = []int{}; i.UseCases = []string{}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefStrict)
 	assert.Empty(t, errs)
@@ -19,8 +19,8 @@ func TestCrossRefs_ValidRefs(t *testing.T) {
 
 func TestCrossRefs_MissingBlockedByTarget(t *testing.T) {
 	prd := validPrd()
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{99}; i.Blocking = []int{}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{99}; i.Blocking = []int{}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefStrict)
 	assert.NotEmpty(t, errs)
@@ -29,8 +29,8 @@ func TestCrossRefs_MissingBlockedByTarget(t *testing.T) {
 
 func TestCrossRefs_MissingBlockingTarget(t *testing.T) {
 	prd := validPrd()
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{}; i.Blocking = []int{99}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{}; i.Blocking = []int{99}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefStrict)
 	assert.NotEmpty(t, errs)
@@ -39,9 +39,9 @@ func TestCrossRefs_MissingBlockingTarget(t *testing.T) {
 
 func TestCrossRefs_BrokenSymmetry(t *testing.T) {
 	prd := validPrd()
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{2}; i.Blocking = []int{}; return i }(),
-		func() IssueYaml { i := validIssue(); i.ID = 2; i.BlockedBy = []int{}; i.Blocking = []int{}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{2}; i.Blocking = []int{}; return i }(),
+		func() Issue { i := validIssue(); i.ID = 2; i.BlockedBy = []int{}; i.Blocking = []int{}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefStrict)
 	assert.NotEmpty(t, errs)
@@ -51,8 +51,8 @@ func TestCrossRefs_BrokenSymmetry(t *testing.T) {
 func TestCrossRefs_UnknownUseCase(t *testing.T) {
 	prd := validPrd()
 	prd.UseCases = []UseCase{{ID: "UC-1", Description: "test"}}
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.UseCases = []string{"UC-99"}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.UseCases = []string{"UC-99"}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefStrict)
 	assert.NotEmpty(t, errs)
@@ -64,8 +64,8 @@ func TestCrossRefs_UnknownUseCase(t *testing.T) {
 // Symmetry is only checked between issues that both exist in the snapshot.
 func TestCrossRefs_Lax_MissingTargetsAccepted(t *testing.T) {
 	prd := validPrd()
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{99}; i.Blocking = []int{2, 3}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{99}; i.Blocking = []int{2, 3}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefLax)
 	assert.Empty(t, errs)
@@ -76,9 +76,9 @@ func TestCrossRefs_Lax_MissingTargetsAccepted(t *testing.T) {
 // per-write commit.
 func TestCrossRefs_Lax_StillFlagsBrokenSymmetryBetweenExistingIssues(t *testing.T) {
 	prd := validPrd()
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.BlockedBy = []int{2}; i.Blocking = []int{}; return i }(),
-		func() IssueYaml { i := validIssue(); i.ID = 2; i.BlockedBy = []int{}; i.Blocking = []int{}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.BlockedBy = []int{2}; i.Blocking = []int{}; return i }(),
+		func() Issue { i := validIssue(); i.ID = 2; i.BlockedBy = []int{}; i.Blocking = []int{}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefLax)
 	assert.NotEmpty(t, errs)
@@ -90,8 +90,8 @@ func TestCrossRefs_Lax_StillFlagsBrokenSymmetryBetweenExistingIssues(t *testing.
 func TestCrossRefs_Lax_StillFlagsUnknownUseCase(t *testing.T) {
 	prd := validPrd()
 	prd.UseCases = []UseCase{{ID: "UC-1", Description: "test"}}
-	issues := []IssueYaml{
-		func() IssueYaml { i := validIssue(); i.ID = 1; i.UseCases = []string{"UC-99"}; return i }(),
+	issues := []Issue{
+		func() Issue { i := validIssue(); i.ID = 1; i.UseCases = []string{"UC-99"}; return i }(),
 	}
 	errs := ValidateCrossRefs(&prd, issues, CrossRefLax)
 	assert.NotEmpty(t, errs)

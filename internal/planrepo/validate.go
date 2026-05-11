@@ -110,7 +110,7 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 // issueFilePath returns the on-disk path to use in validation results: the
 // baseline filename if the issue existed at Open time, otherwise the
 // canonical filename a Commit would write.
-func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) string {
+func issueFilePath(slug string, iss *schema.Issue, baseline map[int]string) string {
 	dir := filepath.Join(slug, "issues")
 	if name, ok := baseline[iss.ID]; ok {
 		return filepath.Join(dir, name)
@@ -118,6 +118,6 @@ func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) 
 	return filepath.Join(dir, canonicalIssueFilename(iss))
 }
 
-func canonicalIssueFilename(iss *schema.IssueYaml) string {
+func canonicalIssueFilename(iss *schema.Issue) string {
 	return fmt.Sprintf("%d-%s.json", iss.ID, iss.Slug)
 }

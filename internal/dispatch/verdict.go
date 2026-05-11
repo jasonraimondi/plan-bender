@@ -61,7 +61,7 @@ func (Unreadable) IsSuccess() bool { return false }
 //  2. exitErr != nil — ExitNonZero. We trust the exit code over a stale issue file.
 //  3. post != nil and post.Status != "in-review" — WrongPostStatus.
 //  4. otherwise — Success.
-func Verdict(exitErr error, loadErr error, post *schema.IssueYaml) Outcome {
+func Verdict(exitErr error, loadErr error, post *schema.Issue) Outcome {
 	if loadErr != nil {
 		return Unreadable{Err: loadErr}
 	}

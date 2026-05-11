@@ -12,7 +12,7 @@ import (
 // BuildPrompt assembles the prompt sent to a sub-agent: the rendered
 // bender-implement-issue SKILL.md from the worktree's .claude/skills/ dir,
 // followed by the issue serialized as JSON.
-func BuildPrompt(worktreePath string, issue schema.IssueYaml) (string, error) {
+func BuildPrompt(worktreePath string, issue schema.Issue) (string, error) {
 	skillPath := filepath.Join(worktreePath, ".claude", "skills", "bender-implement-issue", "SKILL.md")
 	skill, err := os.ReadFile(skillPath)
 	if err != nil {

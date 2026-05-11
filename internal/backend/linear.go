@@ -59,7 +59,7 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 	}, nil
 }
 
-func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PrdYaml) (RemoteProject, error) {
+func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
 	project, err := b.client.CreateProject(ctx, prd.Name, b.teamID)
 	if err != nil {
 		return RemoteProject{}, err
@@ -67,7 +67,7 @@ func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PrdYaml) 
 	return RemoteProject{ID: project.ID, Name: project.Name, URL: project.URL}, nil
 }
 
-func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error) {
+func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueCreateInput{
 		Title:       issue.Name,
@@ -85,7 +85,7 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.IssueYaml
 	return linearIssueToRemote(created), nil
 }
 
-func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.IssueYaml) (RemoteIssue, error) {
+func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error) {
 	if issue.LinearID == nil || *issue.LinearID == "" {
 		return RemoteIssue{}, fmt.Errorf("issue #%d has no linear_id", issue.ID)
 	}

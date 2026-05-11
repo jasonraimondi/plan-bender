@@ -32,7 +32,7 @@ func NewWriteIssueCmd() *cobra.Command {
 				return err
 			}
 
-			var issue schema.IssueYaml
+			var issue schema.Issue
 			if err := json.Unmarshal(data, &issue); err != nil {
 				return fmt.Errorf("invalid JSON: %w", err)
 			}
@@ -77,7 +77,7 @@ func NewWriteIssueCmd() *cobra.Command {
 // UpdateIssue when it already exists in the snapshot. Keeps the command's
 // upsert-style behavior intact while satisfying the session's separate
 // create / update entry points.
-func stageIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
+func stageIssue(sess *planrepo.PlanSession, issue schema.Issue) error {
 	for _, existing := range sess.Snapshot().Issues {
 		if existing.ID == issue.ID {
 			return sess.UpdateIssue(issue)

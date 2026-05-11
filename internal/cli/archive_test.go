@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupPlanDir(t *testing.T, slug string, issues []schema.IssueYaml) string {
+func setupPlanDir(t *testing.T, slug string, issues []schema.Issue) string {
 	t.Helper()
 	dir := t.TempDir()
 	planDir := filepath.Join(dir, "plans", slug)
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
 
-	prd := schema.PrdYaml{
+	prd := schema.PRD{
 		Name: "Test", Slug: slug, Status: "active",
 		Created: "2026-03-26", Updated: "2026-03-26",
 		Description: "Test", Why: "Test", Outcome: "Test",
@@ -41,7 +41,7 @@ func setupPlanDir(t *testing.T, slug string, issues []schema.IssueYaml) string {
 }
 
 func TestArchive_BlocksOnActiveIssues(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		{ID: 1, Slug: "active", Name: "Active", Status: "in-progress", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)
@@ -56,7 +56,7 @@ func TestArchive_BlocksOnActiveIssues(t *testing.T) {
 }
 
 func TestArchive_SucceedsWithForce(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		{ID: 1, Slug: "active", Name: "Active", Status: "in-progress", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)
@@ -75,7 +75,7 @@ func TestArchive_SucceedsWithForce(t *testing.T) {
 }
 
 func TestArchive_AllDoneSucceeds(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		{ID: 1, Slug: "done-issue", Name: "Done", Status: "done", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)

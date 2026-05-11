@@ -89,19 +89,19 @@ func NewArchiveCmd() *cobra.Command {
 // outside the session: holding the plan lock while moving the directory the
 // lock file lives in would tangle release semantics on platforms that resolve
 // .pb-lock through the moved path.
-func readIssuesForArchive(plansDir, slug string) ([]schema.IssueYaml, error) {
+func readIssuesForArchive(plansDir, slug string) ([]schema.Issue, error) {
 	sess, err := planrepo.NewProd(plansDir).Open(slug)
 	if err != nil {
 		return nil, err
 	}
 	defer sess.Close()
 	snap := sess.Snapshot()
-	out := make([]schema.IssueYaml, len(snap.Issues))
+	out := make([]schema.Issue, len(snap.Issues))
 	copy(out, snap.Issues)
 	return out, nil
 }
 
-func buildSummary(slug string, issues []schema.IssueYaml) string {
+func buildSummary(slug string, issues []schema.Issue) string {
 	var b strings.Builder
 
 	byStatus := make(map[string]int)

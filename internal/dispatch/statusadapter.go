@@ -44,11 +44,11 @@ type prodStatusSession struct {
 	cfg  config.Config
 }
 
-func (p *prodStatusSession) Issues() []schema.IssueYaml {
+func (p *prodStatusSession) Issues() []schema.Issue {
 	return p.sess.Snapshot().Issues
 }
 
-func (p *prodStatusSession) Save(issue schema.IssueYaml) error {
+func (p *prodStatusSession) Save(issue schema.Issue) error {
 	if err := p.sess.UpdateIssue(issue); err != nil {
 		return err
 	}

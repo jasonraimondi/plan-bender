@@ -59,7 +59,7 @@ const validPrdYAML = `{
 func seedPlan(t *testing.T, root, slug string) {
 	t.Helper()
 	plansDir := filepath.Join(root, ".plan-bender", "plans")
-	var prd schema.PrdYaml
+	var prd schema.PRD
 	require.NoError(t, json.Unmarshal([]byte(validPrdYAML), &prd))
 	prd.Slug = slug
 

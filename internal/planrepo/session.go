@@ -12,8 +12,8 @@ import (
 // the single source of truth between Open and Commit/Close.
 type Snapshot struct {
 	Slug   string
-	PRD    schema.PrdYaml
-	Issues []schema.IssueYaml
+	PRD    schema.PRD
+	Issues []schema.Issue
 }
 
 // PlanSession is one open session against a single plan. It holds the plan
@@ -107,7 +107,7 @@ func (s *PlanSession) Snapshot() *Snapshot {
 
 // UpdatePrd replaces the in-session PRD and marks it dirty. The change is
 // not written to disk until Commit succeeds.
-func (s *PlanSession) UpdatePrd(prd schema.PrdYaml) error {
+func (s *PlanSession) UpdatePrd(prd schema.PRD) error {
 	s.snapshot.PRD = prd
 	s.dirtyPRD = true
 	return nil
@@ -116,7 +116,7 @@ func (s *PlanSession) UpdatePrd(prd schema.PrdYaml) error {
 // UpdateIssue replaces an existing issue (matched by ID) in the in-session
 // snapshot and marks it dirty. Returns an error if the ID is not in the
 // current snapshot — use CreateIssue for new issues.
-func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
+func (s *PlanSession) UpdateIssue(issue schema.Issue) error {
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == issue.ID {
 			s.snapshot.Issues[i] = issue
@@ -130,7 +130,7 @@ func (s *PlanSession) UpdateIssue(issue schema.IssueYaml) error {
 // CreateIssue appends a new issue to the in-session snapshot and marks it
 // dirty. Returns an error if an issue with the same ID already exists in
 // the session (which would also produce a filename conflict at commit).
-func (s *PlanSession) CreateIssue(issue schema.IssueYaml) error {
+func (s *PlanSession) CreateIssue(issue schema.Issue) error {
 	for _, existing := range s.snapshot.Issues {
 		if existing.ID == issue.ID {
 			return fmt.Errorf("create issue: id #%d already exists in plan %q", issue.ID, s.slug)

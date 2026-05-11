@@ -34,7 +34,7 @@ func NewWritePrdCmd() *cobra.Command {
 				return err
 			}
 
-			var prd schema.PrdYaml
+			var prd schema.PRD
 			if err := json.Unmarshal(data, &prd); err != nil {
 				return fmt.Errorf("invalid JSON: %w", err)
 			}

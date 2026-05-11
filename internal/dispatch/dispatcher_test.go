@@ -80,7 +80,7 @@ func setupDispatch(t *testing.T) *dispatchFixture {
 	return &dispatchFixture{root: root, plansDir: plansDir}
 }
 
-func writeIssue(t *testing.T, plansDir string, iss schema.IssueYaml) {
+func writeIssue(t *testing.T, plansDir string, iss schema.Issue) {
 	t.Helper()
 	data, err := json.MarshalIndent(iss, "", "  ")
 	require.NoError(t, err)
@@ -88,8 +88,8 @@ func writeIssue(t *testing.T, plansDir string, iss schema.IssueYaml) {
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 }
 
-func mkAFKIssue(id int, slug, status string, blockedBy ...int) schema.IssueYaml {
-	return schema.IssueYaml{
+func mkAFKIssue(id int, slug, status string, blockedBy ...int) schema.Issue {
+	return schema.Issue{
 		ID:                 id,
 		Slug:               slug,
 		Name:               slug,
@@ -137,12 +137,12 @@ func newDispatcher(fix *dispatchFixture) *Dispatcher {
 	}
 }
 
-func loadIssueYAML(t *testing.T, plansDir string, id int, slug string) schema.IssueYaml {
+func loadIssueYAML(t *testing.T, plansDir string, id int, slug string) schema.Issue {
 	t.Helper()
 	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.json", id, slug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
+	var iss schema.Issue
 	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }

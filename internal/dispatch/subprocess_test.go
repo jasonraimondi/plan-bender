@@ -91,11 +91,11 @@ func installFakeClaude(t *testing.T, body string) string {
 	return binDir
 }
 
-func loadIssueFromDisk(t *testing.T, plansDir, slug string, id int) schema.IssueYaml {
+func loadIssueFromDisk(t *testing.T, plansDir, slug string, id int) schema.Issue {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(plansDir, slug, "issues", "5-ship-it.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
+	var issue schema.Issue
 	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
@@ -117,7 +117,7 @@ exit 0
 	logDir := filepath.Join(t.TempDir(), "logs")
 	var out bytes.Buffer
 
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
@@ -146,7 +146,7 @@ exit 1
 	logDir := filepath.Join(t.TempDir(), "logs")
 	var out bytes.Buffer
 
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
@@ -173,7 +173,7 @@ exit 0
 	logDir := filepath.Join(t.TempDir(), "logs")
 	var out bytes.Buffer
 
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"some prompt", worktree, plansDir, logDir, &out)
 
@@ -201,7 +201,7 @@ exit 0
 
 	worktree := t.TempDir()
 	var out bytes.Buffer
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 
@@ -220,7 +220,7 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 
 	worktree := t.TempDir()
 	var out bytes.Buffer
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 
@@ -249,7 +249,7 @@ exit 0
 
 	worktree := t.TempDir()
 	var out bytes.Buffer
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	prompt := "---\nname: bender-implement-issue\n---\n\n# Implement\n\nDo the thing."
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		prompt, worktree, plansDir, "", &out)
@@ -278,7 +278,7 @@ exit 1
 
 	worktree := t.TempDir()
 	var out bytes.Buffer
-	issue := schema.IssueYaml{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
 		"prompt", worktree, plansDir, "", &out)
 	require.False(t, res.Success)
@@ -296,7 +296,7 @@ func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILL.md"),
 		[]byte("# Implement Issue\n\nDo the thing."), 0o644))
 
-	issue := schema.IssueYaml{ID: 7, Slug: "do-thing", Name: "Do the thing"}
+	issue := schema.Issue{ID: 7, Slug: "do-thing", Name: "Do the thing"}
 	prompt, err := BuildPrompt(worktree, issue)
 	require.NoError(t, err)
 
@@ -308,7 +308,7 @@ func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {
 
 func TestBuildPrompt_MissingSkillFileReturnsError(t *testing.T) {
 	worktree := t.TempDir()
-	issue := schema.IssueYaml{ID: 1, Slug: "x"}
+	issue := schema.Issue{ID: 1, Slug: "x"}
 	_, err := BuildPrompt(worktree, issue)
 	require.Error(t, err)
 }

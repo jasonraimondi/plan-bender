@@ -12,10 +12,10 @@ import (
 func strPtr(s string) *string { return &s }
 
 // issueOpt mutates a fixture issue. Tests compose them to keep rows readable.
-type issueOpt func(*schema.IssueYaml)
+type issueOpt func(*schema.Issue)
 
-func mkIssue(id int, status, priority string, opts ...issueOpt) schema.IssueYaml {
-	iss := schema.IssueYaml{
+func mkIssue(id int, status, priority string, opts ...issueOpt) schema.Issue {
+	iss := schema.Issue{
 		ID:       id,
 		Slug:     "issue",
 		Name:     "issue",
@@ -30,19 +30,19 @@ func mkIssue(id int, status, priority string, opts ...issueOpt) schema.IssueYaml
 }
 
 func withLabels(l ...string) issueOpt {
-	return func(i *schema.IssueYaml) { i.Labels = l }
+	return func(i *schema.Issue) { i.Labels = l }
 }
 
 func withBlockedBy(ids ...int) issueOpt {
-	return func(i *schema.IssueYaml) { i.BlockedBy = ids }
+	return func(i *schema.Issue) { i.BlockedBy = ids }
 }
 
 func withAssignee(name string) issueOpt {
-	return func(i *schema.IssueYaml) { i.Assignee = strPtr(name) }
+	return func(i *schema.Issue) { i.Assignee = strPtr(name) }
 }
 
 func TestResolve_InProgressPreemptsAll(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent"),
 		mkIssue(2, "in-progress", "low"),
 		mkIssue(3, "backlog", "urgent"),
@@ -53,7 +53,7 @@ func TestResolve_InProgressPreemptsAll(t *testing.T) {
 }
 
 func TestResolve_TodoBeatsBacklog(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "backlog", "urgent"),
 		mkIssue(2, "todo", "low"),
 	}
@@ -63,7 +63,7 @@ func TestResolve_TodoBeatsBacklog(t *testing.T) {
 }
 
 func TestResolve_AFKBeatsHITL(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent", withLabels("HITL")),
 		mkIssue(2, "todo", "low", withLabels("AFK")),
 	}
@@ -74,7 +74,7 @@ func TestResolve_AFKBeatsHITL(t *testing.T) {
 }
 
 func TestResolve_HITLSurfacesWhenNoAFK(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent", withLabels("HITL")),
 		mkIssue(2, "todo", "high", withLabels("HITL")),
 	}
@@ -85,7 +85,7 @@ func TestResolve_HITLSurfacesWhenNoAFK(t *testing.T) {
 }
 
 func TestResolve_PriorityWithinStatusTier(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "low"),
 		mkIssue(2, "todo", "urgent"),
 		mkIssue(3, "todo", "medium"),
@@ -97,7 +97,7 @@ func TestResolve_PriorityWithinStatusTier(t *testing.T) {
 
 func TestResolve_TieBreakByUnblocksCount(t *testing.T) {
 	// Two todo+high candidates: id=1 unblocks 2 issues, id=2 unblocks 0.
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high"),
 		mkIssue(2, "todo", "high"),
 		mkIssue(3, "backlog", "low", withBlockedBy(1)),
@@ -109,7 +109,7 @@ func TestResolve_TieBreakByUnblocksCount(t *testing.T) {
 }
 
 func TestResolve_FinalTieBreakByID(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(2, "todo", "high"),
 		mkIssue(1, "todo", "high"),
 	}
@@ -119,7 +119,7 @@ func TestResolve_FinalTieBreakByID(t *testing.T) {
 }
 
 func TestResolve_StaleBlockedPromoted(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "blocked", "high", withBlockedBy(1)),
 	}
@@ -130,7 +130,7 @@ func TestResolve_StaleBlockedPromoted(t *testing.T) {
 }
 
 func TestResolve_BlockedByOpenIsNotReady(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high"),
 		mkIssue(2, "todo", "urgent", withBlockedBy(1)),
 	}
@@ -140,7 +140,7 @@ func TestResolve_BlockedByOpenIsNotReady(t *testing.T) {
 }
 
 func TestResolve_AssignedSkipped(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent", withAssignee("alice")),
 		mkIssue(2, "todo", "low"),
 	}
@@ -153,7 +153,7 @@ func TestResolve_AssignedSkipped(t *testing.T) {
 }
 
 func TestResolve_AllDoneEmptyResult(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "canceled", "high"),
 	}
@@ -165,7 +165,7 @@ func TestResolve_AllDoneEmptyResult(t *testing.T) {
 
 func TestResolve_NoCandidatesNotAllDone(t *testing.T) {
 	// One blocked by an open issue that itself is assigned.
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high", withAssignee("alice")),
 		mkIssue(2, "todo", "high", withBlockedBy(1)),
 	}
@@ -176,7 +176,7 @@ func TestResolve_NoCandidatesNotAllDone(t *testing.T) {
 
 func TestResolve_BlockedCountReflectsTrueBlocked(t *testing.T) {
 	// One stale-blocked (ready), one truly blocked (deps not all done).
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "todo", "high"),
 		mkIssue(3, "blocked", "high", withBlockedBy(1)), // stale, ready
@@ -191,7 +191,7 @@ func TestResolve_BlockedCountReflectsTrueBlocked(t *testing.T) {
 
 func TestResolve_StatusOrderInProgressTodoBacklogStaleBlocked(t *testing.T) {
 	// One of each, all ready (stale-blocked depends on done).
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "blocked", "urgent", withBlockedBy(1)),
 		mkIssue(3, "backlog", "urgent"),
@@ -220,7 +220,7 @@ func TestResolve_StatusOrderInProgressTodoBacklogStaleBlocked(t *testing.T) {
 }
 
 func TestResolve_SkippedListsEverythingNotChosen(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "todo", "high"),
 		mkIssue(3, "todo", "low"),
@@ -239,7 +239,7 @@ func TestResolve_SkippedListsEverythingNotChosen(t *testing.T) {
 }
 
 func TestResolve_HITLSkippedReasonWhenAFKWins(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent", withLabels("HITL")),
 		mkIssue(2, "todo", "low", withLabels("AFK")),
 	}
@@ -257,7 +257,7 @@ func TestResolve_HITLSkippedReasonWhenAFKWins(t *testing.T) {
 }
 
 func TestReadyAFK_ReturnsAllUnblockedAFKIssues(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high"),
 		mkIssue(2, "todo", "medium"),
 		mkIssue(3, "todo", "low", withBlockedBy(1)),
@@ -269,7 +269,7 @@ func TestReadyAFK_ReturnsAllUnblockedAFKIssues(t *testing.T) {
 }
 
 func TestReadyAFK_ExcludesHITLEvenWhenUnblocked(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high"),
 		mkIssue(2, "todo", "high", withLabels("HITL")),
 	}
@@ -279,7 +279,7 @@ func TestReadyAFK_ExcludesHITLEvenWhenUnblocked(t *testing.T) {
 }
 
 func TestReadyAFK_ExcludesTerminalAndInReviewAndBlocked(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "canceled", "high"),
 		mkIssue(3, "in-review", "high"),
@@ -292,7 +292,7 @@ func TestReadyAFK_ExcludesTerminalAndInReviewAndBlocked(t *testing.T) {
 }
 
 func TestReadyAFK_AllDoneReturnsEmpty(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "done", "low"),
 	}
@@ -301,7 +301,7 @@ func TestReadyAFK_AllDoneReturnsEmpty(t *testing.T) {
 }
 
 func TestReadyAFK_BlockerDoneUnblocks(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "todo", "high", withBlockedBy(1)),
 	}
@@ -311,7 +311,7 @@ func TestReadyAFK_BlockerDoneUnblocks(t *testing.T) {
 }
 
 func TestReadyAFK_AssignedIssueExcluded(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		mkIssue(1, "todo", "high", withAssignee("alice")),
 		mkIssue(2, "todo", "high"),
 	}

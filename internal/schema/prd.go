@@ -20,9 +20,8 @@ type LinearRef struct {
 	ProjectID string `json:"project_id,omitempty"`
 }
 
-// PrdYaml represents a PRD JSON file. (Name kept for source-compat; the
-// on-disk format is JSON.)
-type PrdYaml struct {
+// PRD represents a PRD JSON file.
+type PRD struct {
 	Name          string     `json:"name"`
 	Slug          string     `json:"slug"`
 	Status        string     `json:"status"`
@@ -45,7 +44,7 @@ type PrdYaml struct {
 }
 
 // Validate checks required fields, enum values, and date formats.
-func (p *PrdYaml) Validate() []ValidationError {
+func (p *PRD) Validate() []ValidationError {
 	var errs []ValidationError
 
 	if p.Name == "" {

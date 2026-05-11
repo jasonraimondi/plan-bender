@@ -17,11 +17,11 @@ func testBackend(t *testing.T) (Backend, string) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
 	cfg.PlansDir = dir
-	return NewYAMLFS(cfg), dir
+	return NewLocalFS(cfg), dir
 }
 
-func testPrd() *schema.PrdYaml {
-	return &schema.PrdYaml{
+func testPrd() *schema.PRD {
+	return &schema.PRD{
 		Name:        "Test",
 		Slug:        "test",
 		Status:      "active",
@@ -33,8 +33,8 @@ func testPrd() *schema.PrdYaml {
 	}
 }
 
-func testIssue(id int) *schema.IssueYaml {
-	return &schema.IssueYaml{
+func testIssue(id int) *schema.Issue {
+	return &schema.Issue{
 		ID:                 id,
 		Slug:               "test-issue",
 		Name:               "Test issue",
@@ -55,7 +55,7 @@ func testIssue(id int) *schema.IssueYaml {
 	}
 }
 
-func TestFactory_YAMLFS(t *testing.T) {
+func TestFactory_LocalFS(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.PlansDir = t.TempDir()
 	b, err := New(context.Background(), cfg)

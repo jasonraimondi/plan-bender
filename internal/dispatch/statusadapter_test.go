@@ -44,8 +44,8 @@ const adapterValidPrd = `{
 
 // validAdapterIssue returns an issue that passes planrepo.Commit validation
 // under adapterTestCfg.
-func validAdapterIssue(id int, slug, statusStr string) schema.IssueYaml {
-	return schema.IssueYaml{
+func validAdapterIssue(id int, slug, statusStr string) schema.Issue {
+	return schema.Issue{
 		ID:                 id,
 		Slug:               slug,
 		Name:               "Issue " + slug,
@@ -68,7 +68,7 @@ func validAdapterIssue(id int, slug, statusStr string) schema.IssueYaml {
 
 // writeValidPlan seeds plansDir with a valid PRD and the given issues at
 // canonical {id}-{slug}.json paths.
-func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.IssueYaml) {
+func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.Issue) {
 	t.Helper()
 	planDir := filepath.Join(plansDir, slug)
 	issuesDir := filepath.Join(planDir, "issues")
@@ -82,12 +82,12 @@ func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.IssueY
 	}
 }
 
-func loadIssueFile(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
+func loadIssueFile(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.Issue {
 	t.Helper()
 	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.json", id, issueSlug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
+	var iss schema.Issue
 	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }

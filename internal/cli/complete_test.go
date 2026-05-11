@@ -56,11 +56,11 @@ func setupCompletePlan(t *testing.T, status string) string {
 	return dir
 }
 
-func loadCompleteIssue(t *testing.T, dir string) schema.IssueYaml {
+func loadCompleteIssue(t *testing.T, dir string) schema.Issue {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "3-ship-it.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
+	var issue schema.Issue
 	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
