@@ -166,11 +166,11 @@ func (e *AgentEntry) UnmarshalJSON(data []byte) error {
 	if len(raw) > 0 {
 		extra = make(map[string]any, len(raw))
 		for k, v := range raw {
-			var any any
-			if err := json.Unmarshal(v, &any); err != nil {
+			var decoded any
+			if err := json.Unmarshal(v, &decoded); err != nil {
 				return fmt.Errorf("decoding agent option %q: %w", k, err)
 			}
-			extra[k] = any
+			extra[k] = decoded
 		}
 	}
 

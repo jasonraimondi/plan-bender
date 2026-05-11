@@ -49,6 +49,22 @@ func TestOpenOrCreate_HalfBuiltPlanDirReturnsLoadError(t *testing.T) {
 	require.Error(t, err, "incomplete plan dir must surface load error")
 }
 
+// TestOpenOrCreate_LegacyYAMLHintsAtMigrate ensures the loader nudges users
+// who upgraded the binary without running `pb migrate` toward the fix instead
+// of returning a bare "prd.json does not exist" error.
+func TestOpenOrCreate_LegacyYAMLHintsAtMigrate(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "demo", "issues"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.yaml"),
+		[]byte("name: Demo\nslug: demo\n"), 0o644))
+
+	repo := NewProd(plansDir)
+	_, err := repo.OpenOrCreate("demo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pb migrate")
+	assert.Contains(t, err.Error(), "prd.yaml")
+}
+
 func TestOpenOrCreate_FreshAllowsCommit(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))

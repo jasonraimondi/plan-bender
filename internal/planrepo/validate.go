@@ -21,7 +21,7 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 }
 
 // Validate is a one-shot convenience that opens a session for slug, validates
-// it, and closes the session. Open failures (missing plan, malformed YAML)
+// it, and closes the session. Open failures (missing plan, malformed JSON)
 // are surfaced as PRD errors in the returned result so callers always get the
 // PlanValidationResult shape — matching the behavior of the prior disk-based
 // schema.ValidatePlan path.

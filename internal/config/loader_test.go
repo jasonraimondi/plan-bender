@@ -36,6 +36,20 @@ func TestLoad_LocalOverridesProject(t *testing.T) {
 	assert.Equal(t, 8, cfg.MaxPoints)
 }
 
+// TestLoad_LegacyYAMLHintsAtMigrate guards the upgrade-path footgun: silently
+// falling back to defaults when a user upgraded the binary but didn't run
+// `pb migrate` would hide their entire config behind a default starter.
+func TestLoad_LegacyYAMLHintsAtMigrate(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"),
+		[]byte("max_points: 7\n"), 0o644))
+
+	_, err := Load(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pb migrate")
+	assert.Contains(t, err.Error(), ".plan-bender.yaml")
+}
+
 func TestLoad_MalformedJSONReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	writeJSON(t, filepath.Join(dir, ".plan-bender.json"), "{not valid json")

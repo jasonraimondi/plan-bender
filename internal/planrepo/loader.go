@@ -108,6 +108,12 @@ func loadPRD(fsys fs.FS, slug string) (*schema.PRD, error) {
 	path := filepath.Join(slug, "prd.json")
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			yamlPath := filepath.Join(slug, "prd.yaml")
+			if _, statErr := fs.Stat(fsys, yamlPath); statErr == nil {
+				return nil, fmt.Errorf("found legacy %s but no prd.json — run 'pb migrate' to convert", yamlPath)
+			}
+		}
 		return nil, fmt.Errorf("reading prd %s: %w", path, err)
 	}
 	var prd schema.PRD

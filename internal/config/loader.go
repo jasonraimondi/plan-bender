@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Load reads config from 3 layers (global, project, local) and merges them over defaults.
@@ -31,6 +32,9 @@ func loadWithHome(root, home string) (Config, error) {
 	for _, p := range paths {
 		layer, err := readPartial(p)
 		if errors.Is(err, fs.ErrNotExist) {
+			if yamlPath := legacyYAMLSibling(p); yamlPath != "" {
+				return Config{}, fmt.Errorf("found legacy %s but no .json sibling — run 'pb migrate' to convert", yamlPath)
+			}
 			continue
 		}
 		if err != nil {
@@ -46,6 +50,18 @@ func loadWithHome(root, home string) (Config, error) {
 	}
 
 	return base, nil
+}
+
+// legacyYAMLSibling returns the path of a pre-migration .yaml file sitting
+// next to the missing .json, or "" when no legacy file is present. Used to
+// surface a clear "run pb migrate" hint instead of silently falling through
+// to defaults when an unmigrated config exists.
+func legacyYAMLSibling(jsonPath string) string {
+	yamlPath := strings.TrimSuffix(jsonPath, ".json") + ".yaml"
+	if _, err := os.Stat(yamlPath); err == nil {
+		return yamlPath
+	}
+	return ""
 }
 
 func readPartial(path string) (PartialConfig, error) {
