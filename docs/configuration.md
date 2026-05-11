@@ -4,105 +4,87 @@ Three layers, deep-merged — later wins:
 
 | File | Scope |
 | --- | --- |
-| `~/.config/plan-bender/defaults.yaml` | Global — shared across projects, created manually |
-| `.plan-bender.yaml` | Project — committed to repo, written by `pb setup` |
-| `.plan-bender.local.yaml` | Local — gitignored, secrets go here |
+| `~/.config/plan-bender/defaults.json` | Global — shared across projects, created manually |
+| `.plan-bender.json` | Project — committed to repo, written by `pb setup` |
+| `.plan-bender.local.json` | Local — gitignored, secrets go here |
 
-If `.plan-bender.local.yaml` already exists when you run `pb setup`, no project-level
-`.plan-bender.yaml` is created — the loader merges whatever layers exist.
+If `.plan-bender.local.json` already exists when you run `pb setup`, no project-level
+`.plan-bender.json` is created — the loader merges whatever layers exist.
 
 ## Default config
 
 What `pb setup` writes on first run:
 
-```yaml
-plans_dir: ./.plan-bender/plans/
-agents:
-  claude-code: true
-  pi: true
+```json
+{
+  "plans_dir": "./.plan-bender/plans/",
+  "agents": {
+    "claude-code": true,
+    "pi": true
+  }
+}
 ```
 
 ## Kitchen sink
 
 All available keys with their default values:
 
-```yaml
-plans_dir: ./.plan-bender/plans/
-max_points: 3                  # Cap per issue — forces thin slices
-agents:                        # claude-code | opencode | openclaw | pi
-  claude-code: true            # bool toggles registry defaults; or use object form
-  pi: true                     #   for per-agent overrides (project_dir, scope, ...)
-
-tracks:                        # Classify issue concerns; PRD-to-issues checks coverage
-  - intent
-  - experience
-  - data
-  - rules
-  - resilience
-
-workflow_states:
-  - backlog
-  - todo
-  - in-progress
-  - blocked
-  - in-review
-  - qa
-  - done
-  - canceled
-
-pipeline:
-  skip: []                     # Skill names to exclude, e.g. [bender-interview-me]
-  branch_strategy: integration # integration | direct
-                               # integration: dispatch creates <user>/<slug> off the
-                               #   default branch and merges issue branches there.
-                               # direct: dispatch merges issue branches straight into
-                               #   the default branch — no integration branch.
-  subprocess_timeout: 30m      # Per-subprocess cap on each `claude --print` invocation.
-                               # Go duration string ("30m", "2h"). A hung sub-agent
-                               # otherwise blocks the dispatch loop forever. Also caps
-                               # the lifetime of `before_issue` / `after_issue` hooks.
-                               # Validated at config load.
-
-hooks:                         # Shell strings run by `pba dispatch` around its lifecycle
-  before_issue: ""             # Runs in the worktree dir before each subprocess.
-                               # Non-zero exit blocks the issue and skips the subprocess.
-  after_issue: ""              # Runs in the worktree dir after each subprocess (any outcome).
-                               # Failures are logged but do not change issue status.
-  after_batch: ""              # Runs in the repo root after merge-back. Non-fatal.
-                               # Hook lifetime is bounded by pipeline.subprocess_timeout.
-
-issue_schema:
-  custom_fields: []            # Add required fields to every issue
-  # - name: team
-  #   type: enum
-  #   required: true
-  #   enum_values: [frontend, backend, platform]
-
-review_with_user: false        # Insert a user review step before writing PRDs/issues
-
-report_bugs: false             # Inject a "Bug reports" section into every generated SKILL.md
-                               # telling the agent to write pb-error-report-<UTC>.log on failure
-                               # and link the user to the GitHub issues page.
-
-update_check: true             # Check for new releases on pb commands
-
-manage_gitignore: false        # Set true to let pb setup add .plan-bender/, .plan-bender.local.yaml,
-                               # and agent skill patterns to .gitignore. Leave off if you
-                               # manage .gitignore yourself (via template, CI, etc).
-                               # When off, pb doctor still warns if .plan-bender.local.yaml
-                               # is not gitignored.
-
-# Put this in .plan-bender.local.yaml and load from an env file (e.g. direnv)
-# Hardcoding credentials is supported but strongly discouraged
-linear:
-  enabled: false
-  api_key: $LINEAR_API_KEY     # $VAR and ${VAR} are expanded at load time
-  team: $LINEAR_TEAM_ID
-  project_id: ""               # Optional — scope sync to a project
-  status_map:                  # Map local workflow_states to Linear state names
-    in-progress: "In Progress"
-    in-review: "In Review"
+```json
+{
+  "plans_dir": "./.plan-bender/plans/",
+  "max_points": 3,
+  "agents": {
+    "claude-code": true,
+    "pi": true
+  },
+  "tracks": ["intent", "experience", "data", "rules", "resilience"],
+  "workflow_states": [
+    "backlog", "todo", "in-progress", "blocked",
+    "in-review", "qa", "done", "canceled"
+  ],
+  "pipeline": {
+    "skip": [],
+    "branch_strategy": "integration",
+    "subprocess_timeout": "30m"
+  },
+  "hooks": {
+    "before_issue": "",
+    "after_issue": "",
+    "after_batch": ""
+  },
+  "issue_schema": {
+    "custom_fields": []
+  },
+  "review_with_user": false,
+  "report_bugs": false,
+  "update_check": true,
+  "manage_gitignore": false,
+  "linear": {
+    "enabled": false,
+    "api_key": "$LINEAR_API_KEY",
+    "team": "$LINEAR_TEAM_ID",
+    "project_id": "",
+    "status_map": {
+      "in-progress": "In Progress",
+      "in-review": "In Review"
+    }
+  }
+}
 ```
+
+Field notes:
+
+- `max_points` — cap per issue; forces thin slices.
+- `agents` — bool toggles registry defaults; or use object form for per-agent overrides (`project_dir`, `scope`, ...). Supported: `claude-code`, `opencode`, `openclaw`, `pi`.
+- `pipeline.skip` — skill names to exclude, e.g. `["bender-interview-me"]`.
+- `pipeline.branch_strategy` — `integration` (dispatch creates `<user>/<slug>` off the default branch and merges issue branches there) or `direct` (dispatch merges issue branches straight into the default branch).
+- `pipeline.subprocess_timeout` — Go duration string (`"30m"`, `"2h"`). Per-subprocess cap on each `claude --print` invocation; also caps `before_issue` / `after_issue` hooks. Validated at config load.
+- `hooks.before_issue` — runs in the worktree dir before each subprocess; non-zero exit blocks the issue and skips the subprocess.
+- `hooks.after_issue` — runs in the worktree dir after each subprocess; failures are logged but do not change issue status.
+- `hooks.after_batch` — runs in the repo root after merge-back; non-fatal.
+- `issue_schema.custom_fields` — add required fields to every issue. Example: `{"name": "team", "type": "enum", "required": true, "enum_values": ["frontend", "backend", "platform"]}`.
+- `manage_gitignore` — when `true`, `pb setup` manages `.plan-bender/`, `.plan-bender.local.json`, and agent skill patterns in `.gitignore`. When `false`, `pb doctor` still warns if `.plan-bender.local.json` is not gitignored.
+- `linear` — put credentials in `.plan-bender.local.json` and load from an env file (e.g. direnv). `$VAR` and `${VAR}` are expanded at load time. `status_map` maps local `workflow_states` to Linear state names.
 
 Tracks and workflow states are fully customizable.
 

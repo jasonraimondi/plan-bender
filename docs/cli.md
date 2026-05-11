@@ -8,7 +8,8 @@
 | `pb setup --linear` | Configure Linear integration |
 | `pb setup --yes` | Non-interactive mode |
 | `pb sync linear push <slug>` | Push local issues to Linear |
-| `pb sync linear pull <slug>` | Pull Linear state into local YAML |
+| `pb sync linear pull <slug>` | Pull Linear state into local JSON |
+| `pb migrate` | One-shot conversion of legacy `.yaml` plan/config files to `.json` (idempotent; supports `--dry-run`) |
 | `pb doctor` | Verify installation health |
 | `pb self-update` | Update to latest release |
 | `pb next <slug>` | Show recommended next issue (formatted text) |
@@ -24,13 +25,13 @@
 | `pb docs --full` | Print full config reference |
 
 `pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
-If `.plan-bender.local.yaml` already exists, no `.plan-bender.yaml` is created. Set
+If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set
 `manage_gitignore: false` in config to prevent `pb setup` from modifying `.gitignore`.
 
 ## `plan-bender-agent` — Agent CLI
 
 All output is JSON. Errors are `{"error": "...", "code": "..."}` with non-zero exit codes.
-Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (yaml on disk doesn't parse — includes `file`, `line`, and a `hint`), `VALIDATION_FAILED`, `CONFIG_ERROR`, `INTERNAL`.
+Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes `file`, `line`, and a `hint`), `VALIDATION_FAILED`, `CONFIG_ERROR`, `INTERNAL`.
 
 | Command | What it does |
 | --- | --- |
@@ -63,7 +64,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (yaml on disk doesn't parse — includes
    - Reload issues from disk; if every issue is `done` or `canceled`, exit 0.
    - Compute the AFK batch (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
    - If no batch and only HITL issues remain, print a summary and exit 2.
-   - For each batch issue, create the worktree → atomically claim the issue (`status: in-progress` + `branch: <name>` written through the canonical struct round-trip) → run `before_issue` hook → spawn `claude --print` in the worktree → run `after_issue` hook. The pre-spawn claim is what keeps the YAML parseable: without it, sub-agents follow the implement-issue skill's "set branch / set status" instructions and a naive Edit produces duplicate `branch:` keys that yaml.v3 then rejects. Per-issue stdout is serialized through a locked writer and streams as `[issue-N] …`; the full transcript lands at `.plan-bender/logs/{slug}/{id}.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`); timeouts mark the issue `blocked` with reason `timed out`.
+   - For each batch issue, create the worktree → atomically claim the issue (`status: in-progress` + `branch: <name>` written through the canonical struct round-trip) → run `before_issue` hook → spawn `claude --print` in the worktree → run `after_issue` hook. The pre-spawn claim is what keeps the issue JSON parseable: without it, sub-agents follow the implement-issue skill's "set branch / set status" instructions and a naive Edit produces duplicate keys that the strict decoder then rejects. Per-issue stdout is serialized through a locked writer and streams as `[issue-N] …`; the full transcript lands at `.plan-bender/logs/{slug}/{id}.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`); timeouts mark the issue `blocked` with reason `timed out`.
    - Merge successful branches into the integration branch in dependency order, flipping each merged issue to `done`. Conflicts mark the issue `blocked` and `git merge --abort`. Merge-back is skipped entirely when no issue succeeded in the batch.
    - Run `after_batch` hook in the repo root.
 

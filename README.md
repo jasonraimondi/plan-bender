@@ -70,7 +70,7 @@ From the root of any git repo:
 pb setup
 ```
 
-This writes `.plan-bender.yaml`, generates skill files for the agents you've enabled, and (optionally) adds entries to `.gitignore`. It's idempotent — re-run anytime to regenerate skills after a config change.
+This writes `.plan-bender.json`, generates skill files for the agents you've enabled, and (optionally) adds entries to `.gitignore`. It's idempotent — re-run anytime to regenerate skills after a config change.
 
 Then, in your agent of choice, invoke the orchestrator:
 
@@ -82,12 +82,12 @@ The orchestrator reads your plan state and offers a menu of next actions: start 
 
 ## How it works
 
-plan-bender is a methodology made executable. Each phase has a dedicated skill the agent runs; each skill calls the `pba` CLI to read or write structured YAML.
+plan-bender is a methodology made executable. Each phase has a dedicated skill the agent runs; each skill calls the `pba` CLI to read or write structured JSON.
 
 | Phase | Skill | Output |
 | --- | --- | --- |
 | Discovery | `/bender-interview-me` | Stress-tested idea, surfaced assumptions |
-| PRD | `/bender-write-prd` | `prd.yaml` with scope, decisions, validation |
+| PRD | `/bender-write-prd` | `prd.json` with scope, decisions, validation |
 | Decomposition | `/bender-prd-to-issues` | Thin-sliced issues with dep graph and tracks |
 | Review | `/bender-review-prd` | Principal-engineer pass with auto-fix |
 | Implementation | `/bender-implement-prd` | `pba dispatch` runs all AFK issues |
@@ -97,33 +97,39 @@ plan-bender is a methodology made executable. Each phase has a dedicated skill t
 
 ```
 .plan-bender/plans/auth-system/
-  prd.yaml
+  prd.json
   issues/
-    1-setup-middleware.yaml
-    2-add-token-refresh.yaml
-    3-add-role-checks.yaml
+    1-setup-middleware.json
+    2-add-token-refresh.json
+    3-add-role-checks.json
 ```
 
 A minimal issue:
 
-```yaml
-id: 1
-slug: setup-middleware
-name: "Set up authentication middleware"
-track: rules                       # intent | experience | data | rules | resilience
-status: todo
-points: 2                          # hard-capped at max_points (default 3)
-labels: [AFK]                      # AFK = autonomous, HITL = needs human input
-blocked_by: []
-blocking: [2, 3]
-tdd: true                          # write tests first
-acceptance_criteria:
-  - "Valid JWT → user context on request"
-  - "Expired JWT → 401"
-steps:
-  - "Auth middleware — reject malformed Authorization header"
-  - "Auth middleware — decode JWT, verify signature and expiry"
+```json
+{
+  "id": 1,
+  "slug": "setup-middleware",
+  "name": "Set up authentication middleware",
+  "track": "rules",
+  "status": "todo",
+  "points": 2,
+  "labels": ["AFK"],
+  "blocked_by": [],
+  "blocking": [2, 3],
+  "tdd": true,
+  "acceptance_criteria": [
+    "Valid JWT → user context on request",
+    "Expired JWT → 401"
+  ],
+  "steps": [
+    "Auth middleware — reject malformed Authorization header",
+    "Auth middleware — decode JWT, verify signature and expiry"
+  ]
+}
 ```
+
+`track` is `intent` | `experience` | `data` | `rules` | `resilience`. `points` is hard-capped at `max_points` (default 3). `labels` use `AFK` (autonomous) or `HITL` (needs human input).
 
 See [docs/schema.md](docs/schema.md) for the full schema.
 
@@ -167,7 +173,7 @@ flowchart LR
 | --- | --- |
 | `/bender-orchestrator` | Menu-driven entry point — lists active plans and next actions |
 | `/bender-interview-me` | Stress-test an idea before writing anything |
-| `/bender-write-prd` | Interview + explore codebase + write `prd.yaml` |
+| `/bender-write-prd` | Interview + explore codebase + write `prd.json` |
 | `/bender-write-issue` | Create a single issue |
 | `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
@@ -206,18 +212,21 @@ Three layers, deep-merged (later wins):
 
 | File | Scope |
 | --- | --- |
-| `~/.config/plan-bender/defaults.yaml` | Global, shared across projects |
-| `.plan-bender.yaml` | Project, committed to repo |
-| `.plan-bender.local.yaml` | Local, gitignored — secrets go here |
+| `~/.config/plan-bender/defaults.json` | Global, shared across projects |
+| `.plan-bender.json` | Project, committed to repo |
+| `.plan-bender.local.json` | Local, gitignored — secrets go here |
 
 A minimal project config:
 
-```yaml
-plans_dir: ./.plan-bender/plans/
-max_points: 3
-agents:
-  claude-code: true
-  pi: true
+```json
+{
+  "plans_dir": "./.plan-bender/plans/",
+  "max_points": 3,
+  "agents": {
+    "claude-code": true,
+    "pi": true
+  }
+}
 ```
 
 For the full reference (tracks, workflow states, hooks, custom fields, Linear, templates) see [docs/configuration.md](docs/configuration.md), or print it inline:
@@ -237,27 +246,31 @@ pb docs --full
 
 ## Linear integration
 
-Drop credentials in `.plan-bender.local.yaml` (gitignored — never commit them):
+Drop credentials in `.plan-bender.local.json` (gitignored — never commit them):
 
-```yaml
-linear:
-  enabled: true
-  api_key: $LINEAR_API_KEY      # $VAR / ${VAR} expanded at load time
-  team: $LINEAR_TEAM_ID
-  project_id: ""                 # optional
-  status_map:
-    in-progress: "In Progress"
-    in-review: "In Review"
+```json
+{
+  "linear": {
+    "enabled": true,
+    "api_key": "$LINEAR_API_KEY",
+    "team": "$LINEAR_TEAM_ID",
+    "project_id": "",
+    "status_map": {
+      "in-progress": "In Progress",
+      "in-review": "In Review"
+    }
+  }
+}
 ```
 
-Then sync:
+`$VAR` / `${VAR}` are expanded at load time. Then sync:
 
 ```sh
-pb sync linear push <slug>     # local YAML → Linear
-pb sync linear pull <slug>     # Linear → local YAML
+pb sync linear push <slug>     # local JSON → Linear
+pb sync linear pull <slug>     # Linear → local JSON
 ```
 
-Local YAML remains the source of truth; Linear mirrors it.
+Local JSON remains the source of truth; Linear mirrors it.
 
 ## CLI reference
 

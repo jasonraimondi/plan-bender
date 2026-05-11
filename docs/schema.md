@@ -5,92 +5,101 @@
 ```
 plans/
   auth-system/
-    prd.yaml
+    prd.json
     issues/
-      1-setup-middleware.yaml
-      2-add-token-refresh.yaml
-      3-add-role-checks.yaml
+      1-setup-middleware.json
+      2-add-token-refresh.json
+      3-add-role-checks.json
   .archive/
 ```
 
 ## PRD
 
-```yaml
-name: "Auth System"
-slug: auth-system
-status: draft                  # draft | active | in-review | approved | complete | archived
-created: 2025-03-15
-updated: 2025-03-15
-
-description: "JWT-based auth with token refresh and role-based access."
-why: "API endpoints are unprotected."
-outcome: "All API routes require valid auth."
-
-in_scope:
-  - "JWT validation middleware"
-  - "Token refresh endpoint"
-out_of_scope:
-  - "Social login providers"
-  - "MFA"
-
-use_cases:
-  - id: UC-1
-    description: "User logs in, receives access + refresh tokens"
-
-decisions:
-  - "Short-lived JWTs (15m) + long-lived refresh tokens (7d)"
-open_questions:
-  - "Support multiple concurrent sessions per user?"
-risks:
-  - "Token revocation requires a blocklist store — adds Redis dependency"
-validation:
-  - "All use cases pass integration tests"
-  - "Auth middleware adds < 5ms p99 latency"
-
-dev_command: "npm run dev"
-base_url: "http://localhost:3000"
+```json
+{
+  "name": "Auth System",
+  "slug": "auth-system",
+  "status": "draft",
+  "created": "2025-03-15",
+  "updated": "2025-03-15",
+  "description": "JWT-based auth with token refresh and role-based access.",
+  "why": "API endpoints are unprotected.",
+  "outcome": "All API routes require valid auth.",
+  "in_scope": [
+    "JWT validation middleware",
+    "Token refresh endpoint"
+  ],
+  "out_of_scope": [
+    "Social login providers",
+    "MFA"
+  ],
+  "use_cases": [
+    {"id": "UC-1", "description": "User logs in, receives access + refresh tokens"}
+  ],
+  "decisions": [
+    "Short-lived JWTs (15m) + long-lived refresh tokens (7d)"
+  ],
+  "open_questions": [
+    "Support multiple concurrent sessions per user?"
+  ],
+  "risks": [
+    "Token revocation requires a blocklist store — adds Redis dependency"
+  ],
+  "validation": [
+    "All use cases pass integration tests",
+    "Auth middleware adds < 5ms p99 latency"
+  ],
+  "dev_command": "npm run dev",
+  "base_url": "http://localhost:3000"
+}
 ```
+
+`status`: `draft` | `active` | `in-review` | `approved` | `complete` | `archived`.
 
 ## Issue
 
-```yaml
-id: 1
-slug: setup-middleware
-name: "Set up authentication middleware"
-track: rules
-status: backlog
-priority: high                 # urgent | high | medium | low
-points: 2                      # 1 to max_points
-labels: [AFK]                  # AFK = autonomous, HITL = needs human input
-assignee: null
-blocked_by: []
-blocking: [2, 3]
-created: 2025-03-15
-updated: 2025-03-15
-tdd: true                      # Write tests first
-headed: false                  # Verify in browser
-
-# Optional fields populated by dispatch / sync — usually omitted at authoring time:
-# branch: jason/auth-system/1-setup-middleware
-# pr: https://github.com/org/repo/pull/42
-# linear_id: ENG-123
-# notes: "[2025-03-15 10:42] todo→in-progress: dispatch worktree"
-
-outcome: "Auth middleware validates JWTs and attaches user context."
-scope: "Middleware only — no login UI, no token issuance."
-
-acceptance_criteria:
-  - "Valid JWT → user context on request"
-  - "Expired JWT → 401"
-  - "Missing JWT → 401"
-
-steps:
-  - "Auth middleware — reject missing or malformed Authorization header"
-  - "Auth middleware — decode JWT, verify signature and expiry"
-  - "Auth middleware — attach decoded user context to request object"
-
-use_cases: [UC-1]
+```json
+{
+  "id": 1,
+  "slug": "setup-middleware",
+  "name": "Set up authentication middleware",
+  "track": "rules",
+  "status": "backlog",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [2, 3],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-03-15",
+  "updated": "2025-03-15",
+  "tdd": true,
+  "headed": false,
+  "outcome": "Auth middleware validates JWTs and attaches user context.",
+  "scope": "Middleware only — no login UI, no token issuance.",
+  "acceptance_criteria": [
+    "Valid JWT → user context on request",
+    "Expired JWT → 401",
+    "Missing JWT → 401"
+  ],
+  "steps": [
+    "Auth middleware — reject missing or malformed Authorization header",
+    "Auth middleware — decode JWT, verify signature and expiry",
+    "Auth middleware — attach decoded user context to request object"
+  ],
+  "use_cases": ["UC-1"]
+}
 ```
+
+Enum values:
+- `priority`: `urgent` | `high` | `medium` | `low`
+- `points`: 1 to `max_points`
+- `labels`: `AFK` (autonomous) or `HITL` (needs human input)
+
+`branch`, `pr`, `linear_id` are populated by dispatch / sync and typically omitted at authoring time (the loader is strict so they must be present as `null`, not absent, if the schema's optional flag is not set).
 
 **Key fields:**
 
