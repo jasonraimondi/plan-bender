@@ -35,7 +35,7 @@ func NewWritePrdCmd() *cobra.Command {
 			}
 
 			var prd schema.PRD
-			if err := json.Unmarshal(data, &prd); err != nil {
+			if err := planrepo.StrictUnmarshal(data, &prd); err != nil {
 				return fmt.Errorf("invalid JSON: %w", err)
 			}
 

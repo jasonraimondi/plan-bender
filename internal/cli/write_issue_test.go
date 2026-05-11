@@ -131,6 +131,27 @@ func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestWriteIssue_RejectsUnknownFields guards against silent data loss at the
+// CLI write boundary. A typo'd field (here "prirority") was previously dropped
+// on the way to disk; strict decode surfaces it as a validation error so the
+// author notices before the bad file lands.
+func TestWriteIssue_RejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+	seedPlan(t, dir, "test-plan")
+
+	bad := strings.Replace(validIssueYAML, `"priority": "medium"`, `"prirority": "medium"`, 1)
+
+	cmd := NewWriteIssueCmd()
+	cmd.SetArgs([]string{"test-plan"})
+	cmd.SetIn(strings.NewReader(bad))
+	cmd.SetOut(&strings.Builder{})
+	cmd.SetErr(&strings.Builder{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prirority")
+}
+
 // TestWriteIssue_UpdatesExisting exercises the upsert routing inside
 // stageIssue: a second write to the same ID must succeed (UpdateIssue path)
 // rather than failing on duplicate-ID. Slug rename also exercises the

@@ -60,17 +60,18 @@ func extractJSONLine(data []byte, err error) int {
 	return bytes.Count(data[:offset], []byte{'\n'}) + 1
 }
 
-// strictUnmarshal parses JSON into out with strict field checking. The default
+// StrictUnmarshal parses JSON into out with strict field checking. The default
 // json.Unmarshal silently accepts unknown fields; DisallowUnknownFields rejects
 // any field not declared on the target struct so malformed plan files surface
-// as errors.
-func strictUnmarshal(data []byte, out any) error {
+// as errors. Exported so CLI write commands stay symmetric with the loader —
+// otherwise a typo'd field is silently dropped at write time and the file on
+// disk silently omits it.
+func StrictUnmarshal(data []byte, out any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(out); err != nil {
 		return err
 	}
-	// Reject trailing garbage after the top-level value.
 	if dec.More() {
 		return fmt.Errorf("unexpected data after top-level JSON value")
 	}
@@ -117,7 +118,7 @@ func loadPRD(fsys fs.FS, slug string) (*schema.PRD, error) {
 		return nil, fmt.Errorf("reading prd %s: %w", path, err)
 	}
 	var prd schema.PRD
-	if err := strictUnmarshal(data, &prd); err != nil {
+	if err := StrictUnmarshal(data, &prd); err != nil {
 		return nil, newParseError(path, data, err)
 	}
 	return &prd, nil
@@ -149,7 +150,7 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.Issue, []string, error) {
 			return nil, nil, fmt.Errorf("reading issue %s: %w", path, err)
 		}
 		var issue schema.Issue
-		if err := strictUnmarshal(data, &issue); err != nil {
+		if err := StrictUnmarshal(data, &issue); err != nil {
 			return nil, nil, newParseError(path, data, err)
 		}
 		issues = append(issues, issue)

@@ -33,7 +33,7 @@ func NewWriteIssueCmd() *cobra.Command {
 			}
 
 			var issue schema.Issue
-			if err := json.Unmarshal(data, &issue); err != nil {
+			if err := planrepo.StrictUnmarshal(data, &issue); err != nil {
 				return fmt.Errorf("invalid JSON: %w", err)
 			}
 

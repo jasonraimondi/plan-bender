@@ -88,7 +88,7 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 	if s.dirtyPRD {
 		data, err := marshalAndProbe(&s.snapshot.PRD, func(b []byte) error {
 			var probe schema.PRD
-			return strictUnmarshal(b, &probe)
+			return StrictUnmarshal(b, &probe)
 		})
 		if err != nil {
 			return commitPlan{}, fmt.Errorf("marshal prd: %w", err)
@@ -123,7 +123,7 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 
 		data, err := marshalAndProbe(iss, func(b []byte) error {
 			var probe schema.Issue
-			return strictUnmarshal(b, &probe)
+			return StrictUnmarshal(b, &probe)
 		})
 		if err != nil {
 			return commitPlan{}, fmt.Errorf("marshal issue #%d: %w", id, err)

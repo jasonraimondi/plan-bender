@@ -55,6 +55,26 @@ func TestWritePrd_InvalidPrd(t *testing.T) {
 	assert.Contains(t, err.Error(), "validation failed")
 }
 
+// TestWritePrd_RejectsUnknownFields guards against silent data loss at the
+// CLI write boundary: a typo'd field used to be dropped on the way to disk,
+// matching the planrepo loader's strict-decode contract on the read side.
+func TestWritePrd_RejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
+
+	bad := strings.Replace(writePrdSample, `"outcome": "Success"`, `"outcom": "Success"`, 1)
+
+	cmd := NewWritePrdCmd()
+	cmd.SetArgs([]string{"test"})
+	cmd.SetIn(strings.NewReader(bad))
+	cmd.SetOut(&strings.Builder{})
+	cmd.SetErr(&strings.Builder{})
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "outcom")
+}
+
 // Uses os.Pipe (not strings.NewReader) so readInput's *os.File + non-char-device
 // branch is exercised — the same path a shell heredoc hits in production.
 func TestWritePrd_HeredocPipe(t *testing.T) {
