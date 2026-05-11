@@ -65,7 +65,8 @@ func TestMigrate_IsIdempotent_SkipsWhenJSONExists(t *testing.T) {
 		[]byte(`{"max_points": 9}`), 0o644))
 
 	cmd := NewMigrateCmd()
-	cmd.SetOut(&strings.Builder{})
+	var out strings.Builder
+	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
 
 	// Both files still present.
@@ -74,6 +75,37 @@ func TestMigrate_IsIdempotent_SkipsWhenJSONExists(t *testing.T) {
 	jsonData, err := os.ReadFile(filepath.Join(dir, ".plan-bender.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(jsonData), "9", "existing json must not be overwritten")
+
+	// Conflict must be surfaced — both in per-file output and summary.
+	assert.Contains(t, out.String(), "conflict")
+	assert.Contains(t, out.String(), "1 conflict")
+}
+
+// TestMigrate_FallsBackOnConfigLoadError ensures a malformed .plan-bender.json
+// doesn't silently skip the plan-file walk. The walk must still run against
+// the default plansDir and a warning must reach the user.
+func TestMigrate_FallsBackOnConfigLoadError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{ this is not valid json`), 0o644))
+
+	planDir := filepath.Join(dir, ".plan-bender", "plans", "demo")
+	require.NoError(t, os.MkdirAll(planDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"),
+		[]byte("name: Demo\nslug: demo\n"), 0o644))
+
+	cmd := NewMigrateCmd()
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+
+	// Warning reached the user.
+	assert.Contains(t, out.String(), "warning:")
+	// Walk still happened — prd.yaml converted despite the broken config.
+	_, err := os.Stat(filepath.Join(planDir, "prd.json"))
+	assert.NoError(t, err, "prd.json must exist — walk must have run despite config load failure")
 }
 
 // TestMigrate_PreservesBareColonListItems guards against the regression where

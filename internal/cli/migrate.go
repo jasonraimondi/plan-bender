@@ -30,72 +30,78 @@ func NewMigrateCmd() *cobra.Command {
 and local config files, rewrites them as .json, and deletes the originals.
 Existing .json siblings are skipped — migrate is idempotent and safe to re-run.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			root, _ := os.Getwd()
+			root, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("resolving working directory: %w", err)
+			}
 			out := cmd.OutOrStdout()
 
-			// Config files: ~/.config/plan-bender/defaults.yaml, .plan-bender.yaml, .plan-bender.local.yaml
-			home, _ := os.UserHomeDir()
 			configPaths := []string{}
-			if home != "" {
+			if home, err := os.UserHomeDir(); err == nil && home != "" {
 				configPaths = append(configPaths, filepath.Join(home, ".config", "plan-bender", "defaults.yaml"))
+			} else if err != nil {
+				fmt.Fprintf(out, "warning: skipping global config — could not resolve home dir: %v\n", err)
 			}
 			configPaths = append(configPaths,
 				filepath.Join(root, ".plan-bender.yaml"),
 				filepath.Join(root, ".plan-bender.local.yaml"),
 			)
 
-			converted := 0
-			skipped := 0
+			var converted, conflicts int
 			for _, p := range configPaths {
-				did, err := migrateOne(p, dryRun, out)
+				res, err := migrateOne(p, dryRun, out)
 				if err != nil {
 					return fmt.Errorf("migrate %s: %w", p, err)
 				}
-				if did {
+				switch res {
+				case migrateConverted:
 					converted++
-				} else if exists(p) {
-					skipped++
+				case migrateConflict:
+					conflicts++
 				}
 			}
 
-			cfg, err := config.Load(root)
-			if err == nil {
-				plansDir := cfg.PlansDir
-				if !filepath.IsAbs(plansDir) {
-					plansDir = filepath.Join(root, plansDir)
-				}
-				err := filepath.WalkDir(plansDir, func(path string, d fs.DirEntry, err error) error {
-					if err != nil {
-						return nil // best-effort walk; surface aggregate issues below
+			plansDir := resolvePlansDir(root, out)
+			if err := filepath.WalkDir(plansDir, func(path string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					if errors.Is(walkErr, fs.ErrNotExist) {
+						return filepath.SkipDir
 					}
-					if d.IsDir() || !strings.HasSuffix(path, ".yaml") {
-						return nil
-					}
-					did, mErr := migrateOne(path, dryRun, out)
-					if mErr != nil {
-						return fmt.Errorf("migrate %s: %w", path, mErr)
-					}
-					if did {
-						converted++
-					} else {
-						skipped++
-					}
+					fmt.Fprintf(out, "warning: %s: %v\n", path, walkErr)
 					return nil
-				})
-				if err != nil {
-					return err
 				}
+				if d.IsDir() || !strings.HasSuffix(path, ".yaml") {
+					return nil
+				}
+				res, mErr := migrateOne(path, dryRun, out)
+				if mErr != nil {
+					return fmt.Errorf("migrate %s: %w", path, mErr)
+				}
+				switch res {
+				case migrateConverted:
+					converted++
+				case migrateConflict:
+					conflicts++
+				}
+				return nil
+			}); err != nil {
+				return err
 			}
 
 			if err := updateGitignoreForMigration(root, dryRun, out); err != nil {
 				return err
 			}
 
-			if dryRun {
-				fmt.Fprintf(out, "dry-run: %d to convert, %d skipped\n", converted, skipped)
-			} else {
-				fmt.Fprintf(out, "converted %d files (%d skipped — already had .json sibling)\n", converted, skipped)
+			switch {
+			case dryRun:
+				fmt.Fprintf(out, "dry-run: %d to convert", converted)
+			default:
+				fmt.Fprintf(out, "converted %d files", converted)
 			}
+			if conflicts > 0 {
+				fmt.Fprintf(out, " (%d conflict%s — both .yaml and .json present; resolve manually)", conflicts, plural(conflicts))
+			}
+			fmt.Fprintln(out)
 			return nil
 		},
 	}
@@ -103,43 +109,79 @@ Existing .json siblings are skipped — migrate is idempotent and safe to re-run
 	return cmd
 }
 
-// migrateOne converts a single .yaml file to .json. Returns true when a
-// conversion happened. Skips and returns (false, nil) when:
-//   - the source does not exist
-//   - a .json sibling already exists (idempotent re-run)
-func migrateOne(yamlPath string, dryRun bool, out interface{ Write(p []byte) (int, error) }) (bool, error) {
+// migrateResult tells the caller whether to count this call toward conversions,
+// conflicts, or no-ops. Conflicts (both .yaml and .json present) are surfaced
+// distinctly so the summary doesn't bury them under "skipped".
+type migrateResult int
+
+const (
+	migrateMissing migrateResult = iota
+	migrateConverted
+	migrateConflict
+)
+
+// migrateOne converts a single .yaml file to .json. Returns:
+//   - migrateMissing  when the source does not exist
+//   - migrateConflict when a .json sibling already exists (idempotent re-run)
+//   - migrateConverted when the conversion succeeded
+func migrateOne(yamlPath string, dryRun bool, out io.Writer) (migrateResult, error) {
 	if !exists(yamlPath) {
-		return false, nil
+		return migrateMissing, nil
 	}
 	jsonPath := strings.TrimSuffix(yamlPath, ".yaml") + ".json"
 	if exists(jsonPath) {
-		fmt.Fprintf(out, "skip %s — %s already exists\n", yamlPath, filepath.Base(jsonPath))
-		return false, nil
+		fmt.Fprintf(out, "conflict %s — %s already exists; leaving both untouched\n", yamlPath, filepath.Base(jsonPath))
+		return migrateConflict, nil
 	}
 
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
-		return false, fmt.Errorf("reading: %w", err)
+		return migrateMissing, fmt.Errorf("reading: %w", err)
 	}
 
 	encoded, err := encodeYAMLToJSON(yamlPath, data)
 	if err != nil {
-		return false, err
+		return migrateMissing, err
 	}
 
 	if dryRun {
 		fmt.Fprintf(out, "would convert %s → %s\n", yamlPath, jsonPath)
-		return true, nil
+		return migrateConverted, nil
 	}
 
-	if err := os.WriteFile(jsonPath, encoded, 0o644); err != nil {
-		return false, fmt.Errorf("writing %s: %w", jsonPath, err)
+	if err := backend.AtomicWrite(jsonPath, encoded, 0o644); err != nil {
+		return migrateMissing, fmt.Errorf("writing %s: %w", jsonPath, err)
 	}
 	if err := os.Remove(yamlPath); err != nil {
-		return false, fmt.Errorf("removing %s: %w", yamlPath, err)
+		return migrateMissing, fmt.Errorf("removing %s: %w", yamlPath, err)
 	}
 	fmt.Fprintf(out, "converted %s → %s\n", yamlPath, jsonPath)
-	return true, nil
+	return migrateConverted, nil
+}
+
+// resolvePlansDir returns the configured plans dir, falling back to the
+// default and warning when config.Load fails. A malformed `.plan-bender.json`
+// (e.g. stale strict-rejected keys) used to silently skip the entire plan
+// walk; we surface the error and still walk the default so the user sees
+// what they have.
+func resolvePlansDir(root string, out io.Writer) string {
+	plansDir := config.Defaults().PlansDir
+	if cfg, err := config.Load(root); err == nil {
+		plansDir = cfg.PlansDir
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		fmt.Fprintf(out, "warning: could not load config (%v); walking default %s\n", err, plansDir)
+	}
+	if !filepath.IsAbs(plansDir) {
+		plansDir = filepath.Join(root, plansDir)
+	}
+	return plansDir
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // encodeYAMLToJSON dispatches by path: plan files (prd.yaml, issues/*.yaml)
