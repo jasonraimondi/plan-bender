@@ -109,8 +109,20 @@ func resolveAgents(rawAgents map[string]*AgentEntry) ([]ResolvedAgent, []FieldEr
 			continue
 		}
 
+		// `"agent-name": null` decodes to a nil entry (the json package skips
+		// UnmarshalJSON for null pointer map values). Silently treating it as
+		// disabled hides a likely typo — surface it so the user writes `false`
+		// or removes the key.
+		if entry == nil {
+			errs = append(errs, FieldError{
+				Field:   fmt.Sprintf("agents[%s]", name),
+				Message: "must be bool or object, got null",
+			})
+			continue
+		}
+
 		// Disabled agents are validated but not included in the resolved slice
-		if entry == nil || !entry.Enabled {
+		if !entry.Enabled {
 			continue
 		}
 
