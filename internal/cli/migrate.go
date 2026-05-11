@@ -149,7 +149,7 @@ func migrateOne(yamlPath string, dryRun bool, out io.Writer) (migrateResult, err
 		return migrateConverted, nil
 	}
 
-	if err := backend.AtomicWrite(jsonPath, encoded, 0o644); err != nil {
+	if err := backend.AtomicWrite(jsonPath, encoded, configFileMode(jsonPath)); err != nil {
 		return migrateMissing, fmt.Errorf("writing %s: %w", jsonPath, err)
 	}
 	if err := os.Remove(yamlPath); err != nil {

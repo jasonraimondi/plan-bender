@@ -250,6 +250,33 @@ func TestMigrate_GitignoreReplacesBothWithJsonOnly(t *testing.T) {
 	assert.Contains(t, string(updated), ".plan-bender.local.json")
 }
 
+// TestMigrate_LocalConfigGetsRestrictedMode guards against the regression where
+// `.plan-bender.local.yaml` (Linear API key) was migrated to a 0o644 json — a
+// world-readable secret file. Other config tiers stay at 0o644.
+func TestMigrate_LocalConfigGetsRestrictedMode(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chdir(dir))
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"),
+		[]byte("max_points: 5\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.local.yaml"),
+		[]byte("linear:\n  api_key: sk-secret\n"), 0o600))
+
+	cmd := NewMigrateCmd()
+	cmd.SetOut(&strings.Builder{})
+	require.NoError(t, cmd.Execute())
+
+	localInfo, err := os.Stat(filepath.Join(dir, ".plan-bender.local.json"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), localInfo.Mode().Perm(),
+		".plan-bender.local.json must be owner-only")
+
+	projectInfo, err := os.Stat(filepath.Join(dir, ".plan-bender.json"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), projectInfo.Mode().Perm(),
+		".plan-bender.json stays world-readable")
+}
+
 func TestMigrate_DryRunDoesNotWrite(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))

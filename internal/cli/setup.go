@@ -78,7 +78,7 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 			if err := enc.Encode(config.StarterConfig()); err != nil {
 				return err
 			}
-			if err := backend.AtomicWrite(cfgPath, buf.Bytes(), 0o644); err != nil {
+			if err := backend.AtomicWrite(cfgPath, buf.Bytes(), configFileMode(cfgPath)); err != nil {
 				return err
 			}
 			created = true
@@ -228,6 +228,17 @@ func setupLinear(root string, deps setupDeps, yes bool) error {
 	return nil
 }
 
+// configFileMode picks the umask for a written config file. `.plan-bender.local.json`
+// can hold Linear API keys, so it is restricted to owner-only (0o600); the
+// project and global tiers stay readable (0o644). Centralized so every writer
+// (setup, migrate, future tooling) cannot accidentally widen permissions.
+func configFileMode(path string) os.FileMode {
+	if filepath.Base(path) == ".plan-bender.local.json" {
+		return 0o600
+	}
+	return 0o644
+}
+
 // mergeJSONFile reads an existing JSON file (or starts empty), deep-merges the updates, and writes back.
 func mergeJSONFile(path string, updates map[string]any) error {
 	raw := make(map[string]any)
@@ -267,7 +278,7 @@ func mergeJSONFile(path string, updates map[string]any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return backend.AtomicWrite(path, buf.Bytes(), 0o644)
+	return backend.AtomicWrite(path, buf.Bytes(), configFileMode(path))
 }
 
 // symlinkSkills creates symlinks from generated skill dirs into each configured agent's target directory.
