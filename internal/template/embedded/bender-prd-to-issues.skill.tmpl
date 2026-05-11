@@ -222,11 +222,7 @@ For each issue, pipe the JSON to `{{.commands.write_issue}} {slug}` via stdin (h
 
 ```bash
 {{.commands.write_issue}} {slug} <<'EOF'
-{
-  "id": 1,
-  "slug": "issue-slug"
-  /* ...rest of issue JSON */
-}
+<full issue JSON from the schema above>
 EOF
 ```
 

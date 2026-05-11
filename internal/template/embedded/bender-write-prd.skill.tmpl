@@ -109,11 +109,7 @@ Pipe the PRD JSON to `{{.commands.write_prd}} {slug}` via stdin (heredoc). The C
 
 ```bash
 {{.commands.write_prd}} {slug} <<'EOF'
-{
-  "name": "Project Name",
-  "slug": "{slug}"
-  /* ...rest of PRD JSON */
-}
+<full PRD JSON from the schema above>
 EOF
 ```
 
