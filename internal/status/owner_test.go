@@ -26,8 +26,8 @@ func newTestOwner(t *testing.T) (*Owner, *inMemStore, *bytes.Buffer) {
 	return o, store, buf
 }
 
-func issueAt(id int, status string) schema.IssueYaml {
-	return schema.IssueYaml{ID: id, Slug: "x", Name: "x", Status: status}
+func issueAt(id int, status string) schema.Issue {
+	return schema.Issue{ID: id, Slug: "x", Name: "x", Status: status}
 }
 
 func TestTransition_AllAllowedEdgesSucceed(t *testing.T) {
@@ -65,8 +65,6 @@ func TestTransition_AllAllowedEdgesSucceed(t *testing.T) {
 }
 
 func TestTransition_DisallowedEdgeReturnsErrIllegalTransition(t *testing.T) {
-	// todo → done is not in the allowed table. Set from=[todo] so CAS passes
-	// and the allowed-transitions check is what fails.
 	o, store, _ := newTestOwner(t)
 	store.seed("p", issueAt(1, string(StatusTodo)))
 
@@ -83,8 +81,6 @@ func TestTransition_DisallowedEdgeReturnsErrIllegalTransition(t *testing.T) {
 }
 
 func TestTransition_CASMismatchReturnsActualCurrent(t *testing.T) {
-	// from=[todo] but issue is in-progress and target is in-review. Current is
-	// neither in from-set nor equal to target → ErrCASMismatch.
 	o, store, _ := newTestOwner(t)
 	store.seed("p", issueAt(1, string(StatusInProgress)))
 
@@ -97,9 +93,6 @@ func TestTransition_CASMismatchReturnsActualCurrent(t *testing.T) {
 }
 
 func TestTransition_IdempotentNoOpReturnsErrAlreadyInState(t *testing.T) {
-	// UC-7: dispatcher restart re-issues Transition(in-review → done) for an
-	// already-done issue. Current is NOT in from-set but equals target — must
-	// still return ErrAlreadyInState (per PRD CAS rule), no audit log, no write.
 	o, store, buf := newTestOwner(t)
 	store.seed("p", issueAt(1, string(StatusDone)))
 
@@ -171,13 +164,6 @@ func TestTransition_AuditLogOnRealTransitionIncludesAllFields(t *testing.T) {
 }
 
 func TestTransition_ConcurrentCallsSerializeViaLock(t *testing.T) {
-	// Hammer the same plan/issue with N concurrent todo→in-progress calls.
-	// With a working plan-wide lock exactly one wins (real transition); the
-	// rest observe current=in-progress and return ErrAlreadyInState (idempotent
-	// no-op since current == to). Without locking, multiple goroutines could
-	// observe current=todo, all pass CAS, and all save — producing more than
-	// one Save and >1 success. The 1-success / 1-save assertion proves the
-	// load-check-save sequence is serialized.
 	o, store, _ := newTestOwner(t)
 	store.seed("p", issueAt(1, string(StatusTodo)))
 
@@ -269,9 +255,6 @@ func TestClaim_IdempotentWhenAlreadyInProgressOnSameBranch(t *testing.T) {
 }
 
 func TestClaim_RewritesBranchWhenInProgressOnDifferentBranch(t *testing.T) {
-	// User force-recreates a worktree; the branch on disk changes. Allow the
-	// branch field to be re-stamped while staying in-progress — this is the
-	// only path that updates the branch field on an active issue.
 	o, store, _ := newTestOwner(t)
 	seed := issueAt(1, string(StatusInProgress))
 	old := "user/p--1-old"

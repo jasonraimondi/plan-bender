@@ -6,15 +6,15 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	"encoding/json"
 )
 
 func defaultConfig() config.Config {
 	return config.Defaults()
 }
 
-func validIssue() IssueYaml {
-	return IssueYaml{
+func validIssue() Issue {
+	return Issue{
 		ID:                 1,
 		Slug:               "test-issue",
 		Name:               "Test issue",
@@ -110,7 +110,7 @@ func TestIssueValidate_DuplicateBlocking(t *testing.T) {
 }
 
 func TestIssueValidate_MissingRequiredFields(t *testing.T) {
-	issue := IssueYaml{ID: 1}
+	issue := Issue{ID: 1}
 	errs := issue.Validate(defaultConfig())
 	assertHasFieldError(t, errs, "slug")
 	assertHasFieldError(t, errs, "name")
@@ -129,10 +129,10 @@ func TestIssueValidate_AllValidPriorities(t *testing.T) {
 
 func TestIssueYaml_RoundTrip(t *testing.T) {
 	issue := validIssue()
-	data, err := yaml.Marshal(&issue)
+	data, err := json.Marshal(&issue)
 	require.NoError(t, err)
 
-	var parsed IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &parsed))
+	var parsed Issue
+	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, issue, parsed)
 }

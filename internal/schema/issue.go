@@ -10,43 +10,39 @@ var validPriorities = map[string]bool{
 	"urgent": true, "high": true, "medium": true, "low": true,
 }
 
-// IssueYaml represents an issue YAML file.
-type IssueYaml struct {
-	ID        int      `yaml:"id" json:"id"`
-	Slug      string   `yaml:"slug" json:"slug"`
-	Name      string   `yaml:"name" json:"name"`
-	Track     string   `yaml:"track" json:"track"`
-	Status    string   `yaml:"status" json:"status"`
-	Priority  string   `yaml:"priority" json:"priority"`
-	Points    int      `yaml:"points" json:"points"`
-	Labels    []string `yaml:"labels" json:"labels"`
-	Assignee  *string  `yaml:"assignee" json:"assignee"`
-	BlockedBy []int    `yaml:"blocked_by" json:"blocked_by"`
-	Blocking  []int    `yaml:"blocking" json:"blocking"`
-	Branch    *string  `yaml:"branch" json:"branch"`
-	PR        *string  `yaml:"pr" json:"pr"`
-	LinearID  *string  `yaml:"linear_id" json:"linear_id"`
-	LinearURL string   `yaml:"linear_url,omitempty" json:"linear_url,omitempty"`
-	Created   string   `yaml:"created" json:"created"`
-	Updated   string   `yaml:"updated" json:"updated"`
-	TDD       bool     `yaml:"tdd" json:"tdd"`
-	Headed    *bool    `yaml:"headed,omitempty" json:"headed,omitempty"`
-	Outcome   string   `yaml:"outcome" json:"outcome"`
-	Scope     string   `yaml:"scope" json:"scope"`
-	// Prose fields use ProseList so authors can write list items containing
-	// `: ` without having to quote them. Labels/BlockedBy/Blocking stay as
-	// strict typed slices because they hold identifiers, not prose.
-	AcceptanceCriteria ProseList `yaml:"acceptance_criteria" json:"acceptance_criteria"`
-	Steps              ProseList `yaml:"steps" json:"steps"`
-	UseCases           ProseList `yaml:"use_cases" json:"use_cases"`
-	Notes              *string   `yaml:"notes,omitempty" json:"notes,omitempty"`
+// Issue represents an issue JSON file.
+type Issue struct {
+	ID                 int      `json:"id"`
+	Slug               string   `json:"slug"`
+	Name               string   `json:"name"`
+	Track              string   `json:"track"`
+	Status             string   `json:"status"`
+	Priority           string   `json:"priority"`
+	Points             int      `json:"points"`
+	Labels             []string `json:"labels"`
+	Assignee           *string  `json:"assignee"`
+	BlockedBy          []int    `json:"blocked_by"`
+	Blocking           []int    `json:"blocking"`
+	Branch             *string  `json:"branch"`
+	PR                 *string  `json:"pr"`
+	LinearID           *string  `json:"linear_id"`
+	LinearURL          string   `json:"linear_url,omitempty"`
+	Created            string   `json:"created"`
+	Updated            string   `json:"updated"`
+	TDD                bool     `json:"tdd"`
+	Headed             *bool    `json:"headed,omitempty"`
+	Outcome            string   `json:"outcome"`
+	Scope              string   `json:"scope"`
+	AcceptanceCriteria []string `json:"acceptance_criteria"`
+	Steps              []string `json:"steps"`
+	UseCases           []string `json:"use_cases"`
+	Notes              *string  `json:"notes,omitempty"`
 }
 
 // Validate checks structural rules and config-dependent rules.
-func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
+func (i *Issue) Validate(cfg config.Config) []ValidationError {
 	var errs []ValidationError
 
-	// Required fields
 	if i.Slug == "" {
 		errs = append(errs, ValidationError{Field: "slug", Message: "required non-empty string"})
 	}
@@ -78,7 +74,6 @@ func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
 		errs = append(errs, ValidationError{Field: "scope", Message: "required non-empty string"})
 	}
 
-	// Self-reference checks
 	for _, b := range i.BlockedBy {
 		if b == i.ID {
 			errs = append(errs, ValidationError{Field: "blocked_by", Message: "cannot reference self"})
@@ -92,7 +87,6 @@ func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
 		}
 	}
 
-	// Duplicate checks
 	if hasDuplicates(i.BlockedBy) {
 		errs = append(errs, ValidationError{Field: "blocked_by", Message: "contains duplicates"})
 	}
@@ -100,7 +94,6 @@ func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
 		errs = append(errs, ValidationError{Field: "blocking", Message: "contains duplicates"})
 	}
 
-	// Config-dependent validation
 	if i.Track != "" && !contains(cfg.Tracks, i.Track) {
 		errs = append(errs, ValidationError{
 			Field:   "track",
@@ -126,16 +119,12 @@ func (i *IssueYaml) Validate(cfg config.Config) []ValidationError {
 		})
 	}
 
-	// Custom fields validation
 	errs = append(errs, i.validateCustomFields(cfg)...)
 
 	return errs
 }
 
-func (i *IssueYaml) validateCustomFields(cfg config.Config) []ValidationError {
-	// Custom fields are not stored in the typed struct — they would need
-	// to be accessed via a separate raw map. For now this is a placeholder
-	// that will be wired when the backend reads raw YAML with extra fields.
+func (i *Issue) validateCustomFields(cfg config.Config) []ValidationError {
 	return nil
 }
 

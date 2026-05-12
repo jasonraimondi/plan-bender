@@ -36,39 +36,44 @@ func setupDispatchCLI(t *testing.T) string {
 		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.yaml"),
-		[]byte("plans_dir: ./.plan-bender/plans/\nagents:\n  claude-code: true\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"),
+		[]byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}}`), 0o644))
 	require.NoError(t, os.MkdirAll(filepath.Join(root, ".plan-bender", "plans", "demo", "issues"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender", "plans", "demo", "prd.yaml"),
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender", "plans", "demo", "prd.json"),
 		[]byte(validDemoPrd), 0o644))
 	require.NoError(t, os.Chdir(root))
 	return root
 }
 
-const dispatchCLIIssue = `id: 1
-slug: alpha
-name: Alpha
-track: intent
-status: %s
-priority: high
-points: 1
-labels: [%s]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2026-04-30"
-tdd: true
-outcome: out
-scope: scope
-acceptance_criteria: ["ok"]
-steps: ["x — y"]
-use_cases: ["UC-1"]
-`
+const dispatchCLIIssue = `{
+  "id": 1,
+  "slug": "alpha",
+  "name": "Alpha",
+  "track": "intent",
+  "status": %q,
+  "priority": "high",
+  "points": 1,
+  "labels": [%q],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-04-30",
+  "tdd": true,
+  "outcome": "out",
+  "scope": "scope",
+  "acceptance_criteria": ["ok"],
+  "steps": ["x — y"],
+  "use_cases": ["UC-1"]
+}`
 
 func writeDispatchCLIIssue(t *testing.T, root, status, label string) {
 	t.Helper()
 	body := fmt.Sprintf(dispatchCLIIssue, status, label)
-	path := filepath.Join(root, ".plan-bender", "plans", "demo", "issues", "1-alpha.yaml")
+	path := filepath.Join(root, ".plan-bender", "plans", "demo", "issues", "1-alpha.json")
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
 }
 

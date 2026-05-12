@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // NewArchiveCmd creates the archive command.
@@ -38,7 +38,6 @@ func NewArchiveCmd() *cobra.Command {
 				return openErrorToAgent(slug, err)
 			}
 
-			// Check for active issues
 			if !force {
 				var active []string
 				for _, iss := range issues {
@@ -51,14 +50,12 @@ func NewArchiveCmd() *cobra.Command {
 				}
 			}
 
-			// Generate summary
 			summary := buildSummary(slug, issues)
 			summaryPath := filepath.Join(planDir, "summary.md")
 			if err := os.WriteFile(summaryPath, []byte(summary), 0o644); err != nil {
 				return fmt.Errorf("writing summary: %w", err)
 			}
 
-			// Move to archive
 			archiveDir := filepath.Join(cfg.PlansDir, ".archive")
 			if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 				return err
@@ -89,19 +86,19 @@ func NewArchiveCmd() *cobra.Command {
 // outside the session: holding the plan lock while moving the directory the
 // lock file lives in would tangle release semantics on platforms that resolve
 // .pb-lock through the moved path.
-func readIssuesForArchive(plansDir, slug string) ([]schema.IssueYaml, error) {
+func readIssuesForArchive(plansDir, slug string) ([]schema.Issue, error) {
 	sess, err := planrepo.NewProd(plansDir).Open(slug)
 	if err != nil {
 		return nil, err
 	}
 	defer sess.Close()
 	snap := sess.Snapshot()
-	out := make([]schema.IssueYaml, len(snap.Issues))
+	out := make([]schema.Issue, len(snap.Issues))
 	copy(out, snap.Issues)
 	return out, nil
 }
 
-func buildSummary(slug string, issues []schema.IssueYaml) string {
+func buildSummary(slug string, issues []schema.Issue) string {
 	var b strings.Builder
 
 	byStatus := make(map[string]int)
@@ -121,8 +118,14 @@ func buildSummary(slug string, issues []schema.IssueYaml) string {
 	b.WriteString(fmt.Sprintf("Points: %d / %d\n\n", donePoints, totalPoints))
 	b.WriteString("## By Status\n\n")
 
-	data, _ := yaml.Marshal(byStatus)
-	b.Write(data)
+	statuses := make([]string, 0, len(byStatus))
+	for s := range byStatus {
+		statuses = append(statuses, s)
+	}
+	sort.Strings(statuses)
+	for _, s := range statuses {
+		fmt.Fprintf(&b, "- %s: %d\n", s, byStatus[s])
+	}
 
 	return b.String()
 }

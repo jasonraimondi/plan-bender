@@ -9,7 +9,7 @@ import (
 )
 
 func TestIssueStats(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		{ID: 1, Status: "done", Points: 2},
 		{ID: 2, Status: "in-progress", Points: 3},
 		{ID: 3, Status: "blocked", Points: 1},
@@ -31,7 +31,7 @@ func TestIssueStats_Empty(t *testing.T) {
 }
 
 func TestBuildGraphJSON(t *testing.T) {
-	issues := []schema.IssueYaml{
+	issues := []schema.Issue{
 		{ID: 1, Name: "First", Status: "done", BlockedBy: []int{}},
 		{ID: 2, Name: "Second", Status: "in-progress", BlockedBy: []int{1}},
 		{ID: 3, Name: "Third", Status: "backlog", BlockedBy: []int{1, 2}},

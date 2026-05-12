@@ -88,7 +88,6 @@ func resolveAgents(rawAgents map[string]*AgentEntry) ([]ResolvedAgent, []FieldEr
 		return nil, nil
 	}
 
-	// Sort for deterministic output
 	names := make([]string, 0, len(rawAgents))
 	for name := range rawAgents {
 		names = append(names, name)
@@ -109,8 +108,19 @@ func resolveAgents(rawAgents map[string]*AgentEntry) ([]ResolvedAgent, []FieldEr
 			continue
 		}
 
-		// Disabled agents are validated but not included in the resolved slice
-		if entry == nil || !entry.Enabled {
+		// `"agent-name": null` decodes to a nil entry (the json package skips
+		// UnmarshalJSON for null pointer map values). Silently treating it as
+		// disabled hides a likely typo — surface it so the user writes `false`
+		// or removes the key.
+		if entry == nil {
+			errs = append(errs, FieldError{
+				Field:   fmt.Sprintf("agents[%s]", name),
+				Message: "must be bool or object, got null",
+			})
+			continue
+		}
+
+		if !entry.Enabled {
 			continue
 		}
 
@@ -123,7 +133,6 @@ func resolveAgents(rawAgents map[string]*AgentEntry) ([]ResolvedAgent, []FieldEr
 			Extra:            entry.Options.Extra,
 		}
 
-		// Apply per-agent overrides over registry defaults
 		if entry.Options.ProjectDir != nil {
 			ra.ProjectDir = *entry.Options.ProjectDir
 		}

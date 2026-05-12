@@ -38,7 +38,7 @@ func RunSubprocess(
 	ctx context.Context,
 	owner *status.Owner,
 	slug string,
-	issue schema.IssueYaml,
+	issue schema.Issue,
 	prompt, worktreePath, plansDir, logDir string,
 	outWriter io.Writer,
 ) SubResult {
@@ -150,7 +150,7 @@ func truncateForNotes(s string) string {
 	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
-func loadIssue(plansDir, slug string, id int) (*schema.IssueYaml, error) {
+func loadIssue(plansDir, slug string, id int) (*schema.Issue, error) {
 	sess, err := planrepo.NewProd(plansDir).Open(slug)
 	if err != nil {
 		return nil, err

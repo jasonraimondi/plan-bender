@@ -15,7 +15,7 @@ If none provided, ask: "Which plan should I sync? (slug)"
 
 ## Step 1 — read the local state
 
-Read `{{.plans_dir}}{slug}/prd.yaml` and list `{{.plans_dir}}{slug}/issues/`.
+Read `{{.plans_dir}}{slug}/prd.json` and list `{{.plans_dir}}{slug}/issues/`.
 
 Capture:
 
@@ -92,7 +92,7 @@ Tell the user:
 - direction that ran
 - counts (created, updated)
 - any per-issue errors
-- if push created the project: the new `linear.project_id` written back to `prd.yaml`
+- if push created the project: the new `linear.project_id` written back to `prd.json`
 
 If the run was `partial`, list the failing issue IDs and their errors. Do not retry automatically — surface and ask.
 
@@ -111,5 +111,5 @@ After a successful sync, if the user might want the other direction next, sugges
 {{if .report_bugs}}
 ## Bug reports
 
-If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
 {{end}}

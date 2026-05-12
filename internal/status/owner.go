@@ -37,9 +37,6 @@ func New(store Store) *Owner {
 //  5. Save the mutated issue through the session, append a structured note
 //     when reason is non-empty, update the Updated date, and emit a single
 //     slog.Info audit line.
-//
-// The ctx is currently used only for cancellation symmetry with future
-// callers; the backend store does not yet take a ctx.
 func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Status, to Status, reason string) error {
 	_ = ctx
 
@@ -194,7 +191,7 @@ func containsStatus(set []Status, s Status) bool {
 // preserving any pre-existing notes with a single newline separator. The
 // single-line shape is required so SyncPull and template rendering tolerate
 // repeated transitions piling notes onto the same issue.
-func appendNote(issue *schema.IssueYaml, from, to Status, reason string) {
+func appendNote(issue *schema.Issue, from, to Status, reason string) {
 	line := fmt.Sprintf("[%s] %s→%s: %s", time.Now().Format("2006-01-02 15:04"), from, to, reason)
 	if issue.Notes == nil || *issue.Notes == "" {
 		issue.Notes = &line

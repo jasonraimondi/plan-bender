@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,33 +10,34 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-const completeIssueYAML = `id: 3
-slug: ship-it
-name: Ship it
-track: intent
-status: in-progress
-priority: high
-points: 2
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2024-01-01"
-tdd: true
-outcome: It ships
-scope: Small
-acceptance_criteria:
-  - It ships
-steps:
-  - "Target — ships"
-use_cases:
-  - UC-1
-`
+const completeIssueYAML = `{
+  "id": 3,
+  "slug": "ship-it",
+  "name": "Ship it",
+  "track": "intent",
+  "status": "in-progress",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2024-01-01",
+  "tdd": true,
+  "outcome": "It ships",
+  "scope": "Small",
+  "acceptance_criteria": ["It ships"],
+  "steps": ["Target — ships"],
+  "use_cases": ["UC-1"]
+}`
 
 func setupCompletePlan(t *testing.T, status string) string {
 	t.Helper()
@@ -44,22 +46,22 @@ func setupCompletePlan(t *testing.T, status string) string {
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(validShipPrd), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(validShipPrd), 0o644))
 
 	body := completeIssueYAML
 	if status != "" {
-		body = strings.Replace(body, "status: in-progress", "status: "+status, 1)
+		body = strings.Replace(body, `"status": "in-progress"`, `"status": "`+status+`"`, 1)
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-ship-it.yaml"), []byte(body), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-ship-it.json"), []byte(body), 0o644))
 	return dir
 }
 
-func loadCompleteIssue(t *testing.T, dir string) schema.IssueYaml {
+func loadCompleteIssue(t *testing.T, dir string) schema.Issue {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "3-ship-it.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "3-ship-it.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &issue))
+	var issue schema.Issue
+	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
 

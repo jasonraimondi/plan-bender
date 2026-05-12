@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"encoding/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -24,18 +25,19 @@ import (
 // populated — including UC-1 in use_cases so cross-ref validation accepts
 // the issues produced by mkAFKIssue — so planrepo.Commit's preflight
 // validation accepts status writes from the prod owner adapter.
-const dispatcherTestPrd = `name: Demo
-slug: demo
-status: active
-created: "2026-04-30"
-updated: "2026-04-30"
-description: demo plan
-why: testing
-outcome: demoed
-use_cases:
-  - id: UC-1
-    description: demo use case
-`
+const dispatcherTestPrd = `{
+  "name": "Demo",
+  "slug": "demo",
+  "status": "active",
+  "created": "2026-04-30",
+  "updated": "2026-04-30",
+  "description": "demo plan",
+  "why": "testing",
+  "outcome": "demoed",
+  "use_cases": [
+    {"id": "UC-1", "description": "demo use case"}
+  ]
+}`
 
 // dispatchFixture holds the artifacts a dispatcher test needs: a real git repo
 // with an initial commit, a plans dir under .plan-bender/plans/, a worktree-side
@@ -60,7 +62,6 @@ func setupDispatch(t *testing.T) *dispatchFixture {
 		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
 	}
-	// First commit so HEAD is valid for branch/worktree creation.
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# repo\n"), 0o644))
 	for _, args := range [][]string{
 		{"add", "README.md"},
@@ -72,22 +73,22 @@ func setupDispatch(t *testing.T) *dispatchFixture {
 
 	plansDir := filepath.Join(root, ".plan-bender", "plans")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "demo", "issues"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.yaml"),
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.json"),
 		[]byte(dispatcherTestPrd), 0o644))
 
 	return &dispatchFixture{root: root, plansDir: plansDir}
 }
 
-func writeIssue(t *testing.T, plansDir string, iss schema.IssueYaml) {
+func writeIssue(t *testing.T, plansDir string, iss schema.Issue) {
 	t.Helper()
-	data, err := yaml.Marshal(iss)
+	data, err := json.MarshalIndent(iss, "", "  ")
 	require.NoError(t, err)
-	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug))
+	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.json", iss.ID, iss.Slug))
 	require.NoError(t, os.WriteFile(path, data, 0o644))
 }
 
-func mkAFKIssue(id int, slug, status string, blockedBy ...int) schema.IssueYaml {
-	return schema.IssueYaml{
+func mkAFKIssue(id int, slug, status string, blockedBy ...int) schema.Issue {
+	return schema.Issue{
 		ID:                 id,
 		Slug:               slug,
 		Name:               slug,
@@ -135,13 +136,13 @@ func newDispatcher(fix *dispatchFixture) *Dispatcher {
 	}
 }
 
-func loadIssueYAML(t *testing.T, plansDir string, id int, slug string) schema.IssueYaml {
+func loadIssueYAML(t *testing.T, plansDir string, id int, slug string) schema.Issue {
 	t.Helper()
-	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.yaml", id, slug))
+	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.json", id, slug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &iss))
+	var iss schema.Issue
+	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }
 
@@ -185,12 +186,12 @@ func TestDispatcher_PartialFailureMergesSuccessOnly(t *testing.T) {
 	body := fmt.Sprintf(`set -e
 prompt=$(cat)
 case "$prompt" in
-  *"slug: alpha"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
     echo '{"text":"alpha done"}'
     exit 0
     ;;
-  *"slug: beta"*)
+  *"\"slug\": \"beta\""*)
     echo "beta failure" >&2
     exit 1
     ;;
@@ -225,12 +226,12 @@ func TestReadyAFK_DispatcherIntegration_RespectsDependencyOrder(t *testing.T) {
 
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
-  *"slug: first"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-first.yaml"
+  *"\"slug\": \"first\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-first.json"
     exit 0
     ;;
-  *"slug: second"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-second.yaml"
+  *"\"slug\": \"second\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/2-second.json"
     exit 0
     ;;
 esac
@@ -260,13 +261,12 @@ func TestEnsureIntegrationBranch_DirectStrategyUsesDefault(t *testing.T) {
 
 func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *testing.T) {
 	fix := setupDispatch(t)
-	d := newDispatcher(fix) // defaults branch_strategy = integration
+	d := newDispatcher(fix)
 
 	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
 	assert.Equal(t, "tester/demo", branch)
 
-	// branch should exist in the repo
 	out, err := exec.Command("git", "-C", fix.root, "branch", "--list", "tester/demo").Output()
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "tester/demo")
@@ -309,7 +309,6 @@ func TestDefaultBranch_RejectsDetachedHEAD(t *testing.T) {
 
 func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {
 	fix := setupDispatch(t)
-	// blocker 1 is blocked status → 2 can never start
 	blocker := mkAFKIssue(1, "ghost", "blocked")
 	dependent := mkAFKIssue(2, "needsghost", "todo", 1)
 	writeIssue(t, fix.plansDir, blocker)
@@ -347,12 +346,12 @@ func TestDispatcher_CompletesMultiIssueBatch(t *testing.T) {
 
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
-  *"slug: alpha"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
     exit 0
     ;;
-  *"slug: beta"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-beta.yaml"
+  *"\"slug\": \"beta\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/2-beta.json"
     exit 0
     ;;
 esac
@@ -386,14 +385,14 @@ func TestDispatcher_RunOneClaimsBeforeSubprocess(t *testing.T) {
 	// branch (proving Claim already ran), then flips the issue to in-review.
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
-  *"status: in-progress"*) ;;
-  *) echo "expected status: in-progress in prompt, got:" >&2; echo "$prompt" >&2; exit 11 ;;
+  *'"status": "in-progress"'*) ;;
+  *) echo "expected in-progress in prompt, got:" >&2; echo "$prompt" >&2; exit 11 ;;
 esac
 case "$prompt" in
-  *"branch: tester/demo--1-alpha"*) ;;
+  *'"branch": "tester/demo--1-alpha"'*) ;;
   *) echo "expected branch stamped in prompt" >&2; exit 12 ;;
 esac
-sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
 exit 0
 `, fix.plansDir)
 	installClaudeStub(t, body)
@@ -414,7 +413,6 @@ exit 0
 func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
-	// Note: deliberately NOT calling installSkillFile so BuildPrompt fails.
 
 	installClaudeStub(t, "exit 0\n")
 
@@ -439,8 +437,8 @@ func TestDispatcher_MergeBackRestoresParentHEAD(t *testing.T) {
 
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
-  *"slug: alpha"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
     exit 0
     ;;
 esac
@@ -468,7 +466,7 @@ func TestDispatcher_DirtyParentRefuses(t *testing.T) {
 	installSkillFile(t, fix.root)
 
 	body := fmt.Sprintf(`prompt=$(cat)
-sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/1-alpha.yaml"
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
 exit 0
 `, fix.plansDir)
 	installClaudeStub(t, body)
@@ -544,8 +542,8 @@ func TestDispatcher_RecoveryUnblocksDependents(t *testing.T) {
 
 	body := fmt.Sprintf(`prompt=$(cat)
 case "$prompt" in
-  *"slug: second"*)
-    sed -i.bak 's/status: in-progress/status: in-review/' "%s/demo/issues/2-second.yaml"
+  *"\"slug\": \"second\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/2-second.json"
     exit 0
     ;;
 esac
@@ -561,7 +559,3 @@ exit 1
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
 }
-
-// quiet a couple of vet/staticcheck unused imports on environments where we
-// trim them — left in for explicit signaling.
-var _ = strings.HasPrefix

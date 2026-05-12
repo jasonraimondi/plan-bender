@@ -19,13 +19,13 @@ const (
 
 // Result is the output of Resolve. Issue is nil when no candidate is ready.
 type Result struct {
-	Issue         *schema.IssueYaml `json:"issue"`
-	Reason        string            `json:"reason"`
-	WasBlocked    bool              `json:"was_blocked"`
-	RequiresHuman bool              `json:"requires_human"`
-	AllDone       bool              `json:"all_done"`
-	BlockedCount  int               `json:"blocked_count"`
-	Skipped       []SkippedIssue    `json:"skipped"`
+	Issue         *schema.Issue  `json:"issue"`
+	Reason        string         `json:"reason"`
+	WasBlocked    bool           `json:"was_blocked"`
+	RequiresHuman bool           `json:"requires_human"`
+	AllDone       bool           `json:"all_done"`
+	BlockedCount  int            `json:"blocked_count"`
+	Skipped       []SkippedIssue `json:"skipped"`
 }
 
 // SkippedIssue is one entry in Result.Skipped — every issue not chosen with a one-line reason.
@@ -37,20 +37,20 @@ type SkippedIssue struct {
 
 // candidate is an internal pairing of an issue with its derived "stale-blocked" flag.
 type candidate struct {
-	issue      *schema.IssueYaml
+	issue      *schema.Issue
 	wasBlocked bool
 }
 
 // ReadyAFK returns every AFK-labeled issue that has no open blockers and is in
 // a non-terminal status (not done, canceled, or in-review). This is the parallel
 // batch input for Dispatcher.RunBatch — order is by issue ID for stability.
-func ReadyAFK(issues []schema.IssueYaml) []schema.IssueYaml {
-	byID := make(map[int]*schema.IssueYaml, len(issues))
+func ReadyAFK(issues []schema.Issue) []schema.Issue {
+	byID := make(map[int]*schema.Issue, len(issues))
 	for i := range issues {
 		byID[issues[i].ID] = &issues[i]
 	}
 
-	var ready []schema.IssueYaml
+	var ready []schema.Issue
 	for i := range issues {
 		iss := issues[i]
 		switch iss.Status {
@@ -74,9 +74,9 @@ func ReadyAFK(issues []schema.IssueYaml) []schema.IssueYaml {
 }
 
 // Resolve picks the single recommended next issue from a plan's issues.
-// Pure read — no I/O, no mutation. See PRD next-issue-resolver for ordering rules.
-func Resolve(issues []schema.IssueYaml) Result {
-	byID := make(map[int]*schema.IssueYaml, len(issues))
+// Pure read — no I/O, no mutation.
+func Resolve(issues []schema.Issue) Result {
+	byID := make(map[int]*schema.Issue, len(issues))
 	for i := range issues {
 		byID[issues[i].ID] = &issues[i]
 	}
@@ -213,7 +213,7 @@ func Resolve(issues []schema.IssueYaml) Result {
 
 // openBlockers returns the subset of dep IDs whose issue is not done|canceled.
 // Unknown IDs count as open so dangling references don't silently mark an issue ready.
-func openBlockers(deps []int, byID map[int]*schema.IssueYaml) []int {
+func openBlockers(deps []int, byID map[int]*schema.Issue) []int {
 	var open []int
 	for _, id := range deps {
 		dep, ok := byID[id]

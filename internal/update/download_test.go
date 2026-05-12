@@ -112,7 +112,6 @@ func TestExtractBinaries(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "#!/bin/fake-agent", string(agentData))
 
-		// README should not be extracted
 		_, err = os.Stat(filepath.Join(dest, "README.md"))
 		assert.True(t, os.IsNotExist(err))
 	})
@@ -173,7 +172,6 @@ func TestDownloadAndVerify(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "#!/bin/fake-agent", string(agentData))
 
-	// Cleanup
 	os.RemoveAll(filepath.Dir(mainBin))
 }
 
@@ -207,8 +205,6 @@ func TestDownloadAndVerify_404(t *testing.T) {
 	_, _, err := DownloadAndVerify("v99.99.99", "linux", "amd64", srv.URL+"/releases/download")
 	require.Error(t, err)
 }
-
-// helpers
 
 func createTestTarball(t *testing.T, files map[string][]byte) string {
 	t.Helper()

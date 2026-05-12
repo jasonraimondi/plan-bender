@@ -144,7 +144,6 @@ func TestCacheTTL_ExpiredCacheRefetches(t *testing.T) {
 	assert.Equal(t, "3.0.0", latest)
 	assert.True(t, isNewer)
 
-	// Verify cache was updated
 	cached, err := readCache(cachePath)
 	require.NoError(t, err)
 	assert.Equal(t, "3.0.0", cached.Version)
@@ -203,7 +202,6 @@ func TestCheckForUpdate_NoCacheDir(t *testing.T) {
 	assert.Equal(t, "2.0.0", latest)
 	assert.True(t, isNewer)
 
-	// Cache file should have been created
 	_, err = os.Stat(cachePath)
 	require.NoError(t, err)
 }

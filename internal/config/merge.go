@@ -1,7 +1,6 @@
 package config
 
-// merge applies a PartialConfig layer on top of a Config base.
-// Semantics: agents merge per-key, other maps merge keys, slices replace entirely, scalars overwrite.
+// merge: agents merge per-key, other maps merge keys, slices replace entirely, scalars overwrite.
 func merge(base Config, layer PartialConfig) Config {
 	out := base
 
@@ -18,8 +17,6 @@ func merge(base Config, layer PartialConfig) Config {
 		out.MaxPoints = *layer.MaxPoints
 	}
 	if layer.Agents != nil {
-		// Per-key merge: copy existing entries then apply layer entries.
-		// Always create a new map to avoid mutating base.rawAgents.
 		newMap := make(map[string]*AgentEntry, len(out.rawAgents)+len(layer.Agents))
 		for k, v := range out.rawAgents {
 			newMap[k] = v

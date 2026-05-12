@@ -10,14 +10,13 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // NewWriteIssueCmd creates the write-issue command.
 func NewWriteIssueCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "write-issue <slug> [file]",
-		Short: "Validate and write an issue YAML file",
+		Short: "Validate and write an issue JSON file",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, _ := os.Getwd()
@@ -33,9 +32,9 @@ func NewWriteIssueCmd() *cobra.Command {
 				return err
 			}
 
-			var issue schema.IssueYaml
-			if err := yaml.Unmarshal(data, &issue); err != nil {
-				return fmt.Errorf("invalid YAML: %w", err)
+			var issue schema.Issue
+			if err := planrepo.StrictUnmarshal(data, &issue); err != nil {
+				return fmt.Errorf("invalid JSON: %w", err)
 			}
 
 			errs := issue.Validate(cfg)
@@ -61,7 +60,7 @@ func NewWriteIssueCmd() *cobra.Command {
 			}
 
 			outPath := filepath.Join(cfg.PlansDir, slug, "issues",
-				fmt.Sprintf("%d-%s.yaml", issue.ID, issue.Slug))
+				fmt.Sprintf("%d-%s.json", issue.ID, issue.Slug))
 			if isAgentMode(cmd) {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]string{
 					"status": "ok",
@@ -78,7 +77,7 @@ func NewWriteIssueCmd() *cobra.Command {
 // UpdateIssue when it already exists in the snapshot. Keeps the command's
 // upsert-style behavior intact while satisfying the session's separate
 // create / update entry points.
-func stageIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
+func stageIssue(sess *planrepo.PlanSession, issue schema.Issue) error {
 	for _, existing := range sess.Snapshot().Issues {
 		if existing.ID == issue.ID {
 			return sess.UpdateIssue(issue)

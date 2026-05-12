@@ -101,6 +101,7 @@ func rootCmd() *cobra.Command {
 		cli.NewDispatchCmd(),
 		cli.NewStatusCmd(),
 		cli.NewRetryCmd(),
+		cli.NewMigrateCmd(),
 	)
 
 	return root

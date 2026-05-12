@@ -40,7 +40,7 @@ func NewStatusCmd() *cobra.Command {
 
 			snap := sess.Snapshot()
 			prd := snap.PRD
-			issues := append([]schema.IssueYaml(nil), snap.Issues...)
+			issues := append([]schema.Issue(nil), snap.Issues...)
 			sort.SliceStable(issues, func(i, j int) bool { return issues[i].ID < issues[j].ID })
 
 			counts, order := countByStatus(issues)
@@ -82,7 +82,7 @@ type issueSummaryJSON struct {
 	Notes     *string  `json:"notes"`
 }
 
-func writeStatusJSON(w io.Writer, prd *schema.PrdYaml, issues []schema.IssueYaml, counts map[string]int, _ []string) error {
+func writeStatusJSON(w io.Writer, prd *schema.PRD, issues []schema.Issue, counts map[string]int, _ []string) error {
 	out := statusJSON{
 		Plan: planSummaryJSON{
 			Slug:     prd.Slug,
@@ -119,7 +119,7 @@ func writeStatusJSON(w io.Writer, prd *schema.PrdYaml, issues []schema.IssueYaml
 	return json.NewEncoder(w).Encode(out)
 }
 
-func writeStatusHuman(w io.Writer, prd *schema.PrdYaml, issues []schema.IssueYaml, counts map[string]int, order []string) {
+func writeStatusHuman(w io.Writer, prd *schema.PRD, issues []schema.Issue, counts map[string]int, order []string) {
 	fmt.Fprintf(w, "Plan: %s", prd.Slug)
 	if prd.Name != "" && prd.Name != prd.Slug {
 		fmt.Fprintf(w, " (%s)", prd.Name)
@@ -176,7 +176,7 @@ func writeStatusHuman(w io.Writer, prd *schema.PrdYaml, issues []schema.IssueYam
 // countByStatus tallies issues per status and returns a stable display order:
 // statuses observed in this plan, with a canonical ordering for the common
 // states. Unknown statuses are appended in the order first seen.
-func countByStatus(issues []schema.IssueYaml) (map[string]int, []string) {
+func countByStatus(issues []schema.Issue) (map[string]int, []string) {
 	counts := make(map[string]int, 8)
 	seen := make([]string, 0, 8)
 	for _, iss := range issues {

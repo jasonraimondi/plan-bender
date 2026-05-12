@@ -11,43 +11,40 @@ var validPrdStatuses = map[string]bool{
 
 // UseCase is a PRD use case entry.
 type UseCase struct {
-	ID          string `yaml:"id" json:"id"`
-	Description string `yaml:"description" json:"description"`
+	ID          string `json:"id"`
+	Description string `json:"description"`
 }
 
 // LinearRef holds Linear integration metadata on a PRD.
 type LinearRef struct {
-	ProjectID string `yaml:"project_id,omitempty" json:"project_id,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
 }
 
-// PrdYaml represents a PRD YAML file.
-type PrdYaml struct {
-	Name        string `yaml:"name" json:"name"`
-	Slug        string `yaml:"slug" json:"slug"`
-	Status      string `yaml:"status" json:"status"`
-	Created     string `yaml:"created" json:"created"`
-	Updated     string `yaml:"updated" json:"updated"`
-	Description string `yaml:"description" json:"description"`
-	Why         string `yaml:"why" json:"why"`
-	Outcome     string `yaml:"outcome" json:"outcome"`
-	// Prose fields use ProseList so authors can write list items containing
-	// `: ` without having to quote them. Identifier-shaped fields (slugs,
-	// IDs, structured records like UseCases) keep their stricter types.
-	InScope       ProseList  `yaml:"in_scope,omitempty" json:"in_scope,omitempty"`
-	OutOfScope    ProseList  `yaml:"out_of_scope,omitempty" json:"out_of_scope,omitempty"`
-	UseCases      []UseCase  `yaml:"use_cases,omitempty" json:"use_cases,omitempty"`
-	Decisions     ProseList  `yaml:"decisions,omitempty" json:"decisions,omitempty"`
-	OpenQuestions ProseList  `yaml:"open_questions,omitempty" json:"open_questions,omitempty"`
-	Risks         ProseList  `yaml:"risks,omitempty" json:"risks,omitempty"`
-	Validation    ProseList  `yaml:"validation,omitempty" json:"validation,omitempty"`
-	Notes         *string    `yaml:"notes,omitempty" json:"notes,omitempty"`
-	DevCommand    *string    `yaml:"dev_command,omitempty" json:"dev_command,omitempty"`
-	BaseURL       *string    `yaml:"base_url,omitempty" json:"base_url,omitempty"`
-	Linear        *LinearRef `yaml:"linear,omitempty" json:"linear,omitempty"`
+// PRD represents a PRD JSON file.
+type PRD struct {
+	Name          string     `json:"name"`
+	Slug          string     `json:"slug"`
+	Status        string     `json:"status"`
+	Created       string     `json:"created"`
+	Updated       string     `json:"updated"`
+	Description   string     `json:"description"`
+	Why           string     `json:"why"`
+	Outcome       string     `json:"outcome"`
+	InScope       []string   `json:"in_scope,omitempty"`
+	OutOfScope    []string   `json:"out_of_scope,omitempty"`
+	UseCases      []UseCase  `json:"use_cases,omitempty"`
+	Decisions     []string   `json:"decisions,omitempty"`
+	OpenQuestions []string   `json:"open_questions,omitempty"`
+	Risks         []string   `json:"risks,omitempty"`
+	Validation    []string   `json:"validation,omitempty"`
+	Notes         *string    `json:"notes,omitempty"`
+	DevCommand    *string    `json:"dev_command,omitempty"`
+	BaseURL       *string    `json:"base_url,omitempty"`
+	Linear        *LinearRef `json:"linear,omitempty"`
 }
 
 // Validate checks required fields, enum values, and date formats.
-func (p *PrdYaml) Validate() []ValidationError {
+func (p *PRD) Validate() []ValidationError {
 	var errs []ValidationError
 
 	if p.Name == "" {

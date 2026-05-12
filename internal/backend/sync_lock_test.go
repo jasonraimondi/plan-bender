@@ -43,12 +43,12 @@ func tryOpenWithin(plans *planrepo.Plans, slug string, timeout time.Duration) bo
 func TestSyncPush_NoLockDuringRemoteCreateIssue(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{testIssue(1)})
+	fix := setupSyncTest(t, prd, []*schema.Issue{testIssue(1)})
 
 	probed := false
 	probeOK := false
 	be := &mockBackend{
-		createIssue: func(_ context.Context, issue *schema.IssueYaml, _ string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, issue *schema.Issue, _ string) (RemoteIssue, error) {
 			if !probed {
 				probed = true
 				probeOK = tryOpenWithin(fix.plans, "test", 500*time.Millisecond)
@@ -73,7 +73,7 @@ func TestSyncPull_NoLockDuringRemotePullProject(t *testing.T) {
 	linID := "lin-1"
 	issue := testIssue(1)
 	issue.LinearID = &linID
-	fix := setupSyncTest(t, prd, []*schema.IssueYaml{issue})
+	fix := setupSyncTest(t, prd, []*schema.Issue{issue})
 
 	probeOK := false
 	be := &mockBackend{
@@ -115,7 +115,7 @@ func TestSyncPush_NoLockDuringRemoteCreateProject(t *testing.T) {
 
 	probeOK := false
 	be := &mockBackend{
-		createProject: func(_ context.Context, _ *schema.PrdYaml) (RemoteProject, error) {
+		createProject: func(_ context.Context, _ *schema.PRD) (RemoteProject, error) {
 			probeOK = tryOpenWithin(fix.plans, "test", 500*time.Millisecond)
 			return RemoteProject{ID: "new-proj"}, nil
 		},

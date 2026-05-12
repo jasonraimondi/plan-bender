@@ -28,7 +28,7 @@ func TestOpenOrCreate_FreshSlugReturnsEmptySnapshot(t *testing.T) {
 func TestOpenOrCreate_ExistingPlanLoadsSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -49,6 +49,22 @@ func TestOpenOrCreate_HalfBuiltPlanDirReturnsLoadError(t *testing.T) {
 	require.Error(t, err, "incomplete plan dir must surface load error")
 }
 
+// TestOpenOrCreate_LegacyYAMLHintsAtMigrate ensures the loader nudges users
+// who upgraded the binary without running `pb migrate` toward the fix instead
+// of returning a bare "prd.json does not exist" error.
+func TestOpenOrCreate_LegacyYAMLHintsAtMigrate(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "demo", "issues"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.yaml"),
+		[]byte("name: Demo\nslug: demo\n"), 0o644))
+
+	repo := NewProd(plansDir)
+	_, err := repo.OpenOrCreate("demo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pb migrate")
+	assert.Contains(t, err.Error(), "prd.yaml")
+}
+
 func TestOpenOrCreate_FreshAllowsCommit(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
@@ -62,9 +78,9 @@ func TestOpenOrCreate_FreshAllowsCommit(t *testing.T) {
 	require.NoError(t, sess.UpdatePrd(prd))
 	require.NoError(t, sess.Commit(testCfg()))
 
-	body, err := os.ReadFile(filepath.Join(plansDir, "fresh", "prd.yaml"))
+	body, err := os.ReadFile(filepath.Join(plansDir, "fresh", "prd.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(body), "name: Fresh Plan")
+	assert.Contains(t, string(body), `"name": "Fresh Plan"`)
 }
 
 func TestFindIssueProject_DeterministicSorted(t *testing.T) {
@@ -72,10 +88,10 @@ func TestFindIssueProject_DeterministicSorted(t *testing.T) {
 	// Write two plans where both contain an issue prefixed "5-": only the
 	// alphabetically-first slug should win the lookup.
 	writePlan(t, plansDir, "zeta", validPrd, map[string]string{
-		"5-z.yaml": issueYAML(5, "z"),
+		"5-z.json": issueYAML(5, "z"),
 	})
 	writePlan(t, plansDir, "alpha", validPrd, map[string]string{
-		"5-a.yaml": issueYAML(5, "a"),
+		"5-a.json": issueYAML(5, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -87,11 +103,11 @@ func TestFindIssueProject_DeterministicSorted(t *testing.T) {
 func TestFindIssueProject_FindsAcrossPlans(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "first", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 	writePlan(t, plansDir, "second", validPrd, map[string]string{
-		"2-b.yaml": issueYAML(2, "b"),
-		"3-c.yaml": issueYAML(3, "c"),
+		"2-b.json": issueYAML(2, "b"),
+		"3-c.json": issueYAML(3, "c"),
 	})
 
 	repo := NewProd(plansDir)
@@ -103,7 +119,7 @@ func TestFindIssueProject_FindsAcrossPlans(t *testing.T) {
 func TestFindIssueProject_MissingReturnsError(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -118,10 +134,10 @@ func TestFindIssueProject_SkipsHiddenAndArchive(t *testing.T) {
 	// expects findProject to ignore it.
 	archivedIssuesDir := filepath.Join(plansDir, ".archive", "old", "issues")
 	require.NoError(t, os.MkdirAll(archivedIssuesDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(archivedIssuesDir, "7-x.yaml"), []byte(issueYAML(7, "x")), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(archivedIssuesDir, "7-x.json"), []byte(issueYAML(7, "x")), 0o644))
 
 	writePlan(t, plansDir, "live", validPrd, map[string]string{
-		"7-y.yaml": issueYAML(7, "y"),
+		"7-y.json": issueYAML(7, "y"),
 	})
 
 	repo := NewProd(plansDir)

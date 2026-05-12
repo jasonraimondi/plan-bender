@@ -17,11 +17,11 @@ func testBackend(t *testing.T) (Backend, string) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
 	cfg.PlansDir = dir
-	return NewYAMLFS(cfg), dir
+	return NewLocalFS(cfg), dir
 }
 
-func testPrd() *schema.PrdYaml {
-	return &schema.PrdYaml{
+func testPrd() *schema.PRD {
+	return &schema.PRD{
 		Name:        "Test",
 		Slug:        "test",
 		Status:      "active",
@@ -33,8 +33,8 @@ func testPrd() *schema.PrdYaml {
 	}
 }
 
-func testIssue(id int) *schema.IssueYaml {
-	return &schema.IssueYaml{
+func testIssue(id int) *schema.Issue {
+	return &schema.Issue{
 		ID:                 id,
 		Slug:               "test-issue",
 		Name:               "Test issue",
@@ -55,7 +55,7 @@ func testIssue(id int) *schema.IssueYaml {
 	}
 }
 
-func TestFactory_YAMLFS(t *testing.T) {
+func TestFactory_LocalFS(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.PlansDir = t.TempDir()
 	b, err := New(context.Background(), cfg)
@@ -72,10 +72,8 @@ func TestCreateProject(t *testing.T) {
 	assert.Equal(t, "test", result.ID)
 	assert.Equal(t, "Test", result.Name)
 
-	// prd.yaml exists
-	_, err = os.Stat(filepath.Join(dir, "test", "prd.yaml"))
+	_, err = os.Stat(filepath.Join(dir, "test", "prd.json"))
 	assert.NoError(t, err)
-	// issues dir exists
 	_, err = os.Stat(filepath.Join(dir, "test", "issues"))
 	assert.NoError(t, err)
 }
@@ -92,7 +90,7 @@ func TestCreateIssue(t *testing.T) {
 	assert.Equal(t, "1", result.ID)
 	assert.Equal(t, "Test issue", result.Title)
 
-	path := filepath.Join(dir, "test", "issues", "1-test-issue.yaml")
+	path := filepath.Join(dir, "test", "issues", "1-test-issue.json")
 	_, err = os.Stat(path)
 	assert.NoError(t, err)
 }
@@ -178,8 +176,6 @@ func TestUpdateIssue_FindsProjectInSortedOrder(t *testing.T) {
 	_, err = b.CreateProject(ctx, prdZeta)
 	require.NoError(t, err)
 
-	// Same issue ID lives in both plans with different slugs so we can tell
-	// which one UpdateIssue actually wrote to.
 	alphaIssue := testIssue(7)
 	alphaIssue.Slug = "in-alpha"
 	_, err = b.CreateIssue(ctx, alphaIssue, "alpha")
@@ -189,25 +185,21 @@ func TestUpdateIssue_FindsProjectInSortedOrder(t *testing.T) {
 	_, err = b.CreateIssue(ctx, zetaIssue, "zeta")
 	require.NoError(t, err)
 
-	// UpdateIssue does not receive a project hint — it must look up the
-	// project itself. Sorted scan picks "alpha" first.
 	bumped := testIssue(7)
 	bumped.Slug = "in-alpha"
 	bumped.Status = "in-progress"
 	_, err = b.UpdateIssue(ctx, bumped)
 	require.NoError(t, err)
 
-	// Alpha's file should reflect the new status.
-	alphaPath := filepath.Join(dir, "alpha", "issues", "7-in-alpha.yaml")
+	alphaPath := filepath.Join(dir, "alpha", "issues", "7-in-alpha.json")
 	data, err := os.ReadFile(alphaPath)
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "status: in-progress")
+	assert.Contains(t, string(data), `"status": "in-progress"`)
 
-	// Zeta's file should be untouched.
-	zetaPath := filepath.Join(dir, "zeta", "issues", "7-in-zeta.yaml")
+	zetaPath := filepath.Join(dir, "zeta", "issues", "7-in-zeta.json")
 	data, err = os.ReadFile(zetaPath)
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "status: backlog")
+	assert.Contains(t, string(data), `"status": "backlog"`)
 }
 
 // TestUpdateIssue_MissingIssueReports surfaces the not-found error from

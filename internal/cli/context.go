@@ -12,8 +12,8 @@ import (
 )
 
 type contextFullJSON struct {
-	Prd          *schema.PrdYaml    `json:"prd"`
-	Issues       []schema.IssueYaml `json:"issues"`
+	Prd          *schema.PRD    `json:"prd"`
+	Issues       []schema.Issue `json:"issues"`
 	Dependencies plan.Graph         `json:"dependencies"`
 	Stats        plan.Stats         `json:"stats"`
 }

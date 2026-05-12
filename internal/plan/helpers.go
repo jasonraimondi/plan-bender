@@ -31,7 +31,7 @@ type Graph struct {
 }
 
 // IssueStats computes aggregate statistics for a set of issues.
-func IssueStats(issues []schema.IssueYaml) Stats {
+func IssueStats(issues []schema.Issue) Stats {
 	var s Stats
 	for _, iss := range issues {
 		s.Total++
@@ -48,7 +48,7 @@ func IssueStats(issues []schema.IssueYaml) Stats {
 }
 
 // BuildGraphJSON builds a dependency graph from a set of issues.
-func BuildGraphJSON(issues []schema.IssueYaml) Graph {
+func BuildGraphJSON(issues []schema.Issue) Graph {
 	var nodes []GraphNode
 	var edges []GraphEdge
 

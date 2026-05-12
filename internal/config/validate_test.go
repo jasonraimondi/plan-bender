@@ -107,6 +107,20 @@ func TestValidate_UnknownAgentInDisabledEntry(t *testing.T) {
 	assertFieldError(t, err, "agents[typo-agent]")
 }
 
+// TestValidate_NullAgentEntryRejected guards against `"agent-name": null`
+// silently decoding to a nil entry that resolveAgents previously skipped as
+// disabled. Surface it so the user writes `false` or removes the key.
+func TestValidate_NullAgentEntryRejected(t *testing.T) {
+	cfg := Defaults()
+	cfg.rawAgents = map[string]*AgentEntry{
+		"claude-code": {Enabled: true},
+		"openclaw":    nil,
+	}
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "agents[openclaw]")
+}
+
 func TestValidate_UnknownAgentEnabled(t *testing.T) {
 	cfg := Defaults()
 	cfg.rawAgents = map[string]*AgentEntry{

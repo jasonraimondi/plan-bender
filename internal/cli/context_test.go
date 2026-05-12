@@ -24,55 +24,68 @@ func setupContextTestDir(t *testing.T) string {
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
 
-	prd := `name: Test Plan
-slug: test-plan
-status: active
-created: "2025-01-01"
-updated: "2025-01-02"
-description: A test plan
-why: Testing
-outcome: Tests pass
-`
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), []byte(prd), 0o644))
+	prd := `{
+  "name": "Test Plan",
+  "slug": "test-plan",
+  "status": "active",
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "description": "A test plan",
+  "why": "Testing",
+  "outcome": "Tests pass"
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(prd), 0o644))
 
-	issue1 := `id: 1
-slug: first
-name: First Issue
-track: intent
-status: done
-priority: high
-points: 2
-labels: []
-blocked_by: []
-blocking: [2]
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: done
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
-	issue2 := `id: 2
-slug: second
-name: Second Issue
-track: experience
-status: in-progress
-priority: medium
-points: 3
-labels: []
-blocked_by: [1]
-blocking: []
-created: "2025-01-01"
-updated: "2025-01-02"
-outcome: done
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
-	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.yaml"), []byte(issue1), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "002-second.yaml"), []byte(issue2), 0o644))
+	issue1 := `{
+  "id": 1,
+  "slug": "first",
+  "name": "First Issue",
+  "track": "intent",
+  "status": "done",
+  "priority": "high",
+  "points": 2,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [2],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "done",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
+	issue2 := `{
+  "id": 2,
+  "slug": "second",
+  "name": "Second Issue",
+  "track": "experience",
+  "status": "in-progress",
+  "priority": "medium",
+  "points": 3,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": [1],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2025-01-01",
+  "updated": "2025-01-02",
+  "tdd": false,
+  "outcome": "done",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
+	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "002-second.json"), []byte(issue2), 0o644))
 
 	require.NoError(t, os.Chdir(dir))
 	return dir
@@ -112,22 +125,18 @@ func TestContextCmd_WithSlug_ReturnsFullContext(t *testing.T) {
 	var ctx contextFullJSON
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &ctx))
 
-	// PRD
 	require.NotNil(t, ctx.Prd)
 	assert.Equal(t, "Test Plan", ctx.Prd.Name)
 	assert.Equal(t, "active", ctx.Prd.Status)
 
-	// Issues
 	require.Len(t, ctx.Issues, 2)
 	assert.Equal(t, 1, ctx.Issues[0].ID)
 	assert.Equal(t, 2, ctx.Issues[1].ID)
 
-	// Dependencies
 	require.Len(t, ctx.Dependencies.Nodes, 2)
 	require.Len(t, ctx.Dependencies.Edges, 1)
 	assert.Equal(t, plan.GraphEdge{From: 1, To: 2}, ctx.Dependencies.Edges[0])
 
-	// Stats
 	assert.Equal(t, 2, ctx.Stats.Total)
 	assert.Equal(t, 1, ctx.Stats.Done)
 	assert.Equal(t, 5, ctx.Stats.TotalPoints)
@@ -172,8 +181,8 @@ func TestContextCmd_NoSlug_EmptyPlans(t *testing.T) {
 
 func TestContextFullJSON_MarshalShape(t *testing.T) {
 	ctx := contextFullJSON{
-		Prd:    &schema.PrdYaml{Name: "Test"},
-		Issues: []schema.IssueYaml{{ID: 1}},
+		Prd:    &schema.PRD{Name: "Test"},
+		Issues: []schema.Issue{{ID: 1}},
 		Dependencies: plan.Graph{
 			Nodes: []plan.GraphNode{{ID: 1, Name: "A", Status: "done"}},
 			Edges: []plan.GraphEdge{{From: 1, To: 2}},

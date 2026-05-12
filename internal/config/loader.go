@@ -1,16 +1,16 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"gopkg.in/yaml.v3"
+	"strings"
 )
 
-// Load reads config from 3 layers (global, project, local) and merges them over defaults.
 func Load(root string) (Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -22,19 +22,33 @@ func Load(root string) (Config, error) {
 func loadWithHome(root, home string) (Config, error) {
 	base := Defaults()
 
-	paths := []string{
-		filepath.Join(home, ".config", "plan-bender", "defaults.yaml"),
-		filepath.Join(root, ".plan-bender.yaml"),
-		filepath.Join(root, ".plan-bender.local.yaml"),
+	// Legacy-YAML hints are fatal at project/local layers (an unmigrated
+	// project would hide its entire config behind defaults) but only a
+	// warning at the global layer — otherwise a stale `~/.config` yaml
+	// breaks every pb command for users whose project is already migrated.
+	layers := []struct {
+		path  string
+		fatal bool
+	}{
+		{filepath.Join(home, ".config", "plan-bender", "defaults.json"), false},
+		{filepath.Join(root, ".plan-bender.json"), true},
+		{filepath.Join(root, ".plan-bender.local.json"), true},
 	}
 
-	for _, p := range paths {
-		layer, err := readPartial(p)
+	for _, l := range layers {
+		layer, err := readPartial(l.path)
 		if errors.Is(err, fs.ErrNotExist) {
+			if yamlPath := legacyYAMLSibling(l.path); yamlPath != "" {
+				msg := fmt.Sprintf("found legacy %s but no .json sibling — run 'pb migrate' to convert", yamlPath)
+				if l.fatal {
+					return Config{}, errors.New(msg)
+				}
+				fmt.Fprintln(os.Stderr, "warning: "+msg)
+			}
 			continue
 		}
 		if err != nil {
-			return Config{}, fmt.Errorf("loading %s: %w", filepath.Base(p), err)
+			return Config{}, fmt.Errorf("loading %s: %w", filepath.Base(l.path), err)
 		}
 		base = merge(base, layer)
 	}
@@ -46,6 +60,18 @@ func loadWithHome(root, home string) (Config, error) {
 	}
 
 	return base, nil
+}
+
+// legacyYAMLSibling returns the path of a pre-migration .yaml file sitting
+// next to the missing .json, or "" when no legacy file is present. Used to
+// surface a clear "run pb migrate" hint instead of silently falling through
+// to defaults when an unmigrated config exists.
+func legacyYAMLSibling(jsonPath string) string {
+	yamlPath := strings.TrimSuffix(jsonPath, ".json") + ".yaml"
+	if _, err := os.Stat(yamlPath); err == nil {
+		return yamlPath
+	}
+	return ""
 }
 
 func readPartial(path string) (PartialConfig, error) {
@@ -60,31 +86,26 @@ func readPartial(path string) (PartialConfig, error) {
 	}
 
 	var partial PartialConfig
-	if err := yaml.Unmarshal(data, &partial); err != nil {
-		return PartialConfig{}, fmt.Errorf("parsing YAML: %w", err)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&partial); err != nil {
+		return PartialConfig{}, fmt.Errorf("parsing JSON: %w", err)
 	}
 
 	return partial, nil
 }
 
-// migrateDeprecatedKeys rewrites removed config keys in raw YAML before typed unmarshal.
-// install_target → hard error (user must fix manually).
-// backend: linear → linear.enabled: true (silent migration).
-// backend: yaml-fs → dropped (default behavior).
-// agents: [seq] → agents: {name: true, ...} (silent migration to map format).
-// review_with_user: [seq] → review_with_user: <bool> (silent migration; non-empty → true).
+// migrateDeprecatedKeys rewrites removed config keys in raw JSON before typed unmarshal.
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return data, nil // let the caller handle parse errors
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return data, nil
 	}
 	if _, ok := raw["install_target"]; ok {
-		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  claude-code: true\nin your .plan-bender.yaml")
+		return nil, fmt.Errorf("install_target is removed — replace with agents:\n  \"claude-code\": true\nin your .plan-bender.json")
 	}
 
 	modified := false
 
-	// Migrate old agents array format to map format
 	if agentsVal, ok := raw["agents"]; ok {
 		if agentsList, ok := agentsVal.([]any); ok {
 			agentsMap := make(map[string]any, len(agentsList))
@@ -98,7 +119,6 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 		}
 	}
 
-	// Migrate old review_with_user []string to bool (any non-empty list → true).
 	if rwuVal, ok := raw["review_with_user"]; ok {
 		if rwuList, ok := rwuVal.([]any); ok {
 			raw["review_with_user"] = len(rwuList) > 0
@@ -126,7 +146,7 @@ func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 		return data, nil
 	}
 
-	out, err := yaml.Marshal(raw)
+	out, err := json.Marshal(raw)
 	if err != nil {
 		return data, nil
 	}

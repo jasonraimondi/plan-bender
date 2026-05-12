@@ -10,30 +10,34 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-const worktreeIssueYAML = `id: 7
-slug: middleware
-name: Middleware
-track: intent
-status: todo
-priority: high
-points: 2
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2026-04-30"
-tdd: true
-outcome: It works
-scope: Small
-acceptance_criteria: ["It works"]
-steps: ["Target — works"]
-use_cases: ["UC-1"]
-`
+const worktreeIssueYAML = `{
+  "id": 7,
+  "slug": "middleware",
+  "name": "Middleware",
+  "track": "intent",
+  "status": "todo",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2026-04-30",
+  "tdd": true,
+  "outcome": "It works",
+  "scope": "Small",
+  "acceptance_criteria": ["It works"],
+  "steps": ["Target — works"],
+  "use_cases": ["UC-1"]
+}`
 
 func setupWorktreeRepo(t *testing.T) string {
 	t.Helper()
@@ -52,9 +56,9 @@ func setupWorktreeRepo(t *testing.T) string {
 
 	plansDir := filepath.Join(root, ".plan-bender", "plans", "auth", "issues")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "../prd.yaml"), []byte(validAuthPrd), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.yaml"), []byte(worktreeIssueYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.yaml"), []byte("plans_dir: ./.plan-bender/plans/\nagents:\n  claude-code: true\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "../prd.json"), []byte(validAuthPrd), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.json"), []byte(worktreeIssueYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"), []byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}}`), 0o644))
 
 	require.NoError(t, os.Chdir(root))
 	return root
@@ -104,13 +108,13 @@ func TestWorktreeCreate_HumanMode(t *testing.T) {
 	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch)
 }
 
-func loadWorktreeIssue(t *testing.T, root string) schema.IssueYaml {
+func loadWorktreeIssue(t *testing.T, root string) schema.Issue {
 	t.Helper()
-	path := filepath.Join(root, ".plan-bender", "plans", "auth", "issues", "7-middleware.yaml")
+	path := filepath.Join(root, ".plan-bender", "plans", "auth", "issues", "7-middleware.json")
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &iss))
+	var iss schema.Issue
+	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }
 

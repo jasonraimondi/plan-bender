@@ -11,9 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mkdirAll and writeFile are tiny helpers shared with other tests in this
-// package. They live here because adapter tests are the natural home for
-// thin filesystem helpers used in tests.
 func mkdirAll(t *testing.T, dir string) error {
 	t.Helper()
 	return os.MkdirAll(dir, 0o755)
@@ -27,7 +24,7 @@ func writeFile(t *testing.T, path, body string) error {
 func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	wantErr := errors.New("lock denied")
@@ -49,7 +46,7 @@ func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 func TestNew_LockReleasedExactlyOnceOnClose(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	var releases int
@@ -91,12 +88,9 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 }
 
 func TestNewProd_HasAllProductionAdaptersWired(t *testing.T) {
-	// Constructing NewProd and immediately using its adapters end-to-end
-	// confirms that all four adapters (FS, Write, Mkdir, Lock) are non-nil
-	// and wired to working production implementations.
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.yaml": issueYAML(1, "a"),
+		"1-a.json": issueYAML(1, "a"),
 	})
 
 	repo := NewProd(plansDir)

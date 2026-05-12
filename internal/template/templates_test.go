@@ -23,11 +23,11 @@ func fixtureContext() map[string]any {
 			{"name": "Interview", "description": "Stress-test your plan", "skill": "bender-interview-me"},
 			{"name": "Write PRD", "description": "Create a PRD", "skill": "bender-write-prd"},
 		},
-		"custom_fields":     []map[string]any{},
+		"custom_fields":      []map[string]any{},
 		"track_descriptions": []map[string]string{},
-		"agent":            "claude-code",
-		"review_with_user": false,
-		"report_bugs":      false,
+		"agent":              "claude-code",
+		"review_with_user":   false,
+		"report_bugs":        false,
 		"commands": map[string]string{
 			"context":         "plan-bender-agent context",
 			"validate":        "plan-bender-agent validate",
@@ -281,7 +281,6 @@ func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 		})
 	}
 
-	// Orchestrator surfaces both push and pull
 	out, err := Render("bender-orchestrator.skill.tmpl", tmpls["bender-orchestrator.skill.tmpl"], ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent sync linear push")
@@ -328,16 +327,13 @@ func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
 	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
 	require.NoError(t, err)
 
-	// Skill body is now one dispatch call instead of inline worktree prose.
 	assert.Contains(t, out, "plan-bender-agent dispatch")
 
-	// All parallel-worktree and merge-back prose lives in Go now.
 	assert.NotContains(t, out, "git worktree add")
 	assert.NotContains(t, out, "git worktree remove")
 	assert.NotContains(t, out, "git merge --no-ff")
 	assert.NotContains(t, out, "ultrathink")
 
-	// Combined PR section (§6) is preserved for the human to land the work.
 	assert.Contains(t, out, "Open the combined PR")
 }
 

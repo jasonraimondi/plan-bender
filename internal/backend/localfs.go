@@ -10,21 +10,20 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-// yamlFS implements Backend using local YAML files. All persistence flows
+// localFS implements Backend using local JSON files. All persistence flows
 // through a planrepo.Plans repository so the local backend gets the same
 // session locking, atomic writes, and full-snapshot validation as the rest
 // of the codebase.
-type yamlFS struct {
+type localFS struct {
 	plans *planrepo.Plans
 	cfg   config.Config
 }
 
-// NewYAMLFS creates a yaml-fs backend from config.
-func NewYAMLFS(cfg config.Config) Backend {
-	return &yamlFS{plans: planrepo.NewProd(cfg.PlansDir), cfg: cfg}
+func NewLocalFS(cfg config.Config) Backend {
+	return &localFS{plans: planrepo.NewProd(cfg.PlansDir), cfg: cfg}
 }
 
-func (y *yamlFS) CreateProject(_ context.Context, prd *schema.PrdYaml) (RemoteProject, error) {
+func (y *localFS) CreateProject(_ context.Context, prd *schema.PRD) (RemoteProject, error) {
 	sess, err := y.plans.OpenOrCreate(prd.Slug)
 	if err != nil {
 		return RemoteProject{}, err
@@ -39,7 +38,7 @@ func (y *yamlFS) CreateProject(_ context.Context, prd *schema.PrdYaml) (RemotePr
 	return RemoteProject{ID: prd.Slug, Name: prd.Name}, nil
 }
 
-func (y *yamlFS) CreateIssue(_ context.Context, issue *schema.IssueYaml, projectID string) (RemoteIssue, error) {
+func (y *localFS) CreateIssue(_ context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
 	sess, err := y.plans.Open(projectID)
 	if err != nil {
 		return RemoteIssue{}, err
@@ -54,7 +53,7 @@ func (y *yamlFS) CreateIssue(_ context.Context, issue *schema.IssueYaml, project
 	return issueToRemote(issue), nil
 }
 
-func (y *yamlFS) UpdateIssue(_ context.Context, issue *schema.IssueYaml) (RemoteIssue, error) {
+func (y *localFS) UpdateIssue(_ context.Context, issue *schema.Issue) (RemoteIssue, error) {
 	slug, err := y.plans.FindIssueProject(issue.ID)
 	if err != nil {
 		return RemoteIssue{}, err
@@ -73,7 +72,7 @@ func (y *yamlFS) UpdateIssue(_ context.Context, issue *schema.IssueYaml) (Remote
 	return issueToRemote(issue), nil
 }
 
-func (y *yamlFS) PullIssue(_ context.Context, remoteID string) (RemoteIssue, error) {
+func (y *localFS) PullIssue(_ context.Context, remoteID string) (RemoteIssue, error) {
 	parts := strings.SplitN(remoteID, "/", 2)
 	if len(parts) != 2 {
 		return RemoteIssue{}, fmt.Errorf("invalid remoteId format: %s", remoteID)
@@ -98,7 +97,7 @@ func (y *yamlFS) PullIssue(_ context.Context, remoteID string) (RemoteIssue, err
 	return RemoteIssue{}, fmt.Errorf("issue not found: %s", remoteID)
 }
 
-func (y *yamlFS) PullProject(_ context.Context, projectID string) (PullProjectResult, error) {
+func (y *localFS) PullProject(_ context.Context, projectID string) (PullProjectResult, error) {
 	sess, err := y.plans.Open(projectID)
 	if err != nil {
 		return PullProjectResult{}, err
@@ -115,11 +114,11 @@ func (y *yamlFS) PullProject(_ context.Context, projectID string) (PullProjectRe
 	}, nil
 }
 
-// upsertIssue lets CreateIssue act as create-or-update. Existing yamlFS
+// upsertIssue lets CreateIssue act as create-or-update. Existing localFS
 // callers (notably SyncPush) treat CreateIssue as a write entry point and
 // may re-run after a partial failure, so silently routing same-id calls to
 // UpdateIssue preserves prior behavior with the session API.
-func upsertIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
+func upsertIssue(sess *planrepo.PlanSession, issue schema.Issue) error {
 	for _, existing := range sess.Snapshot().Issues {
 		if existing.ID == issue.ID {
 			return sess.UpdateIssue(issue)
@@ -128,7 +127,7 @@ func upsertIssue(sess *planrepo.PlanSession, issue schema.IssueYaml) error {
 	return sess.CreateIssue(issue)
 }
 
-func issueToRemote(issue *schema.IssueYaml) RemoteIssue {
+func issueToRemote(issue *schema.Issue) RemoteIssue {
 	assignee := ""
 	if issue.Assignee != nil {
 		assignee = *issue.Assignee

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 )
 
-// prodFS returns an os.DirFS rooted at dir.
 func prodFS(dir string) fs.FS {
 	return os.DirFS(dir)
 }
@@ -38,7 +37,6 @@ func AtomicWrite(path string, data []byte, perm fs.FileMode) error {
 	return os.Rename(tmpName, path)
 }
 
-// prodMkdir creates a directory tree.
 func prodMkdir(path string, perm fs.FileMode) error {
 	return os.MkdirAll(path, perm)
 }

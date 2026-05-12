@@ -13,39 +13,44 @@ import (
 )
 
 // validPRD with no issues lets us isolate parse failures to the issue file.
-const malformedTestPRD = `name: Bad
-slug: bad
-status: active
-created: "2026-01-01"
-updated: "2026-01-02"
-description: a plan
-why: testing
-outcome: ok
-`
+const malformedTestPRD = `{
+  "name": "Bad",
+  "slug": "bad",
+  "status": "active",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "a plan",
+  "why": "testing",
+  "outcome": "ok"
+}`
 
-// malformedIssue puts a string into blocked_by (declared as []int). yaml.v3
-// reports the offending list-item line as a TypeError, which exercises the
-// same line-attribution path the colon-in-list footgun used to before the
-// lenient list decoder accepted that case as valid prose.
-const malformedTestIssue = `id: 1
-slug: bad
-name: Bad Issue
-track: intent
-status: todo
-priority: high
-points: 1
-labels: []
-blocked_by:
-  - not-an-int
-blocking: []
-created: "2026-01-01"
-updated: "2026-01-02"
-outcome: done
-scope: small
-acceptance_criteria: []
-steps: []
-use_cases: []
-`
+// malformedIssue puts a string into blocked_by (declared as []int).
+// encoding/json reports the offending byte offset which our parse error
+// translates into a 1-based line number.
+const malformedTestIssue = `{
+  "id": 1,
+  "slug": "bad",
+  "name": "Bad Issue",
+  "track": "intent",
+  "status": "todo",
+  "priority": "high",
+  "points": 1,
+  "labels": [],
+  "assignee": null,
+  "blocked_by": ["not-an-int"],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "tdd": false,
+  "outcome": "done",
+  "scope": "small",
+  "acceptance_criteria": [],
+  "steps": [],
+  "use_cases": []
+}`
 
 func setupMalformedPlan(t *testing.T, slug string) string {
 	t.Helper()
@@ -53,8 +58,8 @@ func setupMalformedPlan(t *testing.T, slug string) string {
 	require.NoError(t, os.Chdir(dir))
 	planDir := filepath.Join(dir, ".plan-bender", "plans", slug)
 	require.NoError(t, os.MkdirAll(filepath.Join(planDir, "issues"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), []byte(malformedTestPRD), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "issues", "1-bad.yaml"), []byte(malformedTestIssue), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(malformedTestPRD), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "issues", "1-bad.json"), []byte(malformedTestIssue), 0o644))
 	return dir
 }
 
@@ -72,8 +77,8 @@ func TestStatus_MalformedYAML_ReturnsInvalidPlanWithFileAndLine(t *testing.T) {
 	var resp errorJSON
 	require.NoError(t, json.Unmarshal([]byte(out.String()), &resp))
 	assert.Equal(t, string(ErrInvalidPlan), resp.Code, "raw output: %s", out.String())
-	assert.Contains(t, resp.File, "issues/1-bad.yaml")
-	assert.Greater(t, resp.Line, 0, "line number should be parsed from yaml error")
+	assert.Contains(t, resp.File, "issues/1-bad.json")
+	assert.Greater(t, resp.Line, 0, "line number should be derived from json error offset")
 	assert.NotEmpty(t, resp.Hint)
 }
 

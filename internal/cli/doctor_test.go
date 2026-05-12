@@ -13,7 +13,7 @@ import (
 
 func TestConfigCheck_ValidConfig(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("{}"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte("{}"), 0o644))
 
 	r := configCheck(dir)
 	assert.True(t, r.Pass)
@@ -24,7 +24,6 @@ func TestConfigCheck_ValidConfig(t *testing.T) {
 func TestConfigCheck_MissingConfig(t *testing.T) {
 	dir := t.TempDir()
 
-	// With no config file, defaults are used and valid
 	r := configCheck(dir)
 	assert.True(t, r.Pass)
 }
@@ -32,8 +31,8 @@ func TestConfigCheck_MissingConfig(t *testing.T) {
 func TestConfigCheck_InvalidConfig(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(
-		filepath.Join(dir, ".plan-bender.yaml"),
-		[]byte("max_points: -1"),
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"max_points": -1}`),
 		0o644,
 	))
 
@@ -53,9 +52,8 @@ func TestSkillsCheck_NoSkillsGenerated(t *testing.T) {
 
 func TestSkillsCheck_Generated_NoSymlinks(t *testing.T) {
 	dir := t.TempDir()
-	cfg := config.Defaults() // agents: ["claude-code"]
+	cfg := config.Defaults()
 
-	// Create a skill dir but no symlinks
 	skillDir := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-test-skill")
 	require.NoError(t, os.MkdirAll(skillDir, 0o755))
 
@@ -71,7 +69,6 @@ func TestSkillsCheck_FullySetUp(t *testing.T) {
 	skillDir := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-test-skill")
 	require.NoError(t, os.MkdirAll(skillDir, 0o755))
 
-	// Create the target symlink
 	targetDir := filepath.Join(dir, ".claude", "skills")
 	require.NoError(t, os.MkdirAll(targetDir, 0o755))
 	require.NoError(t, os.Symlink(skillDir, filepath.Join(targetDir, "bender-test-skill")))
@@ -104,7 +101,6 @@ func TestPlansDirCheck_Missing(t *testing.T) {
 }
 
 func TestVersionCheck_NotFound(t *testing.T) {
-	// With a mangled PATH, plan-bender-agent won't be found
 	t.Setenv("PATH", t.TempDir())
 
 	r := versionCheck("1.0.0")
@@ -114,7 +110,6 @@ func TestVersionCheck_NotFound(t *testing.T) {
 }
 
 func TestVersionCheck_Match(t *testing.T) {
-	// Create a fake plan-bender-agent script that prints a matching version
 	binDir := t.TempDir()
 	script := filepath.Join(binDir, "plan-bender-agent")
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho \"plan-bender-agent version 1.2.3\"\n"), 0o755))
@@ -139,7 +134,7 @@ func TestVersionCheck_Mismatch(t *testing.T) {
 }
 
 func TestLinearCheck_Disabled(t *testing.T) {
-	cfg := config.Defaults() // Linear.Enabled is false
+	cfg := config.Defaults()
 
 	r := linearCheck(cfg)
 	assert.True(t, r.Pass)
@@ -160,25 +155,24 @@ func TestGitignoreCheck_Managed(t *testing.T) {
 
 func TestGitignoreCheck_UnmanagedLocalIgnored(t *testing.T) {
 	dir := t.TempDir()
-	cfg := config.Defaults() // ManageGitignore defaults to false
+	cfg := config.Defaults()
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".gitignore"),
-		[]byte("node_modules/\n.plan-bender.local.yaml\n"),
+		[]byte("node_modules/\n.plan-bender.local.json\n"),
 		0o644,
 	))
 
 	r := gitignoreCheck(dir, cfg)
 	assert.True(t, r.Pass)
 	assert.Contains(t, r.Message, "unmanaged")
-	assert.Contains(t, r.Message, ".plan-bender.local.yaml ok")
+	assert.Contains(t, r.Message, ".plan-bender.local.json ok")
 }
 
 func TestGitignoreCheck_UnmanagedLocalMissing(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
 
-	// .gitignore exists but does not contain .plan-bender.local.yaml
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".gitignore"),
 		[]byte("node_modules/\n"),
@@ -187,17 +181,16 @@ func TestGitignoreCheck_UnmanagedLocalMissing(t *testing.T) {
 
 	r := gitignoreCheck(dir, cfg)
 	assert.False(t, r.Pass)
-	assert.Contains(t, r.Message, ".plan-bender.local.yaml not gitignored")
+	assert.Contains(t, r.Message, ".plan-bender.local.json not gitignored")
 }
 
 func TestGitignoreCheck_UnmanagedNoGitignoreFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()
 
-	// No .gitignore at all — .plan-bender.local.yaml is certainly not gitignored
 	r := gitignoreCheck(dir, cfg)
 	assert.False(t, r.Pass)
-	assert.Contains(t, r.Message, ".plan-bender.local.yaml not gitignored")
+	assert.Contains(t, r.Message, ".plan-bender.local.json not gitignored")
 }
 
 func TestRunChecks_ReturnsAllChecks(t *testing.T) {
@@ -224,27 +217,22 @@ func TestDoctorCmd_HealthySetup(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
 
-	// Write config (manage_gitignore on so setup writes a .gitignore for the doctor check)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("manage_gitignore: true\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte(`{"manage_gitignore": true}`), 0o644))
 
-	// Run setup to generate and symlink skills
 	setupCmd := NewSetupCmd("test")
 	setupCmd.SetOut(&strings.Builder{})
 	require.NoError(t, setupCmd.Execute())
 
-	// Create plans dir
 	cfg, err := config.Load(dir)
 	require.NoError(t, err)
 	plansDir := filepath.Join(dir, cfg.PlansDir)
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
 
-	// Create fake matching pba binary
 	binDir := t.TempDir()
 	script := filepath.Join(binDir, "plan-bender-agent")
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho \"plan-bender-agent version test-ver\"\n"), 0o755))
 	t.Setenv("PATH", binDir)
 
-	// Run doctor (cannot test os.Exit, but test that RunChecks returns all pass)
 	results := RunChecks(dir, cfg, "test-ver")
 	for _, r := range results {
 		assert.True(t, r.Pass, "check %q should pass: %s", r.Name, r.Message)
@@ -254,9 +242,8 @@ func TestDoctorCmd_HealthySetup(t *testing.T) {
 func TestDoctorCmd_PrintsOutput(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Chdir(dir))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"), []byte("{}"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte("{}"), 0o644))
 
-	// Put a fake pba on PATH
 	binDir := t.TempDir()
 	script := filepath.Join(binDir, "plan-bender-agent")
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho \"plan-bender-agent version dev\"\n"), 0o755))
@@ -266,12 +253,9 @@ func TestDoctorCmd_PrintsOutput(t *testing.T) {
 	var out strings.Builder
 	cmd.SetOut(&out)
 
-	// The command will call os.Exit(1) on failure, so we can't easily test that.
-	// Instead test via RunChecks.
 	cfg, _ := config.Load(dir)
 	results := RunChecks(dir, cfg, "dev")
 
-	// At minimum config and linear should pass
 	configResult := results[0]
 	assert.True(t, configResult.Pass)
 

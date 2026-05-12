@@ -29,12 +29,11 @@ func TestDocs_FullFlag_EmitsKitchenSinkConfig(t *testing.T) {
 	require.NoError(t, cmd.Execute())
 
 	output := out.String()
-	// Verify it actually contains config keys, not just the repo URL.
-	assert.Contains(t, output, "plans_dir:")
-	assert.Contains(t, output, "max_points:")
-	assert.Contains(t, output, "workflow_states:")
-	assert.Contains(t, output, "linear:")
-	assert.Contains(t, output, "manage_gitignore:")
+	assert.Contains(t, output, `"plans_dir"`)
+	assert.Contains(t, output, `"max_points"`)
+	assert.Contains(t, output, `"workflow_states"`)
+	assert.Contains(t, output, `"linear"`)
+	assert.Contains(t, output, `"manage_gitignore"`)
 	assert.NotContains(t, output, repoURL)
 }
 

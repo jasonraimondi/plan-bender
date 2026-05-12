@@ -1,6 +1,7 @@
 package planrepo
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
-	"gopkg.in/yaml.v3"
 )
 
 // Commit applies in-session mutations to disk under the held plan lock. It
@@ -87,14 +87,14 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 	// 2. Marshal + roundtrip-check the PRD if dirty.
 	if s.dirtyPRD {
 		data, err := marshalAndProbe(&s.snapshot.PRD, func(b []byte) error {
-			var probe schema.PrdYaml
-			return strictUnmarshal(b, &probe)
+			var probe schema.PRD
+			return StrictUnmarshal(b, &probe)
 		})
 		if err != nil {
 			return commitPlan{}, fmt.Errorf("marshal prd: %w", err)
 		}
 		plan.writes = append(plan.writes, fileWrite{
-			path: filepath.Join(planDir, "prd.yaml"),
+			path: filepath.Join(planDir, "prd.json"),
 			data: data,
 			perm: 0o644,
 		})
@@ -122,8 +122,8 @@ func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
 		seenFilenames[filename] = id
 
 		data, err := marshalAndProbe(iss, func(b []byte) error {
-			var probe schema.IssueYaml
-			return strictUnmarshal(b, &probe)
+			var probe schema.Issue
+			return StrictUnmarshal(b, &probe)
 		})
 		if err != nil {
 			return commitPlan{}, fmt.Errorf("marshal issue #%d: %w", id, err)
@@ -250,7 +250,7 @@ func (s *PlanSession) markClean() {
 	}
 }
 
-func (s *PlanSession) findIssueByID(id int) *schema.IssueYaml {
+func (s *PlanSession) findIssueByID(id int) *schema.Issue {
 	for i := range s.snapshot.Issues {
 		if s.snapshot.Issues[i].ID == id {
 			return &s.snapshot.Issues[i]
@@ -261,13 +261,14 @@ func (s *PlanSession) findIssueByID(id int) *schema.IssueYaml {
 
 // marshalAndProbe marshals v and re-parses the bytes through probe to catch
 // non-roundtripping output (e.g. duplicate keys from a future custom
-// MarshalYAML). The probe runs before any disk write so a regression here
-// surfaces as a preflight error rather than corrupting on-disk YAML.
+// MarshalJSON). The probe runs before any disk write so a regression here
+// surfaces as a preflight error rather than corrupting on-disk JSON.
 func marshalAndProbe(v any, probe func([]byte) error) ([]byte, error) {
-	data, err := yaml.Marshal(v)
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, err
 	}
+	data = append(data, '\n')
 	if err := probe(data); err != nil {
 		return nil, fmt.Errorf("roundtrip check: %w", err)
 	}

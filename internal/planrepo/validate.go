@@ -21,7 +21,7 @@ func (s *PlanSession) Validate(cfg config.Config) schema.PlanValidationResult {
 }
 
 // Validate is a one-shot convenience that opens a session for slug, validates
-// it, and closes the session. Open failures (missing plan, malformed YAML)
+// it, and closes the session. Open failures (missing plan, malformed JSON)
 // are surfaced as PRD errors in the returned result so callers always get the
 // PlanValidationResult shape — matching the behavior of the prior disk-based
 // schema.ValidatePlan path.
@@ -39,7 +39,7 @@ func (p *Plans) Validate(slug string, cfg config.Config) schema.PlanValidationRe
 // broken file (PRD or issue) so `agent validate` points editors at the right
 // place; everything else is reported against the PRD path.
 func openErrorAsValidationResult(slug string, err error) schema.PlanValidationResult {
-	prdPath := filepath.Join(slug, "prd.yaml")
+	prdPath := filepath.Join(slug, "prd.json")
 	var parseErr *ParseError
 	if errors.As(err, &parseErr) {
 		if parseErr.File == prdPath {
@@ -63,7 +63,7 @@ func openErrorAsValidationResult(slug string, err error) schema.PlanValidationRe
 }
 
 func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg config.Config, crossRefMode schema.CrossRefMode) schema.PlanValidationResult {
-	prdPath := filepath.Join(snap.Slug, "prd.yaml")
+	prdPath := filepath.Join(snap.Slug, "prd.json")
 
 	var prdErrs []string
 	for _, ve := range snap.PRD.Validate() {
@@ -110,7 +110,7 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 // issueFilePath returns the on-disk path to use in validation results: the
 // baseline filename if the issue existed at Open time, otherwise the
 // canonical filename a Commit would write.
-func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) string {
+func issueFilePath(slug string, iss *schema.Issue, baseline map[int]string) string {
 	dir := filepath.Join(slug, "issues")
 	if name, ok := baseline[iss.ID]; ok {
 		return filepath.Join(dir, name)
@@ -118,6 +118,6 @@ func issueFilePath(slug string, iss *schema.IssueYaml, baseline map[int]string) 
 	return filepath.Join(dir, canonicalIssueFilename(iss))
 }
 
-func canonicalIssueFilename(iss *schema.IssueYaml) string {
-	return fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug)
+func canonicalIssueFilename(iss *schema.Issue) string {
+	return fmt.Sprintf("%d-%s.json", iss.ID, iss.Slug)
 }

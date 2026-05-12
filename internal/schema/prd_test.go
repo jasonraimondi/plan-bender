@@ -1,15 +1,15 @@
 package schema
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
-func validPrd() PrdYaml {
-	return PrdYaml{
+func validPrd() PRD {
+	return PRD{
 		Name:        "Test",
 		Slug:        "test",
 		Status:      "active",
@@ -28,7 +28,7 @@ func TestPrdValidate_Valid(t *testing.T) {
 }
 
 func TestPrdValidate_MissingRequired(t *testing.T) {
-	prd := PrdYaml{Slug: "x"}
+	prd := PRD{Slug: "x"}
 	errs := prd.Validate()
 	assert.NotEmpty(t, errs)
 	assertHasFieldError(t, errs, "name")
@@ -64,11 +64,11 @@ func TestPrdValidate_AllStatuses(t *testing.T) {
 
 func TestPrdYaml_RoundTrip(t *testing.T) {
 	prd := validPrd()
-	data, err := yaml.Marshal(&prd)
+	data, err := json.Marshal(&prd)
 	require.NoError(t, err)
 
-	var parsed PrdYaml
-	require.NoError(t, yaml.Unmarshal(data, &parsed))
+	var parsed PRD
+	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, prd, parsed)
 }
 

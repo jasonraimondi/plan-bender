@@ -3,7 +3,7 @@
 // underlying store directly.
 package status
 
-// Status is the typed counterpart to schema.IssueYaml.Status. The string values
+// Status is the typed counterpart to schema.Issue.Status. The string values
 // match the schema field exactly so the boundary adapter in issue #2 is a pure
 // string conversion with no translation table.
 type Status string

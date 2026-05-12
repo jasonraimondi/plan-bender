@@ -4,7 +4,7 @@ import "fmt"
 
 // DetectCycles uses Kahn's algorithm to detect dependency cycles in issues.
 // Returns error messages listing cycle-participant IDs.
-func DetectCycles(issues []IssueYaml) []string {
+func DetectCycles(issues []Issue) []string {
 	if len(issues) == 0 {
 		return nil
 	}
@@ -31,7 +31,6 @@ func DetectCycles(issues []IssueYaml) []string {
 		}
 	}
 
-	// BFS from zero in-degree nodes
 	var queue []int
 	for id, deg := range inDegree {
 		if deg == 0 {
@@ -56,7 +55,6 @@ func DetectCycles(issues []IssueYaml) []string {
 		return nil
 	}
 
-	// Collect cycle participants
 	var cycleIDs []int
 	for id, deg := range inDegree {
 		if deg > 0 {

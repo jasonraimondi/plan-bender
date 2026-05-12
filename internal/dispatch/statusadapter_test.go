@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"encoding/json"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -30,20 +31,21 @@ func adapterTestCfg() config.Config {
 	}
 }
 
-const adapterValidPrd = `name: Demo
-slug: demo
-status: active
-created: "2026-01-01"
-updated: "2026-01-02"
-description: A test
-why: Testing
-outcome: Tests pass
-`
+const adapterValidPrd = `{
+  "name": "Demo",
+  "slug": "demo",
+  "status": "active",
+  "created": "2026-01-01",
+  "updated": "2026-01-02",
+  "description": "A test",
+  "why": "Testing",
+  "outcome": "Tests pass"
+}`
 
 // validAdapterIssue returns an issue that passes planrepo.Commit validation
 // under adapterTestCfg.
-func validAdapterIssue(id int, slug, statusStr string) schema.IssueYaml {
-	return schema.IssueYaml{
+func validAdapterIssue(id int, slug, statusStr string) schema.Issue {
+	return schema.Issue{
 		ID:                 id,
 		Slug:               slug,
 		Name:               "Issue " + slug,
@@ -65,28 +67,28 @@ func validAdapterIssue(id int, slug, statusStr string) schema.IssueYaml {
 }
 
 // writeValidPlan seeds plansDir with a valid PRD and the given issues at
-// canonical {id}-{slug}.yaml paths.
-func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.IssueYaml) {
+// canonical {id}-{slug}.json paths.
+func writeValidPlan(t *testing.T, plansDir, slug string, issues ...schema.Issue) {
 	t.Helper()
 	planDir := filepath.Join(plansDir, slug)
 	issuesDir := filepath.Join(planDir, "issues")
 	require.NoError(t, os.MkdirAll(issuesDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.yaml"), []byte(adapterValidPrd), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(adapterValidPrd), 0o644))
 	for _, iss := range issues {
-		data, err := yaml.Marshal(iss)
+		data, err := json.MarshalIndent(iss, "", "  ")
 		require.NoError(t, err)
-		path := filepath.Join(issuesDir, fmt.Sprintf("%d-%s.yaml", iss.ID, iss.Slug))
+		path := filepath.Join(issuesDir, fmt.Sprintf("%d-%s.json", iss.ID, iss.Slug))
 		require.NoError(t, os.WriteFile(path, data, 0o644))
 	}
 }
 
-func loadIssueFile(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.IssueYaml {
+func loadIssueFile(t *testing.T, plansDir, slug string, id int, issueSlug string) schema.Issue {
 	t.Helper()
-	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.yaml", id, issueSlug))
+	path := filepath.Join(plansDir, slug, "issues", fmt.Sprintf("%d-%s.json", id, issueSlug))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var iss schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &iss))
+	var iss schema.Issue
+	require.NoError(t, json.Unmarshal(data, &iss))
 	return iss
 }
 
@@ -124,7 +126,7 @@ func TestProdStatusOwner_ClaimStampsBranchAndStatus(t *testing.T) {
 
 // TestProdStatusOwner_PreflightValidationRejectsCommitWhenIssueInvalid asserts
 // the planrepo commit path enforces validation: if a track on disk is no
-// longer in cfg.Tracks (e.g. user removed it from .plan-bender.yaml), the
+// longer in cfg.Tracks (e.g. user removed it from .plan-bender.json), the
 // commit refuses rather than silently writing a now-invalid issue.
 func TestProdStatusOwner_PreflightValidationRejectsCommitWhenIssueInvalid(t *testing.T) {
 	plansDir := t.TempDir()

@@ -13,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/dispatch"
@@ -21,26 +20,31 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
-const retryIssueYAML = `id: 4
-slug: ship-cli
-name: Ship the CLI
-track: intent
-status: blocked
-priority: high
-points: 2
-labels: [AFK]
-blocked_by: []
-blocking: []
-created: "2026-04-30"
-updated: "2024-01-01"
-tdd: true
-outcome: Shipped
-scope: Small
-acceptance_criteria: ["It ships"]
-steps: ["Target — ships"]
-use_cases: ["UC-1"]
-notes: subprocess timed out after 30m
-`
+const retryIssueYAML = `{
+  "id": 4,
+  "slug": "ship-cli",
+  "name": "Ship the CLI",
+  "track": "intent",
+  "status": "blocked",
+  "priority": "high",
+  "points": 2,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "2026-04-30",
+  "updated": "2024-01-01",
+  "tdd": true,
+  "outcome": "Shipped",
+  "scope": "Small",
+  "acceptance_criteria": ["It ships"],
+  "steps": ["Target — ships"],
+  "use_cases": ["UC-1"],
+  "notes": "subprocess timed out after 30m"
+}`
 
 func setupRetryPlan(t *testing.T, status string, withNotes bool) string {
 	t.Helper()
@@ -48,25 +52,26 @@ func setupRetryPlan(t *testing.T, status string, withNotes bool) string {
 	require.NoError(t, os.Chdir(dir))
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.yaml"), []byte(validShipPrd), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(validShipPrd), 0o644))
 
 	body := retryIssueYAML
 	if status != "" {
-		body = strings.Replace(body, "status: blocked", "status: "+status, 1)
+		body = strings.Replace(body, `"status": "blocked"`, `"status": "`+status+`"`, 1)
 	}
 	if !withNotes {
-		body = strings.Replace(body, "notes: subprocess timed out after 30m\n", "", 1)
+		body = strings.Replace(body, `,
+  "notes": "subprocess timed out after 30m"`, "", 1)
 	}
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "4-ship-cli.yaml"), []byte(body), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "4-ship-cli.json"), []byte(body), 0o644))
 	return dir
 }
 
-func loadRetryIssue(t *testing.T, dir string) schema.IssueYaml {
+func loadRetryIssue(t *testing.T, dir string) schema.Issue {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "4-ship-cli.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "plans", "ship", "issues", "4-ship-cli.json"))
 	require.NoError(t, err)
-	var issue schema.IssueYaml
-	require.NoError(t, yaml.Unmarshal(data, &issue))
+	var issue schema.Issue
+	require.NoError(t, json.Unmarshal(data, &issue))
 	return issue
 }
 

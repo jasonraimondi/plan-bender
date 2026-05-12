@@ -24,10 +24,6 @@ type MkdirFunc func(path string, perm fs.FileMode) error
 type LockFunc func(plansDir string) (release func(), err error)
 
 // Adapters bundles the I/O dependencies a Plans repository needs.
-//
-// Write and Mkdir are unused by the Open/Snapshot/Close/List paths in this
-// package, but are part of the production constructor contract because the
-// session boundary will perform staged writes in a follow-up change.
 type Adapters struct {
 	FS    fs.FS
 	Write WriteFunc

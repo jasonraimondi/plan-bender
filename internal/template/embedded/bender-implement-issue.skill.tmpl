@@ -1,6 +1,6 @@
 ---
 name: bender-implement-issue
-description: Implement one or more plan issues end-to-end with proper branching, testing, and status tracking via YAML workflow states.
+description: Implement one or more plan issues end-to-end with proper branching, testing, and status tracking via JSON workflow states.
 {{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
 {{end}}
@@ -8,13 +8,13 @@ allowed-tools: Bash(linear:*), Bash(jq:*)
 
 # Work on Issue
 
-Implement one or more issues from a plan end-to-end. YAML fields are the source of truth for workflow; prose is for human context only.
+Implement one or more issues from a plan end-to-end. JSON fields are the source of truth for workflow; prose is for human context only.
 
 ## Input
 
 The user provides one or more issue references:
 
-- file path: `{{.plans_dir}}auth/issues/1-setup-middleware.yaml`
+- file path: `{{.plans_dir}}auth/issues/1-setup-middleware.json`
 - shorthand: `auth#1` (project slug + issue ID)
 - slug only (e.g. `auth`): run `{{.commands.next}} {slug}` to auto-pick the next ready issue
 
@@ -30,7 +30,7 @@ If none provided, ask: "Which issue should I work on? (issue ref, or a plan slug
 
 ### 1. Read the issue
 
-Read the issue YAML file. Check:
+Read the issue JSON file. Check:
 
 - acceptance criteria and steps
 - blocked_by — read those issues too, confirm they are in done or canceled
@@ -47,13 +47,13 @@ If assigned to someone else, ask before taking it.
 
 ### 2. Update status
 
-**Never** edit the YAML's `status:` or `branch:` fields by hand — yaml.v3 rejects duplicate keys, and a misplaced Edit silently produces them. Use CLI commands; they round-trip through the issue struct so the file always parses.
+**Never** edit the JSON's `status` or `branch` fields by hand — the strict decoder rejects duplicate keys, and a misplaced Edit silently produces them. Use CLI commands; they round-trip through the issue struct so the file always parses.
 
 - worktree mode (you were spawned by `{{.commands.dispatch}}` or invoked `{{.commands.worktree_create}}`): the worktree creator already stamped `branch: <name>` and `status: in-progress`. Skip this step.
 - standalone, was `blocked`: run `{{.commands.retry}} {slug} {id}` to flip back to `todo`, then run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress`.
 - standalone, was `backlog`/`todo`: run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress` in one atomic step.
 {{- if .has_backend_sync}}
-- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section). The CLIs above only update the local YAML.
+- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section). The CLIs above only update the local JSON.
 {{- end}}
 
 ### 3. Branch setup
@@ -111,14 +111,14 @@ Once implementation is complete and tests pass:
 
 ### 8. Mark complete
 
-Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review`, bumps `updated`, and emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back. **Never** edit `status:` by hand: yaml.v3 rejects duplicate keys and a naive Edit silently produces them.
+Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review`, bumps `updated`, and emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
 
-If you opened a PR in step 7, set the `pr` field with Edit on the **exact** existing line (`pr: null`, etc.) so it replaces in place. Don't append a new `pr:` line.
+If you opened a PR in step 7, set the `pr` field with Edit on the **exact** existing line (`"pr": null`) so it replaces in place. Don't append a new `pr` entry.
 
-If blocked after starting, do not edit `status:` by hand — exit non-zero and let the parent dispatch flip the issue to blocked via its `Transition` call.
+If blocked after starting, do not edit `status` by hand — exit non-zero and let the parent dispatch flip the issue to blocked via its `Transition` call.
 {{- if .has_backend_sync}}
 
-If the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local YAML.
+If the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local JSON.
 {{- end}}
 
 ### 9. Next issue
@@ -132,7 +132,7 @@ If there are more issues, proceed to the next one.
 
 ## Linear sync
 
-When a plan has been synced to Linear (issues have a `linear_id` field), update both local YAML **and** Linear on every status change. Local YAML is always updated first. Linear updates are best-effort — if they fail, log the failure and continue.
+When a plan has been synced to Linear (issues have a `linear_id` field), update both local JSON **and** Linear on every status change. Local JSON is always updated first. Linear updates are best-effort — if they fail, log the failure and continue.
 
 Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 2 and 8 push to Linear.
 
@@ -155,5 +155,5 @@ When given multiple issues, work them sequentially. If any issue is blocked, ski
 {{if .report_bugs}}
 ## Bug reports
 
-If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.yaml` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
 {{end}}
