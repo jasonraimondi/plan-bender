@@ -87,7 +87,7 @@ func setupContextTestDir(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue1), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "002-second.json"), []byte(issue2), 0o644))
 
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	return dir
 }
 
@@ -166,7 +166,7 @@ func TestContextCmd_NoSlug_EmptyPlans(t *testing.T) {
 	dir := t.TempDir()
 	plansDir := filepath.Join(dir, ".plan-bender", "plans")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewContextCmd()
 	var out strings.Builder

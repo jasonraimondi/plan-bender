@@ -42,7 +42,7 @@ const completeIssueYAML = `{
 func setupCompletePlan(t *testing.T, status string) string {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
@@ -157,7 +157,7 @@ func TestComplete_RejectsAlreadyDone(t *testing.T) {
 
 func TestComplete_UnknownPlan(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	cmd := NewCompleteCmd()

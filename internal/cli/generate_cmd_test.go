@@ -23,7 +23,7 @@ func runGenerateCmd(t *testing.T, args ...string) string {
 
 func TestGenerateCmd_WritesSkillsAndSymlinks(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	out := runGenerateCmd(t)
 
@@ -46,7 +46,7 @@ func TestGenerateCmd_WritesSkillsAndSymlinks(t *testing.T) {
 
 func TestGenerateCmd_RepicksUpTemplateOverride(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	runGenerateCmd(t)
 
@@ -82,7 +82,7 @@ func TestGenerateCmd_HiddenFromHelp(t *testing.T) {
 
 func TestGenerateCmd_InvalidConfigReportsError(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),

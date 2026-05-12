@@ -23,7 +23,7 @@ const writePrdSample = `{
 
 func TestWritePrd_ValidPrd(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	inputFile := filepath.Join(dir, "input.json")
@@ -42,7 +42,7 @@ func TestWritePrd_ValidPrd(t *testing.T) {
 
 func TestWritePrd_InvalidPrd(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	inputFile := filepath.Join(dir, "bad.json")
 	require.NoError(t, os.WriteFile(inputFile, []byte(`{"slug": "x"}`), 0o644))
@@ -60,7 +60,7 @@ func TestWritePrd_InvalidPrd(t *testing.T) {
 // matching the planrepo loader's strict-decode contract on the read side.
 func TestWritePrd_RejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	bad := strings.Replace(writePrdSample, `"outcome": "Success"`, `"outcom": "Success"`, 1)
@@ -79,7 +79,7 @@ func TestWritePrd_RejectsUnknownFields(t *testing.T) {
 // branch is exercised — the same path a shell heredoc hits in production.
 func TestWritePrd_HeredocPipe(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	r, w, err := os.Pipe()
@@ -111,7 +111,7 @@ func TestWritePrd_HeredocPipe(t *testing.T) {
 
 func TestWritePrd_StdinPipe(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	cmd := NewWritePrdCmd()

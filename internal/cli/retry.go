@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/dispatch"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/spf13/cobra"
 )
@@ -36,7 +36,7 @@ func NewRetryCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
+			owner := planrepo.NewProdStatusOwner(cfg.PlansDir, cfg)
 			err = owner.Transition(cmd.Context(), slug, id,
 				[]status.Status{status.StatusBlocked}, status.StatusTodo, "retry")
 

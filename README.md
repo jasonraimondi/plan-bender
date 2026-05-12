@@ -292,6 +292,10 @@ pb self-update                 # update to latest release
 
 Full table (including every `pba` subcommand and JSON shape) in [docs/cli.md](docs/cli.md).
 
+## CI
+
+The `locksafe` workflow runs `go run ./tools/locksafe/cmd/locksafe ./...`; maintainers should mark this check required for PR merges in GitHub branch protection or rulesets.
+
 ## Docs
 
 - [CLI reference](docs/cli.md) — every command, dispatch lifecycle, recovery

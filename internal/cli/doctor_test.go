@@ -215,7 +215,7 @@ func TestRunChecks_ReturnsAllChecks(t *testing.T) {
 
 func TestDoctorCmd_HealthySetup(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte(`{"manage_gitignore": true}`), 0o644))
 
@@ -241,7 +241,7 @@ func TestDoctorCmd_HealthySetup(t *testing.T) {
 
 func TestDoctorCmd_PrintsOutput(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte("{}"), 0o644))
 
 	binDir := t.TempDir()

@@ -58,7 +58,7 @@ func TestValidate_JSON(t *testing.T) {
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue), 0o644))
 
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewValidateCmd()
 	cmd.SetArgs([]string{"test-plan", "--json"})
@@ -121,7 +121,7 @@ func TestValidate_JSON_WithErrors(t *testing.T) {
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue), 0o644))
 
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewValidateCmd()
 	cmd.SetArgs([]string{"bad-plan", "--json"})

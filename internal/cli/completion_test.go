@@ -13,10 +13,7 @@ import (
 func TestSlugCompletionFunc(t *testing.T) {
 	dir := t.TempDir()
 
-	orig, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(dir))
-	t.Cleanup(func() { os.Chdir(orig) })
+	chdir(t, dir)
 
 	plansDir := filepath.Join(dir, ".plan-bender", "plans")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "alpha"), 0o755))

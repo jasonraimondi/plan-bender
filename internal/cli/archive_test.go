@@ -44,7 +44,7 @@ func TestArchive_BlocksOnActiveIssues(t *testing.T) {
 		{ID: 1, Slug: "active", Name: "Active", Status: "in-progress", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewArchiveCmd()
 	cmd.SetArgs([]string{"test"})
@@ -59,7 +59,7 @@ func TestArchive_SucceedsWithForce(t *testing.T) {
 		{ID: 1, Slug: "active", Name: "Active", Status: "in-progress", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewArchiveCmd()
 	cmd.SetArgs([]string{"test", "--force"})
@@ -77,7 +77,7 @@ func TestArchive_AllDoneSucceeds(t *testing.T) {
 		{ID: 1, Slug: "done-issue", Name: "Done", Status: "done", Track: "intent", Priority: "high", Points: 1, Labels: []string{}, BlockedBy: []int{}, Blocking: []int{}, Created: "2026-03-26", Updated: "2026-03-26", Outcome: "x", Scope: "x", AcceptanceCriteria: []string{}, Steps: []string{}, UseCases: []string{}},
 	}
 	dir := setupPlanDir(t, "test", issues)
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewArchiveCmd()
 	cmd.SetArgs([]string{"test"})

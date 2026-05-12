@@ -41,7 +41,7 @@ func setupDispatchCLI(t *testing.T) string {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, ".plan-bender", "plans", "demo", "issues"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender", "plans", "demo", "prd.json"),
 		[]byte(validDemoPrd), 0o644))
-	require.NoError(t, os.Chdir(root))
+	chdir(t, root)
 	return root
 }
 
