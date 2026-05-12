@@ -55,7 +55,7 @@ const malformedTestIssue = `{
 func setupMalformedPlan(t *testing.T, slug string) string {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	planDir := filepath.Join(dir, ".plan-bender", "plans", slug)
 	require.NoError(t, os.MkdirAll(filepath.Join(planDir, "issues"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(planDir, "prd.json"), []byte(malformedTestPRD), 0o644))
@@ -118,7 +118,7 @@ func TestOpenErrorToAgent_PlanNotFoundStillBeatsParseCheck(t *testing.T) {
 	// fs.ErrNotExist must short-circuit before we look for ParseError, since
 	// a missing plan dir surfaces as an ENOENT-wrapped error.
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	root := NewAgentRootCmd("test")

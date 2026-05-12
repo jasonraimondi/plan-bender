@@ -60,7 +60,7 @@ func setupWorktreeRepo(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.json"), []byte(worktreeIssueYAML), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"), []byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}}`), 0o644))
 
-	require.NoError(t, os.Chdir(root))
+	chdir(t, root)
 	return root
 }
 
@@ -139,7 +139,7 @@ func TestWorktreeGC_AgentModeReturnsRemoved(t *testing.T) {
 	createCmd.SetOut(&out)
 	require.NoError(t, createCmd.Execute())
 
-	require.NoError(t, os.Chdir(root))
+	chdir(t, root)
 
 	gcRoot := NewAgentRootCmd("test")
 	gcRoot.SetArgs([]string{"worktree", "gc", "auth"})

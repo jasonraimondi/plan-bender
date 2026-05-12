@@ -48,7 +48,7 @@ func (h *setupTestHarness) output() string {
 
 func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
@@ -74,7 +74,7 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 
 func TestSetup_FirstRunIncludesDoctorChecks(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	h := testSetupCmd(setupDeps{version: "test"})
 	require.NoError(t, h.execute())
@@ -87,7 +87,7 @@ func TestSetup_FirstRunIncludesDoctorChecks(t *testing.T) {
 
 func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),
@@ -105,7 +105,7 @@ func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 
 func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	// Only .plan-bender.local.json exists — user is intentionally local-only
 	require.NoError(t, os.WriteFile(
@@ -128,7 +128,7 @@ func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {
 
 func TestSetup_YesFlagExitsZero(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute("--yes"))
@@ -136,7 +136,7 @@ func TestSetup_YesFlagExitsZero(t *testing.T) {
 
 func TestSetup_LinearWithEnvVars(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	t.Setenv("LINEAR_API_KEY", "lin_test_key")
 	t.Setenv("LINEAR_TEAM", "ENG")
@@ -170,7 +170,7 @@ func TestSetup_LinearWithEnvVars(t *testing.T) {
 
 func TestSetup_NoLinearOmitsSyncHint(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
@@ -180,7 +180,7 @@ func TestSetup_NoLinearOmitsSyncHint(t *testing.T) {
 
 func TestSetup_ReadyBlockShowsCLIEquivalents(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	h := testSetupCmd(setupDeps{})
 	require.NoError(t, h.execute())
@@ -193,7 +193,7 @@ func TestSetup_ReadyBlockShowsCLIEquivalents(t *testing.T) {
 
 func TestSetup_LinearWithInvalidCreds(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	t.Setenv("LINEAR_API_KEY", "bad_key")
 	t.Setenv("LINEAR_TEAM", "BAD")
@@ -213,7 +213,7 @@ func TestSetup_LinearWithInvalidCreds(t *testing.T) {
 
 func TestSetup_LinearYesWithoutEnvVarsErrors(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	t.Setenv("LINEAR_API_KEY", "")
 	t.Setenv("LINEAR_TEAM", "")
@@ -231,7 +231,7 @@ func TestSetup_InitAlias(t *testing.T) {
 
 func TestSetup_RerunRegeneratesSkills(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),
@@ -247,7 +247,7 @@ func TestSetup_RerunRegeneratesSkills(t *testing.T) {
 
 func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),
@@ -272,7 +272,7 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 
 func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),
@@ -293,7 +293,7 @@ func TestSetup_GitignoreRegistryDriven(t *testing.T) {
 
 func TestSetup_ManageGitignoreFalseSkipsGitignoreWrite(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(
 		filepath.Join(dir, ".plan-bender.json"),
@@ -310,7 +310,7 @@ func TestSetup_ManageGitignoreFalseSkipsGitignoreWrite(t *testing.T) {
 
 func TestSetup_ManageGitignoreFalsePreservesExistingGitignore(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	original := "# managed by user\nnode_modules/\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(original), 0o644))

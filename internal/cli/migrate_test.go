@@ -15,7 +15,7 @@ import (
 
 func TestMigrate_ConvertsConfigAndPlanFiles(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"),
 		[]byte("plans_dir: ./.plan-bender/plans/\nmax_points: 5\n"), 0o644))
@@ -54,7 +54,7 @@ func TestMigrate_ConvertsConfigAndPlanFiles(t *testing.T) {
 
 func TestMigrate_IsIdempotent_SkipsWhenJSONExists(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	// Both .yaml and .json present — migrate must skip the conversion and
 	// leave .yaml intact so the user can investigate the conflict.
@@ -84,7 +84,7 @@ func TestMigrate_IsIdempotent_SkipsWhenJSONExists(t *testing.T) {
 // the default plansDir and a warning must reach the user.
 func TestMigrate_FallsBackOnConfigLoadError(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"),
 		[]byte(`{ this is not valid json`), 0o644))
@@ -112,7 +112,7 @@ func TestMigrate_FallsBackOnConfigLoadError(t *testing.T) {
 // "M1: foo" strings; migrate must preserve that contract.
 func TestMigrate_PreservesBareColonListItems(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	planDir := filepath.Join(dir, ".plan-bender", "plans", "demo")
 	require.NoError(t, os.MkdirAll(filepath.Join(planDir, "issues"), 0o755))
@@ -184,7 +184,7 @@ steps:
 // the stale entry no longer covers.
 func TestMigrate_UpdatesGitignoreEntry(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	require.NoError(t, os.WriteFile(gitignorePath,
@@ -209,7 +209,7 @@ func TestMigrate_UpdatesGitignoreEntry(t *testing.T) {
 // entry when run again (or when the user already had it).
 func TestMigrate_GitignoreIdempotent(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	require.NoError(t, os.WriteFile(gitignorePath,
@@ -229,7 +229,7 @@ func TestMigrate_GitignoreIdempotent(t *testing.T) {
 // when the json entry already exists alongside.
 func TestMigrate_GitignoreReplacesBothWithJsonOnly(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	require.NoError(t, os.WriteFile(gitignorePath,
@@ -250,7 +250,7 @@ func TestMigrate_GitignoreReplacesBothWithJsonOnly(t *testing.T) {
 // world-readable secret file. Other config tiers stay at 0o644.
 func TestMigrate_LocalConfigGetsRestrictedMode(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"),
 		[]byte("max_points: 5\n"), 0o644))
@@ -274,7 +274,7 @@ func TestMigrate_LocalConfigGetsRestrictedMode(t *testing.T) {
 
 func TestMigrate_DryRunDoesNotWrite(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.yaml"),
 		[]byte("max_points: 5\n"), 0o644))

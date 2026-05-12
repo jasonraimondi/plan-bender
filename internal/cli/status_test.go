@@ -101,7 +101,7 @@ const statusIssueThreeTodoYAML = `{
 func setupStatusPlan(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
@@ -175,7 +175,7 @@ func TestStatus_AgentModeJSON_ContainsFullNotesAndShape(t *testing.T) {
 
 func TestStatus_UnknownPlan(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
 
 	cmd := NewStatusCmd()

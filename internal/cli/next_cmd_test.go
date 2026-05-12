@@ -84,7 +84,7 @@ func setupPlan(t *testing.T, slug string, issueFiles map[string]string) {
 	for name, body := range issueFiles {
 		require.NoError(t, os.WriteFile(filepath.Join(issuesDir, name), []byte(body), 0o644))
 	}
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 }
 
 func TestNextCmd_AgentMode_EmitsJSON(t *testing.T) {
@@ -164,7 +164,7 @@ func TestNextCmd_AllDone_HumanMode(t *testing.T) {
 func TestNextCmd_PlanNotFound_ReturnsAgentError(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewNextCmd()
 	cmd.SetArgs([]string{"missing"})

@@ -14,7 +14,7 @@ import (
 
 func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cfg, err := config.Load(dir)
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 
 func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
@@ -63,7 +63,7 @@ func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 
 func TestGenerateSkills_MultipleAgents(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cfg, err := config.Load(dir)
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 
 func TestGenerateCmd_NoForkedNextTemplates_NoWarning(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	cmd := NewGenerateCmd()
 	var stdout, stderr bytes.Buffer
@@ -111,7 +111,7 @@ func TestGenerateCmd_NoForkedNextTemplates_NoWarning(t *testing.T) {
 
 func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
@@ -137,7 +137,7 @@ func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 
 func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
@@ -163,7 +163,7 @@ func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 
 func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))

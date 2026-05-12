@@ -56,7 +56,7 @@ func TestAgentValidate_ValidPlan(t *testing.T) {
   "use_cases": []
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-first.json"), []byte(issue), 0o644))
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	root := NewAgentRootCmd("test")
 	root.AddCommand(NewAgentValidateCmd())
@@ -119,7 +119,7 @@ func TestAgentValidate_InvalidPlan_StructuredErrors(t *testing.T) {
   "use_cases": []
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-bad.json"), []byte(issue), 0o644))
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	root := NewAgentRootCmd("test")
 	root.AddCommand(NewAgentValidateCmd())
@@ -206,7 +206,7 @@ func TestAgentValidate_CrossRefErrors_HaveFileContext(t *testing.T) {
   "use_cases": []
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(issuesDir, "001-orphan.json"), []byte(issue), 0o644))
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 
 	root := NewAgentRootCmd("test")
 	root.AddCommand(NewAgentValidateCmd())

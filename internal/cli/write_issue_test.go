@@ -72,7 +72,7 @@ func seedPlan(t *testing.T, root, slug string) {
 
 func TestWriteIssue_ValidIssue(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
 	inputFile := filepath.Join(dir, "issue.json")
@@ -91,7 +91,7 @@ func TestWriteIssue_ValidIssue(t *testing.T) {
 
 func TestWriteIssue_StdinPipe(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
 	cmd := NewWriteIssueCmd()
@@ -114,7 +114,7 @@ func TestWriteIssue_StdinPipe(t *testing.T) {
 // them later.
 func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
 	forwardRefIssue := strings.Replace(validIssueYAML, `"blocking": []`, `"blocking": [2, 3, 9]`, 1)
@@ -137,7 +137,7 @@ func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 // author notices before the bad file lands.
 func TestWriteIssue_RejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
 	bad := strings.Replace(validIssueYAML, `"priority": "medium"`, `"prirority": "medium"`, 1)
@@ -158,7 +158,7 @@ func TestWriteIssue_RejectsUnknownFields(t *testing.T) {
 // session's filename-rewrite-with-cleanup logic.
 func TestWriteIssue_UpdatesExisting(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Chdir(dir))
+	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
 	cmd := NewWriteIssueCmd()
