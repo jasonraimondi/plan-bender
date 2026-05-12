@@ -19,13 +19,15 @@ const (
 	allowDirective = "//locksafe:allow"
 	planrepoSuffix = "/internal/planrepo"
 	backendSuffix  = "/internal/backend"
+	dispatchSuffix = "/internal/dispatch"
 )
 
-// Analyzer reports calls to remote I/O APIs while a *planrepo.PlanSession is live,
-// and reports PlanSession type containment outside the planrepo package.
+// Analyzer reports calls to remote I/O and subprocess APIs while a
+// *planrepo.PlanSession is live, and reports PlanSession type containment
+// outside the planrepo package.
 var Analyzer = &analysis.Analyzer{
 	Name: "locksafe",
-	Doc:  "reports remote I/O while a planrepo session lock is live",
+	Doc:  "reports remote I/O or subprocess execution while a planrepo session lock is live",
 	Run:  run,
 }
 
@@ -46,6 +48,14 @@ var httpClientMethods = map[string]bool{
 
 var httpRoundTripperMethods = map[string]bool{
 	"RoundTrip": true,
+}
+
+var execCmdMethods = map[string]bool{
+	"CombinedOutput": true,
+	"Output":         true,
+	"Run":            true,
+	"Start":          true,
+	"Wait":           true,
 }
 
 type checker struct {
@@ -527,7 +537,7 @@ func (c checker) reportRemoteCall(call *ast.CallExpr, state *liveState) {
 	if len(names) > 0 {
 		name = names[0]
 	}
-	c.pass.Reportf(call.Pos(), "locksafe: PlanSession %s is live across remote I/O call %s; close it before the call or add //locksafe:allow <reason> (%s)", name, formatNode(c.pass.Fset, call.Fun), kind)
+	c.pass.Reportf(call.Pos(), "locksafe: PlanSession %s is live across %s call %s; close it before the call or add //locksafe:allow <reason>", name, kind, formatNode(c.pass.Fset, call.Fun))
 }
 
 func (c checker) remoteCallKind(call *ast.CallExpr) (string, bool) {
@@ -536,6 +546,9 @@ func (c checker) remoteCallKind(call *ast.CallExpr) (string, bool) {
 	}
 	if c.isNetHTTPRemoteIO(call) {
 		return "net/http", true
+	}
+	if c.isOSExecSubprocess(call) || c.isDispatchSubprocessCall(call) {
+		return "subprocess", true
 	}
 	return "", false
 }
@@ -565,6 +578,23 @@ func (c checker) isNetHTTPRemoteIO(call *ast.CallExpr) bool {
 	}
 	return isHTTPClientType(selection.Recv()) && httpClientMethods[sel.Sel.Name] ||
 		isHTTPRoundTripperType(selection.Recv()) && httpRoundTripperMethods[sel.Sel.Name]
+}
+
+func (c checker) isOSExecSubprocess(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	selection := c.pass.TypesInfo.Selections[sel]
+	return selection != nil && isExecCmdType(selection.Recv()) && execCmdMethods[sel.Sel.Name]
+}
+
+func (c checker) isDispatchSubprocessCall(call *ast.CallExpr) bool {
+	fn, ok := funcObjectForCall(c.pass, call.Fun)
+	if !ok || fn.Pkg() == nil {
+		return false
+	}
+	return fn.Name() == "RunSubprocess" && strings.HasSuffix(fn.Pkg().Path(), dispatchSuffix)
 }
 
 func (c checker) applyAssignments(lhs, rhs []ast.Expr, state *liveState) {
@@ -635,6 +665,18 @@ func objectForIdent(pass *analysis.Pass, ident *ast.Ident) types.Object {
 		return obj
 	}
 	return pass.TypesInfo.Uses[ident]
+}
+
+func funcObjectForCall(pass *analysis.Pass, expr ast.Expr) (*types.Func, bool) {
+	switch expr := expr.(type) {
+	case *ast.Ident:
+		fn, ok := objectForIdent(pass, expr).(*types.Func)
+		return fn, ok
+	case *ast.SelectorExpr:
+		fn, ok := pass.TypesInfo.Uses[expr.Sel].(*types.Func)
+		return fn, ok
+	}
+	return nil, false
 }
 
 func isNilIdent(expr ast.Expr) bool {
@@ -742,6 +784,21 @@ func isHTTPRoundTripperType(t types.Type) bool {
 		return false
 	}
 	return named.Obj().Name() == "RoundTripper" && named.Obj().Pkg().Path() == "net/http"
+}
+
+func isExecCmdType(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	t = types.Unalias(t)
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = types.Unalias(ptr.Elem())
+	}
+	named, ok := t.(*types.Named)
+	if !ok || named.Obj().Pkg() == nil {
+		return false
+	}
+	return named.Obj().Name() == "Cmd" && named.Obj().Pkg().Path() == "os/exec"
 }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
