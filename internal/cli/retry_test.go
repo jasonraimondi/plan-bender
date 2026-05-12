@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/dispatch"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
@@ -202,7 +202,7 @@ func TestRetry_ConcurrentRaceSurfacesCASMismatch(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
+		owner := planrepo.NewProdStatusOwner(cfg.PlansDir, cfg)
 		competeErr = owner.Transition(context.Background(), "ship", 4,
 			[]status.Status{status.StatusBlocked}, status.StatusInProgress, "manual resume")
 	}()

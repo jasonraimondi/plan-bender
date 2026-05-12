@@ -52,7 +52,18 @@ func NewWriteIssueCmd() *cobra.Command {
 			}
 			defer sess.Close()
 
-			if err := stageIssue(sess, issue); err != nil {
+			found := false
+			for _, existing := range sess.Snapshot().Issues {
+				if existing.ID == issue.ID {
+					found = true
+					break
+				}
+			}
+			if found {
+				if err := sess.UpdateIssue(issue); err != nil {
+					return err
+				}
+			} else if err := sess.CreateIssue(issue); err != nil {
 				return err
 			}
 			if err := sess.Commit(cfg); err != nil {
@@ -71,17 +82,4 @@ func NewWriteIssueCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-// stageIssue routes the write through CreateIssue when the ID is new, or
-// UpdateIssue when it already exists in the snapshot. Keeps the command's
-// upsert-style behavior intact while satisfying the session's separate
-// create / update entry points.
-func stageIssue(sess *planrepo.PlanSession, issue schema.Issue) error {
-	for _, existing := range sess.Snapshot().Issues {
-		if existing.ID == issue.ID {
-			return sess.UpdateIssue(issue)
-		}
-	}
-	return sess.CreateIssue(issue)
 }

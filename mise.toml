@@ -1,2 +1,6 @@
 [tools]
 go = "1.24"
+
+[tasks.lint-locksafe]
+description = "Run the locksafe analyzer"
+run = "go run ./tools/locksafe/cmd/locksafe ./..."

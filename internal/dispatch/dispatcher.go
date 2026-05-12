@@ -88,11 +88,11 @@ func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.Issue, err
 }
 
 // statusOwner returns the lazily-constructed status.Owner backed by the
-// production prodStatusStore wired to d.plansDir(). All status writes during
-// a Run flow through this single Owner.
+// production planrepo status adapter wired to d.plansDir(). All status writes
+// during a Run flow through this single Owner.
 func (d *Dispatcher) statusOwner() *status.Owner {
 	d.ownerOnce.Do(func() {
-		d.owner = status.New(newProdStatusStore(d.plansDir(), d.Config))
+		d.owner = planrepo.NewProdStatusOwner(d.plansDir(), d.Config)
 	})
 	return d.owner
 }

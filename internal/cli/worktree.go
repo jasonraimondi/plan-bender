@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/dispatch"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
@@ -61,7 +60,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 			// so the YAML reflects the on-disk worktree. Without this the branch
 			// lives on disk while the issue YAML still shows backlog/null branch,
 			// and dispatch's CAS-checks lose the thread on the next iteration.
-			owner := dispatch.NewProdStatusOwner(cfg.PlansDir, cfg)
+			owner := planrepo.NewProdStatusOwner(cfg.PlansDir, cfg)
 			claimErr := owner.Claim(cmd.Context(), slug, id, res.Branch, "worktree create")
 			claimed := claimErr == nil || errors.Is(claimErr, status.ErrAlreadyInState)
 			if !claimed {

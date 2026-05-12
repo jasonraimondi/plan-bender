@@ -153,7 +153,7 @@ func TestWriteIssue_RejectsUnknownFields(t *testing.T) {
 }
 
 // TestWriteIssue_UpdatesExisting exercises the upsert routing inside
-// stageIssue: a second write to the same ID must succeed (UpdateIssue path)
+// A second write to the same ID must succeed through the update path.
 // rather than failing on duplicate-ID. Slug rename also exercises the
 // session's filename-rewrite-with-cleanup logic.
 func TestWriteIssue_UpdatesExisting(t *testing.T) {

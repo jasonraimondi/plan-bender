@@ -1,0 +1,23 @@
+name: Locksafe
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  locksafe:
+    name: locksafe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Run locksafe analyzer
+        run: go run ./tools/locksafe/cmd/locksafe ./...

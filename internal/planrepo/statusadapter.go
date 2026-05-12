@@ -1,8 +1,7 @@
-package dispatch
+package planrepo
 
 import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
@@ -12,12 +11,12 @@ import (
 // runs inside one planrepo session that holds the plan lock from Open through
 // Save (which delegates to PlanSession.Commit) until Close.
 type prodStatusStore struct {
-	plans *planrepo.Plans
+	plans *Plans
 	cfg   config.Config
 }
 
 func newProdStatusStore(plansDir string, cfg config.Config) *prodStatusStore {
-	return &prodStatusStore{plans: planrepo.NewProd(plansDir), cfg: cfg}
+	return &prodStatusStore{plans: NewProd(plansDir), cfg: cfg}
 }
 
 // NewProdStatusOwner returns a status.Owner backed by a planrepo-session
@@ -40,7 +39,7 @@ func (s *prodStatusStore) OpenSession(slug string) (status.Session, error) {
 // only mutates a single issue per call, so Save stages the update and commits
 // in one step before returning control.
 type prodStatusSession struct {
-	sess *planrepo.PlanSession
+	sess *PlanSession
 	cfg  config.Config
 }
 

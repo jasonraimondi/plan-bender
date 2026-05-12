@@ -3,23 +3,23 @@ package dispatch
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"encoding/json"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
 func newTestOwner(plansDir string) *status.Owner {
-	return status.New(newProdStatusStore(plansDir, config.Defaults()))
+	return planrepo.NewProdStatusOwner(plansDir, config.Defaults())
 }
 
 // subprocessTestPrd is a fully-populated PRD — including UC-1 in use_cases

@@ -44,7 +44,18 @@ func (y *localFS) CreateIssue(_ context.Context, issue *schema.Issue, projectID 
 		return RemoteIssue{}, err
 	}
 	defer sess.Close()
-	if err := upsertIssue(sess, *issue); err != nil {
+	found := false
+	for _, existing := range sess.Snapshot().Issues {
+		if existing.ID == issue.ID {
+			found = true
+			break
+		}
+	}
+	if found {
+		if err := sess.UpdateIssue(*issue); err != nil {
+			return RemoteIssue{}, err
+		}
+	} else if err := sess.CreateIssue(*issue); err != nil {
 		return RemoteIssue{}, err
 	}
 	if err := sess.Commit(y.cfg); err != nil {
@@ -112,19 +123,6 @@ func (y *localFS) PullProject(_ context.Context, projectID string) (PullProjectR
 		Project: RemoteProject{ID: projectID, Name: snap.PRD.Name},
 		Issues:  remoteIssues,
 	}, nil
-}
-
-// upsertIssue lets CreateIssue act as create-or-update. Existing localFS
-// callers (notably SyncPush) treat CreateIssue as a write entry point and
-// may re-run after a partial failure, so silently routing same-id calls to
-// UpdateIssue preserves prior behavior with the session API.
-func upsertIssue(sess *planrepo.PlanSession, issue schema.Issue) error {
-	for _, existing := range sess.Snapshot().Issues {
-		if existing.ID == issue.ID {
-			return sess.UpdateIssue(issue)
-		}
-	}
-	return sess.CreateIssue(issue)
 }
 
 func issueToRemote(issue *schema.Issue) RemoteIssue {
