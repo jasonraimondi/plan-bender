@@ -19,13 +19,13 @@ const (
 
 // Result is the output of Resolve. Issue is nil when no candidate is ready.
 type Result struct {
-	Issue         *schema.Issue `json:"issue"`
-	Reason        string            `json:"reason"`
-	WasBlocked    bool              `json:"was_blocked"`
-	RequiresHuman bool              `json:"requires_human"`
-	AllDone       bool              `json:"all_done"`
-	BlockedCount  int               `json:"blocked_count"`
-	Skipped       []SkippedIssue    `json:"skipped"`
+	Issue         *schema.Issue  `json:"issue"`
+	Reason        string         `json:"reason"`
+	WasBlocked    bool           `json:"was_blocked"`
+	RequiresHuman bool           `json:"requires_human"`
+	AllDone       bool           `json:"all_done"`
+	BlockedCount  int            `json:"blocked_count"`
+	Skipped       []SkippedIssue `json:"skipped"`
 }
 
 // SkippedIssue is one entry in Result.Skipped — every issue not chosen with a one-line reason.

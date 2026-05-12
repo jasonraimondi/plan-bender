@@ -186,11 +186,11 @@ type ResolvedAgent struct {
 }
 
 type Config struct {
-	Tracks          []string          `json:"tracks"`
-	WorkflowStates  []string          `json:"workflow_states"`
-	PlansDir        string            `json:"plans_dir"`
-	MaxPoints       int               `json:"max_points"`
-	Agents          []ResolvedAgent   `json:"agents"`
+	Tracks          []string        `json:"tracks"`
+	WorkflowStates  []string        `json:"workflow_states"`
+	PlansDir        string          `json:"plans_dir"`
+	MaxPoints       int             `json:"max_points"`
+	Agents          []ResolvedAgent `json:"agents"`
 	rawAgents       map[string]*AgentEntry
 	Pipeline        PipelineConfig    `json:"pipeline"`
 	IssueSchema     IssueSchemaConfig `json:"issue_schema"`

@@ -26,10 +26,10 @@ var linearToPriority = map[int]string{
 }
 
 type linearBackend struct {
-	client    *linear.Client
-	cfg       config.Config
-	teamID    string
-	stateIDs  map[string]string
+	client   *linear.Client
+	cfg      config.Config
+	teamID   string
+	stateIDs map[string]string
 }
 
 func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
@@ -89,8 +89,8 @@ func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue) (R
 
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueUpdateInput{
-		Title:   issue.Name,
-		StateID: stateID,
+		Title:    issue.Name,
+		StateID:  stateID,
 		Priority: mapPriority(issue.Priority),
 	}
 

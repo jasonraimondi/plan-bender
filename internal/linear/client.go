@@ -115,12 +115,12 @@ func (c *Client) CreateIssue(ctx context.Context, input IssueCreateInput) (*Issu
 
 // IssueCreateInput is the input for creating a Linear issue.
 type IssueCreateInput struct {
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	TeamID      string     `json:"teamId"`
-	ProjectID   string     `json:"projectId,omitempty"`
-	Priority    int        `json:"priority,omitempty"`
-	StateID     string     `json:"stateId,omitempty"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	TeamID      string `json:"teamId"`
+	ProjectID   string `json:"projectId,omitempty"`
+	Priority    int    `json:"priority,omitempty"`
+	StateID     string `json:"stateId,omitempty"`
 }
 
 // UpdateIssue updates a Linear issue.
