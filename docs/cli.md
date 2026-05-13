@@ -63,14 +63,14 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 2. Loop until done:
    - Reload issues from disk; if every issue is `done` or `canceled`, exit 0.
    - Compute the AFK batch (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
-   - If no batch and only HITL issues remain, print a summary and exit 2.
+   - If no batch and only HITL issues remain, print a summary and exit 2; resolve with `/bender-implement-hitl <slug>`.
    - For each batch issue, create the worktree → atomically claim the issue (`status: in-progress` + `branch: <name>` written through the canonical struct round-trip) → run `before_issue` hook → spawn `claude --print` in the worktree → run `after_issue` hook. The pre-spawn claim is what keeps the issue JSON parseable: without it, sub-agents follow the implement-issue skill's "set branch / set status" instructions and a naive Edit produces duplicate keys that the strict decoder then rejects. Per-issue stdout is serialized through a locked writer and streams as `[issue-N] …`; the full transcript lands at `.plan-bender/logs/{slug}/{id}.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`); timeouts mark the issue `blocked` with reason `timed out`.
    - Merge successful branches into the integration branch in dependency order, flipping each merged issue to `done`. Conflicts mark the issue `blocked` and `git merge --abort`. Merge-back is skipped entirely when no issue succeeded in the batch.
    - Run `after_batch` hook in the repo root.
 
 Before merging, dispatch captures the parent repo's HEAD and refuses to run if `git diff-index` reports tracked-file changes. HEAD is restored on exit so successful dispatch never silently leaves the user on the integration branch.
 
-Exit codes: `0` (all done), `2` (HITL-only remain), `1` (other failure, e.g. stuck-on-blocked, dirty repo).
+Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure, e.g. stuck-on-blocked, dirty repo).
 
 ### Completion sentinel
 

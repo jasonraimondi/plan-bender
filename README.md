@@ -91,6 +91,7 @@ plan-bender is a methodology made executable. Each phase has a dedicated skill t
 | Decomposition | `/bender-prd-to-issues` | Thin-sliced issues with dep graph and tracks |
 | Review | `/bender-review-prd` | Principal-engineer pass with auto-fix |
 | Implementation | `/bender-implement-prd` | `pba dispatch` runs all AFK issues |
+| HITL issue | `/bender-implement-hitl` | Resolve human decisions, then AFK or implement |
 | Single issue | `/bender-implement-issue` | Branch → code → test → PR |
 
 ### Plan layout
@@ -146,6 +147,7 @@ flowchart LR
     D["/bender-prd-to-issues"]
     R["/bender-review-prd"]:::optional
     M["/bender-implement-prd"]
+    H["/bender-implement-hitl"]:::optional
     WI["/bender-write-issue"]
     II["/bender-implement-issue"]
     L["/bender-sync-linear"]:::side
@@ -158,6 +160,9 @@ flowchart LR
     R --> M
     D -.skip review.-> M
     M --> Done
+    M -.HITL remains.-> H
+    H --> M
+    H --> Done
 
     I -.single issue.-> WI
     WI --> II
@@ -178,6 +183,7 @@ flowchart LR
 | `/bender-prd-to-issues` | Decompose PRD into thin vertical-slice issues |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
 | `/bender-implement-prd` | Run `pba dispatch` to work all issues in dependency order |
+| `/bender-implement-hitl` | Resolve human-gated issues and either hand back to AFK or implement now |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
 | `/bender-sync-linear` | Sync plan with Linear (Linear backend only) |
 

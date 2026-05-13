@@ -56,6 +56,7 @@ func TestAllTemplatesLoad(t *testing.T) {
 		"bender-prd-to-issues.skill.tmpl",
 		"bender-review-prd.skill.tmpl",
 		"bender-implement-prd.skill.tmpl",
+		"bender-implement-hitl.skill.tmpl",
 		"bender-implement-issue.skill.tmpl",
 		"bender-interview-me.skill.tmpl",
 		"bender-sync-linear.skill.tmpl",
@@ -78,6 +79,30 @@ func TestAllTemplatesRender(t *testing.T) {
 			assert.NotEmpty(t, out)
 		})
 	}
+}
+
+func TestImplementHitlTemplate_AgentConditional(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	tmplContent := tmpls["bender-implement-hitl.skill.tmpl"]
+
+	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "claude-code"
+		out, err := Render("implement-hitl", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.Contains(t, out, "AskUserQuestionTool")
+	})
+
+	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "openclaw"
+		out, err := Render("implement-hitl", tmplContent, ctx)
+		require.NoError(t, err)
+		assert.NotContains(t, out, "AskUserQuestionTool")
+		assert.Contains(t, out, "Ask the user directly in conversation")
+	})
 }
 
 func TestInterviewTemplate_AgentConditional(t *testing.T) {
@@ -317,6 +342,31 @@ func TestWorkflowStatesJoin(t *testing.T) {
 	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, strings.Join(ctx["workflow_states"].([]string), " → "))
+}
+
+func TestImplementHitlTemplate_UsesResolverAndIssueWorkflow(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-hitl", tmpls["bender-implement-hitl.skill.tmpl"], ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "plan-bender-agent next")
+	assert.Contains(t, out, "plan-bender-agent worktree create")
+	assert.Contains(t, out, "plan-bender-agent complete")
+	assert.Contains(t, out, "/bender-implement-prd")
+}
+
+func TestImplementPrdTemplate_SuggestsHitlSkill(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "/bender-implement-hitl")
 }
 
 func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
