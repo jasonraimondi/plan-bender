@@ -1,0 +1,8 @@
+{
+  "agents": {
+    "claude-code": true,
+    "pi": true
+  },
+  "plans_dir": "./.plan-bender/plans/",
+  "report_bugs": true
+}
