@@ -19,8 +19,8 @@ func MarkAgentMode(cmd *cobra.Command) {
 	cmd.SetContext(ctx)
 }
 
-// NewAgentRootCmd creates the root command for the plan-bender-agent binary.
-// All output is JSON. Errors are written as {"error": "...", "code": "..."} to stdout.
+// All plan-bender-agent output is JSON. Errors are written as
+// {"error": "...", "code": "..."} to stdout.
 func NewAgentRootCmd(version string) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "plan-bender-agent",

@@ -14,9 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewStatusCmd creates the `status` command, a read-only per-issue view of a
-// plan's state. Pairs with `retry` for recovering from blocked dispatches —
-// status surfaces the blocked reason, retry clears it.
+// Pairs with `retry` for recovering from blocked dispatches — status
+// surfaces the blocked reason, retry clears it.
 func NewStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <slug>",

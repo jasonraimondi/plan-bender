@@ -10,9 +10,7 @@ import (
 
 const defaultSubprocessTimeout = 30 * time.Minute
 
-// ResolvedSubprocessTimeout returns the parsed timeout, falling back to
-// defaultSubprocessTimeout when unset. validate() rejects unparseable values
-// at Load time, so this method does not return an error.
+// validate() rejects unparseable values at Load time, so this never returns an error.
 func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
 	if p.SubprocessTimeout == "" {
 		return defaultSubprocessTimeout
@@ -43,8 +41,7 @@ type PipelineConfig struct {
 	Skip           []string `json:"skip,omitempty"`
 	BranchStrategy string   `json:"branch_strategy,omitempty"`
 	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
-	// otherwise blocks dispatch indefinitely. Stored as a Go duration string
-	// ("30m", "2h"); empty means use defaultSubprocessTimeout.
+	// otherwise blocks dispatch indefinitely. Empty falls back to defaultSubprocessTimeout.
 	SubprocessTimeout string `json:"subprocess_timeout,omitempty"`
 }
 

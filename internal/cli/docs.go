@@ -77,7 +77,6 @@ var docsOpener = func(url string) error {
 	return exec.Command("open", url).Run()
 }
 
-// NewDocsCmd creates the docs command.
 func NewDocsCmd() *cobra.Command {
 	var full, printOnly bool
 

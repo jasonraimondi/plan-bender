@@ -7,10 +7,8 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-// inMemStore is the in-memory Store fake used by Owner tests. Per-slug Lock
-// gives the same serialization guarantee as the production flock-based
-// store, so concurrency tests are meaningful here. Production callers use
-// the planrepo-backed adapter — this fake is package-test only.
+// Per-slug Lock gives the same serialization guarantee as the production
+// flock-based store, so concurrency tests are meaningful here.
 type inMemStore struct {
 	mu     sync.Mutex
 	locks  map[string]*sync.Mutex

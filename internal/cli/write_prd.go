@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewWritePrdCmd creates the write-prd command.
 func NewWritePrdCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "write-prd <slug> [file]",

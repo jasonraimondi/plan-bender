@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCompletionCmd creates the completion command.
 func NewCompletionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "completion [bash|zsh|fish]",
@@ -31,7 +30,6 @@ func NewCompletionCmd() *cobra.Command {
 	return cmd
 }
 
-// SlugCompletionFunc returns a ValidArgsFunction that completes plan slugs.
 func SlugCompletionFunc() cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		if len(args) > 0 {

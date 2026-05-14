@@ -20,8 +20,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 )
 
-// ErrHITLOnly signals that the dispatch loop ended because every remaining
-// issue requires human input. The CLI maps this to exit code 2.
+// ErrHITLOnly signals only HITL issues remain. The CLI maps this to exit code 2.
 var ErrHITLOnly = errors.New("only HITL issues remain")
 
 // Dispatcher orchestrates the full implementation loop for a plan: resolve →

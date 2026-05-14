@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewDispatchCmd creates the `dispatch` command for both binaries.
-//
 // Exit semantics: ErrHITLOnly is returned unwrapped so main.go can map it to
 // exit code 2; other errors propagate and result in exit 1.
 func NewDispatchCmd() *cobra.Command {

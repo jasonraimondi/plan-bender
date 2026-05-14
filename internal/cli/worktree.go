@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewWorktreeCmd returns the `worktree` parent command with `create` and `gc` subcommands.
 func NewWorktreeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "worktree",

@@ -7,7 +7,6 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-// Status values referenced by the resolver. Mirrors workflow_states in config.
 const (
 	statusInProgress = "in-progress"
 	statusTodo       = "todo"

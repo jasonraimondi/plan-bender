@@ -20,12 +20,12 @@ func CompleteSentinel(id int) string {
 	return fmt.Sprintf(`<pba:complete issue-id="%d"/>`, id)
 }
 
-// NewCompleteCmd creates the `complete` command. Flips an issue to in-review
-// under the plan-wide flock by delegating to status.Owner.Transition. The
-// from-set covers todo, in-progress, and backlog because sub-agents may skip
-// straight from any of those into in-review on completion. Re-completing an
-// already-in-review issue is idempotent: the sentinel is still emitted so a
-// dispatcher that lost track of an earlier completion can detect the result.
+// Flips an issue to in-review under the plan-wide flock via
+// status.Owner.Transition. The from-set covers todo, in-progress, and backlog
+// because sub-agents may skip straight from any of those into in-review on
+// completion. Re-completing an already-in-review issue is idempotent: the
+// sentinel is still emitted so a dispatcher that lost track of an earlier
+// completion can detect the result.
 func NewCompleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "complete <slug> <id>",

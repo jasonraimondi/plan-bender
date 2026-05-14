@@ -94,7 +94,6 @@ func readPartial(path string) (PartialConfig, error) {
 	return partial, nil
 }
 
-// migrateDeprecatedKeys rewrites removed config keys in raw JSON before typed unmarshal.
 func migrateDeprecatedKeys(data []byte) ([]byte, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {

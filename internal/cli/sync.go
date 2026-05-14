@@ -12,8 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewSyncCmd creates the sync command group. Each backend tool is a subcommand
-// (e.g. `sync linear`) which in turn exposes push/pull.
+// Each backend tool is a subcommand (e.g. `sync linear`) which exposes push/pull.
 func NewSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",

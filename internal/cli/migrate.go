@@ -18,9 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// NewMigrateCmd creates the migrate command. One-shot: convert legacy
-// .yaml plan and config files to .json on disk, then delete the originals.
-// Existing .json siblings are left untouched.
 func NewMigrateCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{

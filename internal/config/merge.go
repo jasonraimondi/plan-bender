@@ -1,6 +1,7 @@
 package config
 
-// merge: agents merge per-key, other maps merge keys, slices replace entirely, scalars overwrite.
+// merge applies layer over base: agents merge per-key, other maps merge keys,
+// slices replace entirely, scalars overwrite.
 func merge(base Config, layer PartialConfig) Config {
 	out := base
 

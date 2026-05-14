@@ -60,7 +60,6 @@ type fileRemove struct {
 type commitPlan struct {
 	writes  []fileWrite
 	removes []fileRemove
-	// dirsToEnsure are directories that must exist before any write runs.
 	dirsToEnsure []string
 }
 

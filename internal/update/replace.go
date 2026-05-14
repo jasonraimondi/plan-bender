@@ -47,8 +47,7 @@ func ReplaceBinary(newBinaryPath, targetPath string) error {
 	return nil
 }
 
-// RecreateSymlink creates (or recreates) a symlink named linkName in binaryDir
-// pointing to target. Any existing file or symlink at the path is removed first.
+// RecreateSymlink removes any existing file or symlink at the path before linking.
 func RecreateSymlink(binaryDir, target, linkName string) error {
 	symlinkPath := filepath.Join(binaryDir, linkName)
 

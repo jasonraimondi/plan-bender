@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewWriteIssueCmd creates the write-issue command.
 func NewWriteIssueCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "write-issue <slug> [file]",

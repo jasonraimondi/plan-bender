@@ -31,7 +31,6 @@ func ensureVPrefix(version string) string {
 	return "v" + version
 }
 
-// BuildAssetURL constructs the download URL for a platform-specific release archive.
 func BuildAssetURL(version, goos, goarch string) string {
 	return BuildAssetURLWithBase(version, goos, goarch, githubReleaseBase)
 }
@@ -43,7 +42,6 @@ func BuildAssetURLWithBase(version, goos, goarch, baseURL string) string {
 	return fmt.Sprintf("%s/%s/%s", baseURL, tag, filename)
 }
 
-// BuildChecksumsURL constructs the download URL for the checksums.txt file.
 func BuildChecksumsURL(version string) string {
 	return BuildChecksumsURLWithBase(version, githubReleaseBase)
 }
@@ -53,15 +51,12 @@ func BuildChecksumsURLWithBase(version, baseURL string) string {
 	return fmt.Sprintf("%s/%s/checksums.txt", baseURL, tag)
 }
 
-// AssetFilename returns the archive filename for the given version/os/arch.
 func AssetFilename(version, goos, goarch string) string {
 	v := stripVPrefix(version)
 	return fmt.Sprintf("%s_%s_%s_%s.tar.gz", binaryName, v, goos, goarch)
 }
 
-// VerifyChecksum parses checksums body and verifies that the SHA256 of the file at
-// archivePath matches the expected hash for expectedFilename.
-// The checksums format is: "{sha256}  {filename}" (two spaces between hash and name).
+// VerifyChecksum expects the checksums format "{sha256}  {filename}" (two spaces).
 func VerifyChecksum(archivePath string, checksumsBody []byte, expectedFilename string) error {
 	expectedHash, err := findHashInChecksums(checksumsBody, expectedFilename)
 	if err != nil {
@@ -112,8 +107,6 @@ func hashFile(path string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-// ExtractBinaries extracts the plan-bender and plan-bender-agent binaries from
-// a gzipped tarball into destDir. Returns paths to both extracted binaries.
 func ExtractBinaries(tarballPath, destDir string) (mainBin, agentBin string, err error) {
 	f, err := os.Open(tarballPath)
 	if err != nil {

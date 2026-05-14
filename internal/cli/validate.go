@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewValidateCmd creates the validate command.
 func NewValidateCmd() *cobra.Command {
 	var jsonOutput bool
 

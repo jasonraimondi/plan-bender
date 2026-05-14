@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-// hookDefaultTimeout caps any RunHook call whose ctx carries no deadline. A
-// runaway before_issue hook (`./forever.sh`) would otherwise pin the dispatcher
-// indefinitely.
 const hookDefaultTimeout = 10 * time.Minute
 
 // RunHook executes cmd via `sh -c` with Cmd.Dir=dir, streams stdout to outWriter

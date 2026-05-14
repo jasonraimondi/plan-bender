@@ -23,7 +23,6 @@ type selfUpdateCmd struct {
 	syncPlanFiles       func(root string, out io.Writer) error
 }
 
-// NewSelfUpdateCmd creates the self-update command.
 func NewSelfUpdateCmd(version string) *cobra.Command {
 	client := &http.Client{}
 	sc := &selfUpdateCmd{

@@ -14,10 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewRetryCmd creates the `retry` command. Flips a blocked issue back to todo
-// under the plan-wide flock by delegating to status.Owner.Transition. The
-// from-set is intentionally narrow ([blocked] only); any other current state
-// surfaces as a CAS-mismatch error rather than silently overwriting live work.
+// Flips a blocked issue back to todo under the plan-wide flock via
+// status.Owner.Transition. The from-set is intentionally narrow ([blocked]
+// only); any other current state surfaces as a CAS-mismatch error rather
+// than silently overwriting live work.
 func NewRetryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retry <slug> <id>",

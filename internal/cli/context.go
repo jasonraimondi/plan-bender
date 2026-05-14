@@ -18,7 +18,6 @@ type contextFullJSON struct {
 	Stats        plan.Stats         `json:"stats"`
 }
 
-// NewContextCmd creates the context command for the agent binary.
 // No slug: returns JSON array of plan summaries.
 // With slug: returns full plan context as JSON.
 func NewContextCmd() *cobra.Command {

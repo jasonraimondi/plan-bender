@@ -106,7 +106,6 @@ func FetchLatest(client *http.Client, baseURL string) (string, error) {
 	return strings.TrimPrefix(release.TagName, "v"), nil
 }
 
-// FetchReleaseNotes returns the body/changelog of the GitHub release for the given version.
 func FetchReleaseNotes(client *http.Client, baseURL, version string) (string, error) {
 	url := baseURL + repoTagsPath + "v" + version
 

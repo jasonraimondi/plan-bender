@@ -33,13 +33,10 @@ func tryOpenWithin(plans *planrepo.Plans, slug string, timeout time.Duration) bo
 	}
 }
 
-// TestSyncPush_NoLockDuringRemoteCreateIssue exercises acceptance criterion
-// "Sync never holds a plan repository session lock while calling Linear or
-// other remote Backend APIs": the remote stub probes the plan lock from a
-// goroutine; if SyncPush is still holding the snapshot session, the probe
-// would block and the assertion fails. The probe runs once during the first
-// CreateIssue call so we exercise the per-issue iteration path, not just the
-// initial readSnapshot release.
+// The remote stub probes the plan lock from a goroutine during the first
+// CreateIssue call; if SyncPush still holds the snapshot session, the probe
+// blocks and the assertion fails. The probe runs mid-iteration so we exercise
+// the per-issue path, not just the initial readSnapshot release.
 func TestSyncPush_NoLockDuringRemoteCreateIssue(t *testing.T) {
 	prd := testPrd()
 	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}

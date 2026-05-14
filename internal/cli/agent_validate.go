@@ -21,7 +21,6 @@ type agentValidationResult struct {
 	Errors []agentValidationError `json:"errors"`
 }
 
-// NewAgentValidateCmd creates the agent validate subcommand.
 func NewAgentValidateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "validate <slug>",

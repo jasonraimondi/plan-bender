@@ -22,7 +22,6 @@ type CheckResult struct {
 	Message string
 }
 
-// RunChecks runs all doctor checks and returns the results.
 func RunChecks(root string, cfg config.Config, version string) []CheckResult {
 	results := []CheckResult{
 		configCheck(root),
@@ -35,7 +34,6 @@ func RunChecks(root string, cfg config.Config, version string) []CheckResult {
 	return results
 }
 
-// NewDoctorCmd creates the doctor command.
 func NewDoctorCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "doctor",

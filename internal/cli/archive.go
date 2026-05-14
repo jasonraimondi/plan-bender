@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewArchiveCmd creates the archive command.
 func NewArchiveCmd() *cobra.Command {
 	var force bool
 

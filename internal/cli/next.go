@@ -12,8 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewNextCmd creates the next command, which returns the recommended next
-// issue for a plan from YAML state. Pure read — does not mutate any file.
+// Pure read; does not mutate any file.
 func NewNextCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "next <slug>",

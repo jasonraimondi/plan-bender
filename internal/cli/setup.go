@@ -29,7 +29,6 @@ type setupDeps struct {
 	newValidator func(apiKey string) linearValidator
 }
 
-// NewSetupCmd creates the setup command.
 func NewSetupCmd(version string) *cobra.Command {
 	return newSetupCmd(setupDeps{version: version})
 }
