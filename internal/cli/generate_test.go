@@ -23,13 +23,13 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	count, err := GenerateSkills(dir, cfg, &out)
 	require.NoError(t, err)
 
-	assert.Equal(t, 9, count)
-	assert.Contains(t, out.String(), "9 skills generated")
+	assert.Equal(t, 10, count)
+	assert.Contains(t, out.String(), "10 skills generated")
 
 	agentDir := filepath.Join(dir, ".plan-bender", "skills", "claude-code")
 	entries, err := os.ReadDir(agentDir)
 	require.NoError(t, err)
-	assert.Len(t, entries, 9)
+	assert.Len(t, entries, 10)
 
 	for _, e := range entries {
 		data, err := os.ReadFile(filepath.Join(agentDir, e.Name(), "SKILL.md"))
@@ -76,13 +76,13 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 	count, err := GenerateSkills(dir, cfg, &out)
 	require.NoError(t, err)
 
-	assert.Equal(t, 18, count)
-	assert.Contains(t, out.String(), "18 skills generated")
+	assert.Equal(t, 20, count)
+	assert.Contains(t, out.String(), "20 skills generated")
 
 	for _, agent := range []string{"claude-code", "openclaw"} {
 		entries, err := os.ReadDir(filepath.Join(dir, ".plan-bender", "skills", agent))
 		require.NoError(t, err)
-		assert.Len(t, entries, 9, "agent %s should have 9 skill dirs", agent)
+		assert.Len(t, entries, 10, "agent %s should have 10 skill dirs", agent)
 	}
 
 	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-interview-me", "SKILL.md"))

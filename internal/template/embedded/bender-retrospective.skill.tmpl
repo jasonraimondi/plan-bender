@@ -1,0 +1,108 @@
+---
+name: bender-retrospective
+description: End-of-session retrospective on plan-bender itself. Scans the conversation, any pb-error-report-*.log files, and plan-state anomalies for friction with plan-bender's commands, skills, and UX, then writes a structured feedback log. Use when the user says "retro", "what went wrong", "session feedback", or "/bender-retrospective" at the end of a planning or implementation session.
+---
+
+# Plan-Bender Retrospective
+
+Self-improvement pass on **plan-bender itself** (not the user's project work). Identify friction with plan-bender's commands, skill instructions, and workflows during this session, then write a structured feedback log the user can ship as a GitHub issue.
+
+This is the inverse of the per-command bug report: bug reports capture **one command that failed**; this retro captures **the shape of the session** — papercuts, confusing skill steps, dead-ends, anything where plan-bender made the work harder than it needed to be.
+
+## When to run
+
+User-invoked, at the end of a session. Don't run it spontaneously. Trigger phrases: "retro", "what went wrong", "/bender-retrospective", "any feedback for plan-bender".
+
+## Inputs to scan
+
+Most signal lives in conversation memory — the other sources corroborate or surface things you might have forgotten. Scan all of them; don't suppress a conversation-only finding just because the others didn't echo it.
+
+1. **Conversation memory** — review the session and identify:
+   - `pb` / `pba` commands that needed a retry, a flag the user had to guess, or stdout/stderr you had to interpret.
+   - Skill instructions that were ambiguous, contradicted each other, or sent you down a dead-end before you course-corrected.
+   - Steps you had to do manually because the skill didn't cover them (e.g., editing YAML by hand, fixing a `blocked_by` mismatch the skill should have caught).
+   - User corrections — every "no, do X instead" is a signal a skill or command nudged you wrong.
+   - Moments where you asked the user a question the skill or a `pb` command should have answered.
+
+2. **TodoWrite trail** (claude-code only) — your own task list is evidence of where you re-planned:
+   - Tasks added mid-session that the skill should have anticipated up-front.
+   - Tasks marked `completed` then re-opened — usually means the "done" criteria from the skill was wrong.
+   - Long-running `in_progress` tasks the skill expected to close quickly.
+
+3. **`pb-error-report-*.log` files** — list files matching that glob in the project root. Each is a per-command failure already captured. Summarize them here so the retro is a single artifact; don't restate the full stdout, just the command and the one-line cause.
+
+4. **Plan-state anomalies** — run `{{.commands.context}}` and `{{.commands.status}} {slug}` for any plan touched this session. Flag only concrete, observable states:
+   - Issues whose `state` is `in_progress` but whose `updated` field predates this session's first command.
+   - `blocked_by` on issue A names B, but B's `blocking` does not name A (or vice versa).
+   - Worktrees listed by `pba worktree list` (if available) that have no issue in a non-terminal state.
+   - Plan YAML where `git log -1 -- <file>` shows a commit but the corresponding `pb` / `pba` command in the session never ran (i.e., the user hand-edited).
+
+## Finding categories
+
+Sort findings into these buckets. Skip empty buckets — don't pad.
+
+- **Command friction** — `pb` / `pba` UX: confusing flags, unclear errors, missing output, surprising exit codes.
+- **Skill clarity** — places where this or another `bender-*` skill's instructions were ambiguous, missing a step, or led you wrong before correction.
+- **Workflow gaps** — things the workflow should have caught automatically (validation, sync, status transitions) but pushed onto the user or onto you.
+- **Plan-state anomalies** — concrete state in the plans dir that shouldn't have been reachable from a clean run-through.
+- **Suggested improvements** — for each finding, one sentence: what would plan-bender do differently if this were fixed.
+
+Each finding should name the **specific command, skill, or file** and the **specific moment in the session** (paraphrase, don't quote walls of output). Vague findings ("the flow felt rough") are not useful — drop them or sharpen them.
+
+## Output
+
+Write a single file to:
+
+```
+.plan-bender/retros/<UTC-timestamp>.log
+```
+
+(e.g. `.plan-bender/retros/20260514T143000Z.log`. The `.plan-bender/` namespace keeps retros out of the user's project root and out of their `git status`. Create the `retros/` directory if it doesn't exist.)
+
+Use this structure:
+
+```
+# Plan-Bender Session Retro
+Date: <UTC ISO timestamp>
+Agent: {{.agent}}
+pb version: <output of `pb --version`>
+Plans touched: <slug list>
+
+## Summary
+<2-3 sentences — the headline friction of the session>
+
+## Findings
+
+### Command friction
+- <command> — <one-line problem> — <one-line suggested improvement>
+
+### Skill clarity
+- <skill name> step <N> — <what was ambiguous> — <how it should read>
+
+### Workflow gaps
+- <gap> — <suggested improvement>
+
+### Plan-state anomalies
+- <slug>/<file or issue id> — <observed state> — <how it got there>
+
+### Existing bug reports referenced
+- <pb-error-report-*.log filename> — <one-line cause>
+
+## What worked well
+<short — non-empty only if there's something specific worth keeping>
+```
+
+## After writing
+
+1. Tell the user the absolute path of the log.
+2. Link https://github.com/jasonraimondi/plan-bender/issues so they can file the retro as an issue (or several).
+3. **Do not** modify any plan files, skills, or config as part of this skill — this is observation-only. Improvements happen in a separate PR.
+
+## What NOT to include
+
+Out of scope: anything unrelated to plan-bender (CI, the test framework, the user's project code), and any finding you can't anchor to a specific command, skill, file, or session moment. If the session had zero real friction, write a one-line log and stop — don't manufacture findings to fill buckets.
+{{if .report_bugs}}
+## Bug reports
+
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+{{end}}

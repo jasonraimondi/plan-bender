@@ -61,6 +61,7 @@ func TestAllTemplatesLoad(t *testing.T) {
 		"bender-implement-issue.skill.tmpl",
 		"bender-interview-me.skill.tmpl",
 		"bender-sync-linear.skill.tmpl",
+		"bender-retrospective.skill.tmpl",
 	}
 	for _, name := range expected {
 		assert.Contains(t, tmpls, name, "missing template %s", name)
@@ -266,7 +267,7 @@ func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
-	const marker = "pb-error-report-"
+	const marker = "## Bug reports"
 
 	for name, content := range tmpls {
 		t.Run(name+"/off", func(t *testing.T) {
