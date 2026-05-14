@@ -133,6 +133,7 @@ Templates receive a context map built from your config:
 | `sync_pull` | `plan-bender-agent sync linear pull` |
 | `archive` | `plan-bender-agent archive` |
 | `next` | `plan-bender-agent next` |
+| `status` | `plan-bender-agent status` |
 | `dispatch` | `plan-bender-agent dispatch` |
 | `complete` | `plan-bender-agent complete` |
 | `retry` | `plan-bender-agent retry` |

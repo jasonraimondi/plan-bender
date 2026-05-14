@@ -37,6 +37,7 @@ func fixtureContext() map[string]any {
 			"sync_pull":       "plan-bender-agent sync linear pull",
 			"archive":         "plan-bender-agent archive",
 			"next":            "plan-bender-agent next",
+			"status":          "plan-bender-agent status",
 			"dispatch":        "plan-bender-agent dispatch",
 			"complete":        "plan-bender-agent complete",
 			"retry":           "plan-bender-agent retry",
@@ -353,6 +354,8 @@ func TestImplementHitlTemplate_UsesResolverAndIssueWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent next")
+	assert.Contains(t, out, "plan-bender-agent status")
+	assert.Contains(t, out, "plan-bender-agent validate")
 	assert.Contains(t, out, "plan-bender-agent worktree create")
 	assert.Contains(t, out, "plan-bender-agent complete")
 	assert.Contains(t, out, "/bender-implement-prd")

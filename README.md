@@ -201,7 +201,7 @@ flowchart LR
 > [!IMPORTANT]
 > Dispatch refuses to run with a dirty working tree. It captures and restores `HEAD` on exit so a successful run never silently leaves you on the integration branch.
 
-**Exit codes:** `0` (all done) • `2` (only HITL issues remain) • `1` (failure — stuck-on-blocked, dirty repo, etc.)
+**Exit codes:** `0` (all done) • `2` (only HITL issues remain — run `/bender-implement-hitl <slug>`) • `1` (failure — stuck-on-blocked, dirty repo, etc.)
 
 ### Recovering from a stuck dispatch
 
