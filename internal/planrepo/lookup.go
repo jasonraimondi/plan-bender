@@ -50,6 +50,23 @@ func (p *Plans) FindIssueProject(id int) (string, error) {
 	return "", fmt.Errorf("cannot find project for issue #%d", id)
 }
 
+// normalizeSlug strips a leading plansDir prefix from slug. Shell tab
+// completion often produces slugs that include the plansDir component (e.g.
+// "jason/plans/foo" when plansDir is "./jason/plans/"); without stripping,
+// the loader would join plansDir twice and fail to find the plan.
+func normalizeSlug(plansDir, slug string) string {
+	cleanedDir := filepath.Clean(plansDir)
+	cleanedSlug := filepath.Clean(slug)
+	if cleanedDir == "." || cleanedDir == "" {
+		return cleanedSlug
+	}
+	prefix := cleanedDir + string(filepath.Separator)
+	if stripped, ok := strings.CutPrefix(cleanedSlug, prefix); ok {
+		return stripped
+	}
+	return cleanedSlug
+}
+
 // planDirExists reports whether slug has any subtree at all under plansDir.
 func planDirExists(fsys fs.FS, slug string) bool {
 	info, err := fs.Stat(fsys, slug)

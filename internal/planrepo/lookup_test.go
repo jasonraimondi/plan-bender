@@ -83,6 +83,43 @@ func TestOpenOrCreate_FreshAllowsCommit(t *testing.T) {
 	assert.Contains(t, string(body), `"name": "Fresh Plan"`)
 }
 
+// Tab completion in shells produces slugs that include the plansDir prefix
+// (e.g. `jason/plans/self-serve-billing-recovery` when plansDir is
+// `./jason/plans/`). Plans.Open must accept such paths and treat them as the
+// trailing slug so users don't have to manually trim what their shell pasted.
+func TestOpen_StripsPlansDirPrefixFromSlug(t *testing.T) {
+	root := t.TempDir()
+	chdirForTest(t, root)
+	plansDir := "./jason/plans/"
+	writePlan(t, plansDir, "ship", validPrd, map[string]string{
+		"1-a.json": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("jason/plans/ship")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	assert.Equal(t, "Test Plan", sess.Snapshot().PRD.Name)
+}
+
+func TestOpenOrCreate_StripsPlansDirPrefixFromSlug(t *testing.T) {
+	root := t.TempDir()
+	chdirForTest(t, root)
+	plansDir := "./jason/plans/"
+	writePlan(t, plansDir, "ship", validPrd, map[string]string{
+		"1-a.json": issueYAML(1, "a"),
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.OpenOrCreate("jason/plans/ship")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	assert.Equal(t, "Test Plan", sess.Snapshot().PRD.Name)
+	assert.Equal(t, "ship", sess.Snapshot().Slug)
+}
+
 func TestFindIssueProject_DeterministicSorted(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	// Write two plans where both contain an issue prefixed "5-": only the

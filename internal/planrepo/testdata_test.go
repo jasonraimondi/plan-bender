@@ -10,6 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func chdirForTest(t *testing.T, dir string) {
+	t.Helper()
+	old, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() { require.NoError(t, os.Chdir(old)) })
+}
+
 func mustValidPRD(slug string) schema.PRD {
 	return schema.PRD{
 		Name:        "Fresh Plan",

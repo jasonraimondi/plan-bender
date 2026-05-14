@@ -42,6 +42,7 @@ type PlanSession struct {
 // Open acquires the plan lock and loads a snapshot for slug. If lock
 // acquisition or snapshot loading fails, no lock is held on return.
 func (p *Plans) Open(slug string) (*PlanSession, error) {
+	slug = normalizeSlug(p.plansDir, slug)
 	release, err := p.adapters.Lock(p.plansDir)
 	if err != nil {
 		return nil, err
@@ -68,6 +69,7 @@ func (p *Plans) Open(slug string) (*PlanSession, error) {
 // error from Open so half-written state surfaces loudly rather than silently
 // being treated as fresh.
 func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
+	slug = normalizeSlug(p.plansDir, slug)
 	release, err := p.adapters.Lock(p.plansDir)
 	if err != nil {
 		return nil, err
