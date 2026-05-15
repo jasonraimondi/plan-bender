@@ -29,8 +29,8 @@ type PullProjectResult struct {
 
 type Backend interface {
 	CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error)
-	CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error)
-	UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error)
+	CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error)
+	UpdateIssue(ctx context.Context, issue *schema.Issue, slug string) (RemoteIssue, error)
 	PullIssue(ctx context.Context, remoteID string) (RemoteIssue, error)
 	PullProject(ctx context.Context, projectID string) (PullProjectResult, error)
 }

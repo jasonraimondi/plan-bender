@@ -85,7 +85,7 @@ func TestCreateIssue(t *testing.T) {
 	_, err := b.CreateProject(ctx, testPrd())
 	require.NoError(t, err)
 
-	result, err := b.CreateIssue(ctx, testIssue(1), "test")
+	result, err := b.CreateIssue(ctx, testIssue(1), "test", "test")
 	require.NoError(t, err)
 	assert.Equal(t, "1", result.ID)
 	assert.Equal(t, "Test issue", result.Title)
@@ -101,12 +101,12 @@ func TestUpdateIssue(t *testing.T) {
 
 	_, err := b.CreateProject(ctx, testPrd())
 	require.NoError(t, err)
-	_, err = b.CreateIssue(ctx, testIssue(1), "test")
+	_, err = b.CreateIssue(ctx, testIssue(1), "test", "test")
 	require.NoError(t, err)
 
 	updated := testIssue(1)
 	updated.Status = "in-progress"
-	result, err := b.UpdateIssue(ctx, updated)
+	result, err := b.UpdateIssue(ctx, updated, "test")
 	require.NoError(t, err)
 	assert.Equal(t, "in-progress", result.Status)
 }
@@ -117,7 +117,7 @@ func TestPullIssue(t *testing.T) {
 
 	_, err := b.CreateProject(ctx, testPrd())
 	require.NoError(t, err)
-	_, err = b.CreateIssue(ctx, testIssue(1), "test")
+	_, err = b.CreateIssue(ctx, testIssue(1), "test", "test")
 	require.NoError(t, err)
 
 	result, err := b.PullIssue(ctx, "test/1")
@@ -133,13 +133,13 @@ func TestPullProject(t *testing.T) {
 
 	_, err := b.CreateProject(ctx, testPrd())
 	require.NoError(t, err)
-	_, err = b.CreateIssue(ctx, testIssue(1), "test")
+	_, err = b.CreateIssue(ctx, testIssue(1), "test", "test")
 	require.NoError(t, err)
 
 	issue2 := testIssue(2)
 	issue2.Slug = "second-issue"
 	issue2.Name = "Second"
-	_, err = b.CreateIssue(ctx, issue2, "test")
+	_, err = b.CreateIssue(ctx, issue2, "test", "test")
 	require.NoError(t, err)
 
 	result, err := b.PullProject(ctx, "test")
@@ -178,17 +178,17 @@ func TestUpdateIssue_FindsProjectInSortedOrder(t *testing.T) {
 
 	alphaIssue := testIssue(7)
 	alphaIssue.Slug = "in-alpha"
-	_, err = b.CreateIssue(ctx, alphaIssue, "alpha")
+	_, err = b.CreateIssue(ctx, alphaIssue, "alpha", "alpha")
 	require.NoError(t, err)
 	zetaIssue := testIssue(7)
 	zetaIssue.Slug = "in-zeta"
-	_, err = b.CreateIssue(ctx, zetaIssue, "zeta")
+	_, err = b.CreateIssue(ctx, zetaIssue, "zeta", "zeta")
 	require.NoError(t, err)
 
 	bumped := testIssue(7)
 	bumped.Slug = "in-alpha"
 	bumped.Status = "in-progress"
-	_, err = b.UpdateIssue(ctx, bumped)
+	_, err = b.UpdateIssue(ctx, bumped, "alpha")
 	require.NoError(t, err)
 
 	alphaPath := filepath.Join(dir, "alpha", "issues", "7-in-alpha.json")
@@ -207,7 +207,7 @@ func TestUpdateIssue_FindsProjectInSortedOrder(t *testing.T) {
 // write failure.
 func TestUpdateIssue_MissingIssueReports(t *testing.T) {
 	b, _ := testBackend(t)
-	_, err := b.UpdateIssue(context.Background(), testIssue(999))
+	_, err := b.UpdateIssue(context.Background(), testIssue(999), "test")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "issue #999")
 }
