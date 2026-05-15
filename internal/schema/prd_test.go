@@ -62,7 +62,7 @@ func TestPrdValidate_AllStatuses(t *testing.T) {
 	}
 }
 
-func TestPrdYaml_RoundTrip(t *testing.T) {
+func TestPrdJSON_RoundTrip(t *testing.T) {
 	prd := validPrd()
 	data, err := json.Marshal(&prd)
 	require.NoError(t, err)

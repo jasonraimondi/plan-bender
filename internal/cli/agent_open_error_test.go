@@ -63,7 +63,7 @@ func setupMalformedPlan(t *testing.T, slug string) string {
 	return dir
 }
 
-func TestStatus_MalformedYAML_ReturnsInvalidPlanWithFileAndLine(t *testing.T) {
+func TestStatus_MalformedJSON_ReturnsInvalidPlanWithFileAndLine(t *testing.T) {
 	setupMalformedPlan(t, "bad")
 
 	root := NewAgentRootCmd("test")
@@ -82,7 +82,7 @@ func TestStatus_MalformedYAML_ReturnsInvalidPlanWithFileAndLine(t *testing.T) {
 	assert.NotEmpty(t, resp.Hint)
 }
 
-func TestNext_MalformedYAML_ReturnsInvalidPlan(t *testing.T) {
+func TestNext_MalformedJSON_ReturnsInvalidPlan(t *testing.T) {
 	setupMalformedPlan(t, "bad")
 
 	root := NewAgentRootCmd("test")
@@ -98,7 +98,7 @@ func TestNext_MalformedYAML_ReturnsInvalidPlan(t *testing.T) {
 	assert.Equal(t, string(ErrInvalidPlan), resp.Code)
 }
 
-func TestContext_MalformedYAML_ReturnsInvalidPlan(t *testing.T) {
+func TestContext_MalformedJSON_ReturnsInvalidPlan(t *testing.T) {
 	setupMalformedPlan(t, "bad")
 
 	root := NewAgentRootCmd("test")

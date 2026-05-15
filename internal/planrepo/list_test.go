@@ -50,7 +50,7 @@ func TestList_ReturnsValidPlans(t *testing.T) {
   "outcome": "B"
 }`
 	writePlan(t, plansDir, "alpha", prdAlpha, map[string]string{
-		"1-one.json": issueYAML(1, "one"),
+		"1-one.json": issueJSON(1, "one"),
 	})
 	writePlan(t, plansDir, "beta", prdBeta, nil)
 
@@ -84,7 +84,7 @@ func TestList_SkipsMalformedPrdAndDoesNotFailWholeListing(t *testing.T) {
   "why": "G",
   "outcome": "G"
 }`, map[string]string{
-		"1-only.json": issueYAML(1, "only"),
+		"1-only.json": issueJSON(1, "only"),
 	})
 
 	writePlan(t, plansDir, "broken-prd", "::not json::", nil)

@@ -136,7 +136,7 @@ func newDispatcher(fix *dispatchFixture) *Dispatcher {
 	}
 }
 
-func loadIssueYAML(t *testing.T, plansDir string, id int, slug string) schema.Issue {
+func loadIssueJSON(t *testing.T, plansDir string, id int, slug string) schema.Issue {
 	t.Helper()
 	path := filepath.Join(plansDir, "demo", "issues", fmt.Sprintf("%d-%s.json", id, slug))
 	data, err := os.ReadFile(path)
@@ -208,8 +208,8 @@ exit 2
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stuck")
 
-	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
-	beta := loadIssueYAML(t, fix.plansDir, 2, "beta")
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
+	beta := loadIssueJSON(t, fix.plansDir, 2, "beta")
 
 	assert.Equal(t, "done", alpha.Status, "alpha should be merged and flipped to done")
 	assert.Equal(t, "blocked", beta.Status, "beta should be blocked after subprocess failure")
@@ -242,8 +242,8 @@ exit 1
 	d := newDispatcher(fix)
 	require.NoError(t, d.Run(context.Background(), "demo"))
 
-	firstResult := loadIssueYAML(t, fix.plansDir, 1, "first")
-	secondResult := loadIssueYAML(t, fix.plansDir, 2, "second")
+	firstResult := loadIssueJSON(t, fix.plansDir, 1, "first")
+	secondResult := loadIssueJSON(t, fix.plansDir, 2, "second")
 	assert.Equal(t, "done", firstResult.Status)
 	assert.Equal(t, "done", secondResult.Status)
 }
@@ -506,15 +506,15 @@ exit 1
 	err := timeBoxRun(t, d, "demo", 30*time.Second)
 	require.NoError(t, err)
 
-	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
-	beta := loadIssueYAML(t, fix.plansDir, 2, "beta")
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
+	beta := loadIssueJSON(t, fix.plansDir, 2, "beta")
 	assert.Equal(t, "done", alpha.Status)
 	assert.Equal(t, "done", beta.Status)
 }
 
 // TestDispatcher_RunOneClaimsBeforeSubprocess asserts dispatch atomically claims
 // the issue (status=in-progress + branch stamped) BEFORE the sub-agent reads
-// the YAML. Without this the implement-issue skill prompts the agent to set
+// the issue JSON. Without this the implement-issue skill prompts the agent to set
 // `branch:` and `status:` itself by textual edit, and a naive Edit produces
 // duplicate keys that yaml.v3 then rejects on every subsequent Load. The
 // regression we're guarding against is the v0.0.35 corruption where
@@ -543,9 +543,9 @@ exit 0
 	d := newDispatcher(fix)
 	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
 
-	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "done", alpha.Status)
-	require.NotNil(t, alpha.Branch, "Claim must stamp branch on the YAML")
+	require.NotNil(t, alpha.Branch, "Claim must stamp branch on the issue JSON")
 	assert.Equal(t, "tester/demo--1-alpha", *alpha.Branch)
 }
 
@@ -564,7 +564,7 @@ func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stuck", "loop must terminate, not retry forever")
 
-	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "blocked", alpha.Status, "early-failure issue must be marked blocked")
 	require.NotNil(t, alpha.Notes)
 	assert.Contains(t, *alpha.Notes, "building prompt", "block reason should reference the failure")
@@ -651,7 +651,7 @@ func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
 
 	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
 
-	alpha := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "done", alpha.Status, "in-review issue must be flipped to done after recovery merge")
 
 	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
@@ -697,8 +697,8 @@ exit 1
 
 	require.NoError(t, timeBoxRun(t, d, "demo", 30*time.Second))
 
-	first := loadIssueYAML(t, fix.plansDir, 1, "first")
-	second := loadIssueYAML(t, fix.plansDir, 2, "second")
+	first := loadIssueJSON(t, fix.plansDir, 1, "first")
+	second := loadIssueJSON(t, fix.plansDir, 2, "second")
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
 }

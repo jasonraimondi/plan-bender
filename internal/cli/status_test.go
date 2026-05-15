@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const statusPrdYAML = `{
+const statusPrdJSON = `{
   "name": "Ship It",
   "slug": "ship",
   "status": "active",
@@ -22,7 +22,7 @@ const statusPrdYAML = `{
   "outcome": "Shipped"
 }`
 
-const statusIssueOneDoneYAML = `{
+const statusIssueOneDoneJSON = `{
   "id": 1,
   "slug": "setup-config",
   "name": "Setup config",
@@ -47,7 +47,7 @@ const statusIssueOneDoneYAML = `{
   "use_cases": ["UC-1"]
 }`
 
-const statusIssueTwoBlockedYAML = `{
+const statusIssueTwoBlockedJSON = `{
   "id": 2,
   "slug": "add-middleware",
   "name": "Add middleware",
@@ -73,7 +73,7 @@ const statusIssueTwoBlockedYAML = `{
   "notes": "subprocess timed out after 30m\n\nfollow-up failure detail"
 }`
 
-const statusIssueThreeTodoYAML = `{
+const statusIssueThreeTodoJSON = `{
   "id": 3,
   "slug": "deploy",
   "name": "Deploy it",
@@ -105,10 +105,10 @@ func setupStatusPlan(t *testing.T) string {
 	plansDir := filepath.Join(dir, ".plan-bender", "plans", "ship")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(statusPrdYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "1-setup-config.json"), []byte(statusIssueOneDoneYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "2-add-middleware.json"), []byte(statusIssueTwoBlockedYAML), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-deploy.json"), []byte(statusIssueThreeTodoYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(statusPrdJSON), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "1-setup-config.json"), []byte(statusIssueOneDoneJSON), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "2-add-middleware.json"), []byte(statusIssueTwoBlockedJSON), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "issues", "3-deploy.json"), []byte(statusIssueThreeTodoJSON), 0o644))
 	return dir
 }
 

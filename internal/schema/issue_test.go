@@ -127,7 +127,7 @@ func TestIssueValidate_AllValidPriorities(t *testing.T) {
 	}
 }
 
-func TestIssueYaml_RoundTrip(t *testing.T) {
+func TestIssueJSON_RoundTrip(t *testing.T) {
 	issue := validIssue()
 	data, err := json.Marshal(&issue)
 	require.NoError(t, err)

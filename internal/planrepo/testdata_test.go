@@ -56,7 +56,7 @@ const validPrd = `{
 }
 `
 
-func issueYAML(id int, slug string) string {
+func issueJSON(id int, slug string) string {
 	return fmt.Sprintf(`{
   "id": %d,
   "slug": %q,

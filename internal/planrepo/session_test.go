@@ -14,10 +14,10 @@ func TestOpen_LoadsSnapshotWithDeterministicIssueOrder(t *testing.T) {
 	// Write issues in non-sorted insertion order with filenames that exercise
 	// numeric vs lexicographic sort. We expect lexicographic sort by filename.
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"10-tenth.json":     issueYAML(10, "tenth"),
-		"2-second.json":     issueYAML(2, "second"),
-		"1-first.json":      issueYAML(1, "first"),
-		"20-twentieth.json": issueYAML(20, "twentieth"),
+		"10-tenth.json":     issueJSON(10, "tenth"),
+		"2-second.json":     issueJSON(2, "second"),
+		"1-first.json":      issueJSON(1, "first"),
+		"20-twentieth.json": issueJSON(20, "twentieth"),
 	})
 
 	repo := NewProd(plansDir)
@@ -86,7 +86,7 @@ func TestOpen_NoIssuesDir(t *testing.T) {
 func TestClose_Idempotent(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-first.json": issueYAML(1, "first"),
+		"1-first.json": issueJSON(1, "first"),
 	})
 
 	repo := NewProd(plansDir)
@@ -100,7 +100,7 @@ func TestClose_Idempotent(t *testing.T) {
 func TestClose_ReleasesLockSoNextOpenSucceeds(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "test-plan", validPrd, map[string]string{
-		"1-first.json": issueYAML(1, "first"),
+		"1-first.json": issueJSON(1, "first"),
 	})
 
 	repo := NewProd(plansDir)
@@ -132,7 +132,7 @@ func TestOpen_FailedLoadReleasesLock(t *testing.T) {
 	// A subsequent Open of an unrelated, valid plan must not block on a
 	// leaked lock. Use a fresh slug.
 	writePlan(t, plansDir, "good", validPrd, map[string]string{
-		"1-first.json": issueYAML(1, "first"),
+		"1-first.json": issueJSON(1, "first"),
 	})
 	sess, err := repo.Open("good")
 	require.NoError(t, err)

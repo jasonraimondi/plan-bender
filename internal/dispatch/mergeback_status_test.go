@@ -38,7 +38,7 @@ func makeMergeableBranch(t *testing.T, root, integrationBranch, branch, file str
 }
 
 // TestDispatcher_MergeBack_CASMismatchSurfaces drives MergeBack against an
-// issue YAML whose status is not in the from-set [in-review] and not equal to
+// issue JSON whose status is not in the from-set [in-review] and not equal to
 // the target done. owner.Transition returns *ErrCASMismatch; MergeBack must
 // wrap and return it instead of swallowing.
 func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
@@ -64,7 +64,7 @@ func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
 }
 
 // TestDispatcher_MergeBack_AlreadyInStateSwallowed drives MergeBack against
-// an issue YAML already in done state (crash-recovery: dispatcher restart
+// an issue JSON already in done state (crash-recovery: dispatcher restart
 // re-issues a transition that already landed). owner.Transition returns
 // ErrAlreadyInState; MergeBack must continue silently.
 func TestDispatcher_MergeBack_AlreadyInStateSwallowed(t *testing.T) {
@@ -85,6 +85,6 @@ func TestDispatcher_MergeBack_AlreadyInStateSwallowed(t *testing.T) {
 
 	require.NoError(t, err, "ErrAlreadyInState must be swallowed (crash-recovery path)")
 
-	post := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "done", post.Status, "issue stays done — no spurious write")
 }

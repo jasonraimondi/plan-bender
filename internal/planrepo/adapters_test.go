@@ -24,7 +24,7 @@ func writeFile(t *testing.T, path, body string) error {
 func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	wantErr := errors.New("lock denied")
@@ -46,7 +46,7 @@ func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 func TestNew_LockReleasedExactlyOnceOnClose(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	var releases int
@@ -90,7 +90,7 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 func TestNewProd_HasAllProductionAdaptersWired(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)

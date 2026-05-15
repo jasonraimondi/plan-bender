@@ -11,7 +11,7 @@ import (
 func TestPlansValidate_ValidPlan(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "good", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -60,7 +60,7 @@ func TestPlansValidate_MalformedPRD_AttributedToPRDFile(t *testing.T) {
 	planDir := filepath.Join(plansDir, "broken")
 	require.NoError(t, mkdirAll(t, filepath.Join(planDir, "issues")))
 	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.json"), `{"not_a_real_field": "x"}`))
-	require.NoError(t, writeFile(t, filepath.Join(planDir, "issues", "1-a.json"), issueYAML(1, "a")))
+	require.NoError(t, writeFile(t, filepath.Join(planDir, "issues", "1-a.json"), issueJSON(1, "a")))
 
 	repo := NewProd(plansDir)
 	res := repo.Validate("broken", testCfg())
@@ -73,7 +73,7 @@ func TestPlansValidate_MalformedPRD_AttributedToPRDFile(t *testing.T) {
 func TestPlansValidate_ReleasesLockSoNextOpenSucceeds(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "good", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const validIssueYAML = `{
+const validIssueJSON = `{
   "id": 1,
   "slug": "do-the-thing",
   "name": "Do the thing",
@@ -39,7 +39,7 @@ const validIssueYAML = `{
   "use_cases": []
 }`
 
-const validPrdYAML = `{
+const validPrdJSON = `{
   "name": "Test Plan",
   "slug": "test-plan",
   "status": "active",
@@ -60,7 +60,7 @@ func seedPlan(t *testing.T, root, slug string) {
 	t.Helper()
 	plansDir := filepath.Join(root, ".plan-bender", "plans")
 	var prd schema.PRD
-	require.NoError(t, json.Unmarshal([]byte(validPrdYAML), &prd))
+	require.NoError(t, json.Unmarshal([]byte(validPrdJSON), &prd))
 	prd.Slug = slug
 
 	sess, err := planrepo.NewProd(plansDir).OpenOrCreate(slug)
@@ -76,7 +76,7 @@ func TestWriteIssue_ValidIssue(t *testing.T) {
 	seedPlan(t, dir, "test-plan")
 
 	inputFile := filepath.Join(dir, "issue.json")
-	require.NoError(t, os.WriteFile(inputFile, []byte(validIssueYAML), 0o644))
+	require.NoError(t, os.WriteFile(inputFile, []byte(validIssueJSON), 0o644))
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan", inputFile})
@@ -96,7 +96,7 @@ func TestWriteIssue_StdinPipe(t *testing.T) {
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan"})
-	cmd.SetIn(strings.NewReader(validIssueYAML))
+	cmd.SetIn(strings.NewReader(validIssueJSON))
 	var out strings.Builder
 	cmd.SetOut(&out)
 	require.NoError(t, cmd.Execute())
@@ -117,7 +117,7 @@ func TestWriteIssue_AcceptsForwardRefs(t *testing.T) {
 	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
-	forwardRefIssue := strings.Replace(validIssueYAML, `"blocking": []`, `"blocking": [2, 3, 9]`, 1)
+	forwardRefIssue := strings.Replace(validIssueJSON, `"blocking": []`, `"blocking": [2, 3, 9]`, 1)
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan"})
@@ -140,7 +140,7 @@ func TestWriteIssue_RejectsUnknownFields(t *testing.T) {
 	chdir(t, dir)
 	seedPlan(t, dir, "test-plan")
 
-	bad := strings.Replace(validIssueYAML, `"priority": "medium"`, `"prirority": "medium"`, 1)
+	bad := strings.Replace(validIssueJSON, `"priority": "medium"`, `"prirority": "medium"`, 1)
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan"})
@@ -163,11 +163,11 @@ func TestWriteIssue_UpdatesExisting(t *testing.T) {
 
 	cmd := NewWriteIssueCmd()
 	cmd.SetArgs([]string{"test-plan"})
-	cmd.SetIn(strings.NewReader(validIssueYAML))
+	cmd.SetIn(strings.NewReader(validIssueJSON))
 	cmd.SetOut(&strings.Builder{})
 	require.NoError(t, cmd.Execute())
 
-	updated := strings.Replace(validIssueYAML, `"slug": "do-the-thing"`, `"slug": "renamed"`, 1)
+	updated := strings.Replace(validIssueJSON, `"slug": "do-the-thing"`, `"slug": "renamed"`, 1)
 	updated = strings.Replace(updated, `"name": "Do the thing"`, `"name": "Renamed"`, 1)
 	cmd2 := NewWriteIssueCmd()
 	cmd2.SetArgs([]string{"test-plan"})

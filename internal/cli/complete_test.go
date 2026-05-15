@@ -14,7 +14,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-const completeIssueYAML = `{
+const completeIssueJSON = `{
   "id": 3,
   "slug": "ship-it",
   "name": "Ship it",
@@ -48,7 +48,7 @@ func setupCompletePlan(t *testing.T, status string) string {
 
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(validShipPrd), 0o644))
 
-	body := completeIssueYAML
+	body := completeIssueJSON
 	if status != "" {
 		body = strings.Replace(body, `"status": "in-progress"`, `"status": "`+status+`"`, 1)
 	}

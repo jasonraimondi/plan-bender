@@ -20,7 +20,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
 
-const retryIssueYAML = `{
+const retryIssueJSON = `{
   "id": 4,
   "slug": "ship-cli",
   "name": "Ship the CLI",
@@ -54,7 +54,7 @@ func setupRetryPlan(t *testing.T, status string, withNotes bool) string {
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "issues"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "prd.json"), []byte(validShipPrd), 0o644))
 
-	body := retryIssueYAML
+	body := retryIssueJSON
 	if status != "" {
 		body = strings.Replace(body, `"status": "blocked"`, `"status": "`+status+`"`, 1)
 	}

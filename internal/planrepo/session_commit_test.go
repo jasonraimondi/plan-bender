@@ -56,7 +56,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -74,7 +74,7 @@ func TestUpdatePrd_ReflectedInSnapshot(t *testing.T) {
 func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -92,7 +92,7 @@ func TestUpdateIssue_ReflectedInSnapshot(t *testing.T) {
 func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -107,7 +107,7 @@ func TestUpdateIssue_RejectsUnknownID(t *testing.T) {
 func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -125,7 +125,7 @@ func TestCreateIssue_AppearsInSnapshot(t *testing.T) {
 func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -140,7 +140,7 @@ func TestCreateIssue_RejectsDuplicateID(t *testing.T) {
 func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
 	originalPrd := mustReadFile(t, filepath.Join(plansDir, "p", "prd.json"))
@@ -165,7 +165,7 @@ func TestCommit_PreflightValidationFailureNoWrites(t *testing.T) {
 func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -185,7 +185,7 @@ func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -207,7 +207,7 @@ func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {
 func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -237,8 +237,8 @@ func TestCommit_WritesDirtyPrdAndIssues(t *testing.T) {
 func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
-		"2-b.json": issueYAML(2, "b"),
+		"1-a.json": issueJSON(1, "a"),
+		"2-b.json": issueJSON(2, "b"),
 	})
 
 	var writes []string
@@ -272,7 +272,7 @@ func TestCommit_OnlyWritesDirtyFiles(t *testing.T) {
 func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)
@@ -291,7 +291,7 @@ func TestCommit_CreateIssueWritesNewFile(t *testing.T) {
 func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-original.json": issueYAML(1, "original"),
+		"1-original.json": issueJSON(1, "original"),
 	})
 
 	repo := NewProd(plansDir)
@@ -326,8 +326,8 @@ func TestCommit_SlugChangeRenamesIssueFile(t *testing.T) {
 func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
-		"2-b.json": issueYAML(2, "b"),
+		"1-a.json": issueJSON(1, "a"),
+		"2-b.json": issueJSON(2, "b"),
 	})
 
 	originalA := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
@@ -378,7 +378,7 @@ func TestCommit_BestEffortRollbackOnInjectedWriteFailure(t *testing.T) {
 func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	// Fail the second write so the first (new file 2-fresh.json) succeeds
@@ -421,7 +421,7 @@ func TestCommit_RollbackRemovesFreshlyCreatedFile(t *testing.T) {
 func TestClose_DiscardsDirtyChanges(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 	originalIssue := mustReadFile(t, filepath.Join(plansDir, "p", "issues", "1-a.json"))
 
@@ -442,7 +442,7 @@ func TestClose_DiscardsDirtyChanges(t *testing.T) {
 func TestConcurrentOpen_SerializesThroughLock(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writePlan(t, plansDir, "p", validPrd, map[string]string{
-		"1-a.json": issueYAML(1, "a"),
+		"1-a.json": issueJSON(1, "a"),
 	})
 
 	repo := NewProd(plansDir)

@@ -14,7 +14,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
-const worktreeIssueYAML = `{
+const worktreeIssueJSON = `{
   "id": 7,
   "slug": "middleware",
   "name": "Middleware",
@@ -57,7 +57,7 @@ func setupWorktreeRepo(t *testing.T) string {
 	plansDir := filepath.Join(root, ".plan-bender", "plans", "auth", "issues")
 	require.NoError(t, os.MkdirAll(plansDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "../prd.json"), []byte(validAuthPrd), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.json"), []byte(worktreeIssueYAML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "7-middleware.json"), []byte(worktreeIssueJSON), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"), []byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}}`), 0o644))
 
 	chdir(t, root)
@@ -83,9 +83,9 @@ func TestWorktreeCreate_AgentModeJSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	iss := loadWorktreeIssue(t, root)
-	assert.Equal(t, "in-progress", iss.Status, "issue YAML status must be in-progress after create")
+	assert.Equal(t, "in-progress", iss.Status, "issue JSON status must be in-progress after create")
 	require.NotNil(t, iss.Branch)
-	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch, "issue YAML branch must be set after create")
+	assert.Equal(t, "tester/auth--7-middleware", *iss.Branch, "issue JSON branch must be set after create")
 }
 
 func TestWorktreeCreate_HumanMode(t *testing.T) {

@@ -70,7 +70,7 @@ exit 0
 	err := d.Run(ctx, "demo")
 	require.Error(t, err)
 
-	post := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "blocked", post.Status, "issue should be blocked when before_issue fails")
 	require.NotNil(t, post.Notes)
 	assert.Contains(t, *post.Notes, "before_issue hook failed")
@@ -94,7 +94,7 @@ exit 0
 	defer cancel()
 	require.NoError(t, d.Run(ctx, "demo"))
 
-	post := loadIssueYAML(t, fix.plansDir, 1, "alpha")
+	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "done", post.Status, "after_issue hook failure must not block the issue")
 	assert.Contains(t, out.String(), "after_issue hook failed")
 }

@@ -23,7 +23,7 @@ func newTestOwner(plansDir string) *status.Owner {
 }
 
 // subprocessTestPrd is a fully-populated PRD — including UC-1 in use_cases
-// so cross-ref validation accepts stubIssueYAML — so planrepo.Commit's
+// so cross-ref validation accepts stubIssueJSON — so planrepo.Commit's
 // preflight validation accepts status writes from the owner during
 // subprocess tests.
 const subprocessTestPrd = `{
@@ -40,7 +40,7 @@ const subprocessTestPrd = `{
   ]
 }`
 
-const stubIssueYAML = `{
+const stubIssueJSON = `{
   "id": 5,
   "slug": "ship-it",
   "name": "Ship it",
@@ -69,7 +69,7 @@ func writeStubIssue(t *testing.T, plansDir, slug, status string) {
 	t.Helper()
 	dir := filepath.Join(plansDir, slug, "issues")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
-	body := stubIssueYAML
+	body := stubIssueJSON
 	if status != "" {
 		body = strings.Replace(body, `"status": "in-progress"`, `"status": "`+status+`"`, 1)
 	}
