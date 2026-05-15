@@ -32,6 +32,48 @@ func renderIssueBody(issue *schema.Issue, slug string) string {
 	return b.String()
 }
 
+// renderProjectBody renders a PRD into the two fields published to a Linear
+// project: the short description (the PRD's own description field) and the
+// markdown content body carrying the remaining PRD fields as headed sections.
+// The content body uses the same footer and overwrite disclaimer as the issue
+// body. Optional sections with no content are omitted.
+func renderProjectBody(prd *schema.PRD) (description, content string) {
+	var b strings.Builder
+
+	section(&b, "Why", prd.Why)
+	section(&b, "Outcome", prd.Outcome)
+	listSection(&b, "In scope", prd.InScope, false)
+	listSection(&b, "Out of scope", prd.OutOfScope, false)
+	useCaseSection(&b, prd.UseCases)
+	listSection(&b, "Decisions", prd.Decisions, false)
+	listSection(&b, "Open questions", prd.OpenQuestions, false)
+	listSection(&b, "Risks", prd.Risks, false)
+	listSection(&b, "Validation", prd.Validation, false)
+	if prd.Notes != nil && *prd.Notes != "" {
+		section(&b, "Notes", *prd.Notes)
+	}
+
+	b.WriteString("---\n\n")
+	fmt.Fprintf(&b, "**Status:** %s\n\n", prd.Status)
+	fmt.Fprintf(&b, "_Source: `.plan-bender/plans/%s/prd.json`. Linear is published from this file by plan-bender; edits made here are overwritten on the next sync._\n",
+		prd.Slug)
+
+	return prd.Description, b.String()
+}
+
+// useCaseSection writes a heading followed by a bulleted list of use cases,
+// each rendered as "**id**: description". An empty slice omits the heading.
+func useCaseSection(b *strings.Builder, useCases []schema.UseCase) {
+	if len(useCases) == 0 {
+		return
+	}
+	b.WriteString("## Use cases\n\n")
+	for _, uc := range useCases {
+		fmt.Fprintf(b, "- **%s**: %s\n", uc.ID, uc.Description)
+	}
+	b.WriteString("\n")
+}
+
 // section writes a heading and a prose body. Outcome and Scope are required by
 // schema validation, so this is only called with non-empty text.
 func section(b *strings.Builder, heading, body string) {

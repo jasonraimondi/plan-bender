@@ -26,6 +26,7 @@ func syncTestCfg() config.Config {
 // mockBackend implements Backend with per-method function fields.
 type mockBackend struct {
 	createProject func(ctx context.Context, prd *schema.PRD) (RemoteProject, error)
+	updateProject func(ctx context.Context, prd *schema.PRD) (RemoteProject, error)
 	createIssue   func(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error)
 	updateIssue   func(ctx context.Context, issue *schema.Issue, slug string) (RemoteIssue, error)
 	pullIssue     func(ctx context.Context, remoteID string) (RemoteIssue, error)
@@ -34,6 +35,12 @@ type mockBackend struct {
 
 func (m *mockBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
 	return m.createProject(ctx, prd)
+}
+func (m *mockBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
+	if m.updateProject == nil {
+		return RemoteProject{}, nil
+	}
+	return m.updateProject(ctx, prd)
 }
 func (m *mockBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error) {
 	return m.createIssue(ctx, issue, projectID, slug)
@@ -265,6 +272,51 @@ func TestSyncPush_CreatesProject(t *testing.T) {
 	updatedPrd := readPrdFromDisk(t, fix.plansDir, "test")
 	require.NotNil(t, updatedPrd.Linear)
 	assert.Equal(t, "new-proj", updatedPrd.Linear.ProjectID)
+}
+
+func TestSyncPush_RefreshesProject(t *testing.T) {
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+
+	fix := setupSyncTest(t, prd, []*schema.Issue{testIssue(1)})
+
+	projectCreated := false
+	var refreshedID string
+	be := &mockBackend{
+		createProject: func(_ context.Context, _ *schema.PRD) (RemoteProject, error) {
+			projectCreated = true
+			return RemoteProject{}, nil
+		},
+		updateProject: func(_ context.Context, prd *schema.PRD) (RemoteProject, error) {
+			refreshedID = prd.Linear.ProjectID
+			return RemoteProject{ID: prd.Linear.ProjectID}, nil
+		},
+		createIssue: func(_ context.Context, issue *schema.Issue, _, _ string) (RemoteIssue, error) {
+			return RemoteIssue{ID: fmt.Sprintf("lin-%d", issue.ID)}, nil
+		},
+	}
+
+	_, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
+	require.NoError(t, err)
+	assert.False(t, projectCreated, "existing project must not be re-created")
+	assert.Equal(t, "proj-1", refreshedID, "existing project must be refreshed via UpdateProject")
+}
+
+func TestSyncPush_ProjectRefreshError(t *testing.T) {
+	prd := testPrd()
+	prd.Linear = &schema.LinearRef{ProjectID: "proj-1"}
+
+	fix := setupSyncTest(t, prd, []*schema.Issue{testIssue(1)})
+
+	be := &mockBackend{
+		updateProject: func(_ context.Context, _ *schema.PRD) (RemoteProject, error) {
+			return RemoteProject{}, fmt.Errorf("api error")
+		},
+	}
+
+	_, err := SyncPush(context.Background(), fix.plans, be, "test", fix.cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "updating project")
 }
 
 func TestSyncPull_StatusUpdate(t *testing.T) {

@@ -57,7 +57,28 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 }
 
 func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
-	project, err := b.client.CreateProject(ctx, prd.Name, b.teamID)
+	description, content := renderProjectBody(prd)
+	project, err := b.client.CreateProject(ctx, linear.ProjectCreateInput{
+		Name:        prd.Name,
+		TeamIDs:     []string{b.teamID},
+		Description: description,
+		Content:     content,
+	})
+	if err != nil {
+		return RemoteProject{}, err
+	}
+	return RemoteProject{ID: project.ID, Name: project.Name, URL: project.URL}, nil
+}
+
+func (b *linearBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
+	if prd.Linear == nil || prd.Linear.ProjectID == "" {
+		return RemoteProject{}, fmt.Errorf("PRD has no linear project_id")
+	}
+	description, content := renderProjectBody(prd)
+	project, err := b.client.UpdateProject(ctx, prd.Linear.ProjectID, linear.ProjectUpdateInput{
+		Description: description,
+		Content:     content,
+	})
 	if err != nil {
 		return RemoteProject{}, err
 	}
