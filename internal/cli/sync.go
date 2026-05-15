@@ -30,7 +30,7 @@ func newSyncLinearCmd() *cobra.Command {
 		Long: `Sync local plan with Linear.
 
   sync linear push <slug>    push local PRD/issues to Linear (creates project + issues if missing)
-  sync linear pull <slug>    pull Linear state into local YAML`,
+  sync linear pull <slug>    pull Linear state into local JSON`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -58,7 +58,7 @@ func newSyncPushCmd() *cobra.Command {
 func newSyncPullCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pull <slug>",
-		Short: "Pull remote state to local YAML",
+		Short: "Pull remote state to local JSON",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return syncPull(cmd, args[0])

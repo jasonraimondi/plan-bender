@@ -15,7 +15,7 @@ func NewValidateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "validate <slug>",
-		Short: "Validate PRD and issue YAML files",
+		Short: "Validate PRD and issue JSON files",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]

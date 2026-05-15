@@ -95,9 +95,9 @@ func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Stat
 }
 
 // Claim atomically marks an issue as in-progress and records the branch a
-// worker has reserved for it. Used by `worktree create` so the YAML truthfully
+// worker has reserved for it. Used by `worktree create` so the issue JSON truthfully
 // reflects on-disk state after a worktree is created — without Claim the
-// branch lives on disk, but the issue YAML still says backlog/todo with no
+// branch lives on disk, but the issue JSON still says backlog/todo with no
 // branch field, and dispatch's CAS-checks lose the thread.
 //
 // Claim is idempotent: if the issue is already in-progress on the same

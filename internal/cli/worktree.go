@@ -56,8 +56,8 @@ func newWorktreeCreateCmd() *cobra.Command {
 			}
 
 			// Atomic claim: flip status to in-progress and stamp the branch field
-			// so the YAML reflects the on-disk worktree. Without this the branch
-			// lives on disk while the issue YAML still shows backlog/null branch,
+			// so the issue JSON reflects the on-disk worktree. Without this the branch
+			// lives on disk while the issue JSON still shows backlog/null branch,
 			// and dispatch's CAS-checks lose the thread on the next iteration.
 			owner := planrepo.NewProdStatusOwner(cfg.PlansDir, cfg)
 			claimErr := owner.Claim(cmd.Context(), slug, id, res.Branch, "worktree create")
@@ -72,7 +72,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 					)
 				}
 				return NewAgentError(
-					fmt.Sprintf("worktree created at %s on branch %s, but failed to update issue #%d YAML: %v",
+					fmt.Sprintf("worktree created at %s on branch %s, but failed to update issue #%d JSON: %v",
 						res.Path, res.Branch, id, claimErr),
 					ErrInternal,
 				)

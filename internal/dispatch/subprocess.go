@@ -123,7 +123,7 @@ func RunSubprocess(
 	// Wrap waitErr with stderr so the persisted blocked-state note retains
 	// observability. %w preserves the unwrap chain so Verdict's errors.As
 	// against *exec.ExitError still recovers the exit code. Cap the stderr
-	// portion so a verbose subprocess error cannot bloat the issue YAML.
+	// portion so a verbose subprocess error cannot bloat the issue JSON.
 	exitErr := waitErr
 	if exitErr != nil && strings.TrimSpace(stderrText) != "" {
 		exitErr = fmt.Errorf("%w\n%s", waitErr, truncateForNotes(strings.TrimSpace(stderrText)))
@@ -140,7 +140,7 @@ func RunSubprocess(
 // stderrNotesLimit caps how much stderr we embed in an issue's notes on failure.
 // The full transcript still lands in the dispatch log file; the cap exists so
 // a verbose subprocess error (e.g. an entire skill body echoed back as an
-// "unknown option" message) cannot bloat the YAML.
+// "unknown option" message) cannot bloat the JSON.
 const stderrNotesLimit = 2048
 
 func truncateForNotes(s string) string {
