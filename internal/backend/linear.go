@@ -26,11 +26,12 @@ var linearToPriority = map[int]string{
 }
 
 type linearBackend struct {
-	client   *linear.Client
-	cfg      config.Config
-	teamID   string
-	stateIDs map[string]string
-	labelIDs map[string]string // lowercased label name → Linear label id; nil until first load
+	client            *linear.Client
+	cfg               config.Config
+	teamID            string
+	stateIDs          map[string]string
+	labelIDs          map[string]string // lowercased label name → Linear label id; nil until first load
+	estimationEnabled bool
 }
 
 func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
@@ -44,16 +45,22 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 	client := linear.NewClient(cfg.Linear.APIKey)
 
 	// Pre-fetch workflow states; also resolves team key → UUID for mutations.
-	teamID, states, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
+	teamID, states, estimationType, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
 	if err != nil {
 		return nil, fmt.Errorf("fetching workflow states: %w", err)
 	}
 
+	estimationEnabled := estimationType != "" && estimationType != "notUsed"
+	if !estimationEnabled {
+		slog.Info("team has estimation disabled; issue points will not be synced", "team", cfg.Linear.Team)
+	}
+
 	return &linearBackend{
-		client:   client,
-		cfg:      cfg,
-		teamID:   teamID,
-		stateIDs: states,
+		client:            client,
+		cfg:               cfg,
+		teamID:            teamID,
+		stateIDs:          states,
+		estimationEnabled: estimationEnabled,
 	}, nil
 }
 
@@ -102,6 +109,9 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, pr
 		StateID:     stateID,
 		LabelIDs:    labelIDs,
 	}
+	if b.estimationEnabled {
+		input.Estimate = issue.Points
+	}
 
 	created, err := b.client.CreateIssue(ctx, input)
 	if err != nil {
@@ -127,6 +137,9 @@ func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, sl
 		StateID:     stateID,
 		Priority:    mapPriority(issue.Priority),
 		LabelIDs:    labelIDs,
+	}
+	if b.estimationEnabled {
+		input.Estimate = issue.Points
 	}
 
 	updated, err := b.client.UpdateIssue(ctx, *issue.LinearID, input)

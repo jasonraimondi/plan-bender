@@ -218,6 +218,45 @@ func TestCreateIssueLabel_Failure(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestListWorkflowStates_EstimationEnabled(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {
+			"team": {
+				"id": "team-uuid-1",
+				"issueEstimationType": "fibonacci",
+				"states": {
+					"nodes": [
+						{"id": "state-1", "name": "Backlog"},
+						{"id": "state-2", "name": "Done"}
+					]
+				}
+			}
+		}
+	}`)
+
+	teamID, states, estimationType, err := c.ListWorkflowStates(t.Context(), "ENG")
+	require.NoError(t, err)
+	assert.Equal(t, "team-uuid-1", teamID)
+	assert.Equal(t, "fibonacci", estimationType)
+	assert.Equal(t, map[string]string{"Backlog": "state-1", "Done": "state-2"}, states)
+}
+
+func TestListWorkflowStates_EstimationDisabled(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {
+			"team": {
+				"id": "team-uuid-1",
+				"issueEstimationType": "notUsed",
+				"states": {"nodes": []}
+			}
+		}
+	}`)
+
+	_, _, estimationType, err := c.ListWorkflowStates(t.Context(), "ENG")
+	require.NoError(t, err)
+	assert.Equal(t, "notUsed", estimationType)
+}
+
 func TestGetProject(t *testing.T) {
 	c := clientWithResponse(`{
 		"data": {
