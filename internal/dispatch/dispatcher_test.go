@@ -272,6 +272,167 @@ func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *tes
 	assert.Contains(t, string(out), "tester/demo")
 }
 
+// TestEnsureIntegrationBranch_BaseOverridesDefault_Integration covers the
+// happy path for --base under integration strategy: the integration branch
+// is forked off the supplied ref instead of the auto-detected default.
+func TestEnsureIntegrationBranch_BaseOverridesDefault_Integration(t *testing.T) {
+	fix := setupDispatch(t)
+
+	// Create a "feature-x" branch one commit ahead of main so a fork off
+	// feature-x produces a different SHA than a fork off main.
+	for _, args := range [][]string{
+		{"checkout", "-b", "feature-x"},
+		{"commit", "--allow-empty", "-m", "feature-x commit"},
+		{"checkout", "main"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", fix.root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	d := newDispatcher(fix)
+	d.Base = "feature-x"
+
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "tester/demo", branch)
+
+	// Integration branch's tip must match feature-x, not main.
+	integrationSHA, err := exec.Command("git", "-C", fix.root, "rev-parse", "tester/demo").Output()
+	require.NoError(t, err)
+	featureSHA, err := exec.Command("git", "-C", fix.root, "rev-parse", "feature-x").Output()
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(string(featureSHA)), strings.TrimSpace(string(integrationSHA)))
+}
+
+// TestEnsureIntegrationBranch_BaseOverridesDefault_Direct covers --base under
+// the direct strategy: ensureIntegrationBranch returns the supplied ref so
+// MergeBack merges issue branches into it instead of the default branch.
+func TestEnsureIntegrationBranch_BaseOverridesDefault_Direct(t *testing.T) {
+	fix := setupDispatch(t)
+
+	out, err := exec.Command("git", "-C", fix.root, "checkout", "-b", "feature-x").CombinedOutput()
+	require.NoError(t, err, "checkout: %s", string(out))
+	out, err = exec.Command("git", "-C", fix.root, "checkout", "main").CombinedOutput()
+	require.NoError(t, err, "checkout main: %s", string(out))
+
+	cfg := config.Defaults()
+	cfg.Pipeline.BranchStrategy = "direct"
+	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Base: "feature-x"}
+
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "feature-x", branch, "direct strategy must return --base as merge target")
+}
+
+// TestEnsureIntegrationBranch_BaseAcceptsSHA covers the "any commit-ish"
+// contract: a SHA is a valid --base.
+func TestEnsureIntegrationBranch_BaseAcceptsSHA(t *testing.T) {
+	fix := setupDispatch(t)
+
+	shaBytes, err := exec.Command("git", "-C", fix.root, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	sha := strings.TrimSpace(string(shaBytes))
+
+	d := newDispatcher(fix)
+	d.Base = sha
+
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "tester/demo", branch)
+
+	integrationSHA, err := exec.Command("git", "-C", fix.root, "rev-parse", "tester/demo").Output()
+	require.NoError(t, err)
+	assert.Equal(t, sha, strings.TrimSpace(string(integrationSHA)))
+}
+
+// TestEnsureIntegrationBranch_ExistingBranchWithBaseWarns covers the
+// warn-and-continue rule: when <user>/<slug> already exists and --base was
+// explicitly passed, dispatch warns and reuses the existing branch rather
+// than re-forking (which would clobber merged work).
+func TestEnsureIntegrationBranch_ExistingBranchWithBaseWarns(t *testing.T) {
+	fix := setupDispatch(t)
+
+	// Pre-create tester/demo so ensureIntegrationBranch hits the reuse path.
+	out, err := exec.Command("git", "-C", fix.root, "branch", "tester/demo").CombinedOutput()
+	require.NoError(t, err, "pre-create branch: %s", string(out))
+
+	buf := &bytes.Buffer{}
+	d := &Dispatcher{
+		Config:   config.Defaults(),
+		Root:     fix.root,
+		PlansDir: fix.plansDir,
+		Out:      buf,
+		Base:     "main",
+	}
+
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "tester/demo", branch)
+	assert.Contains(t, buf.String(), "tester/demo")
+	assert.Contains(t, buf.String(), "--base")
+	assert.Contains(t, buf.String(), "ignored")
+}
+
+// TestEnsureIntegrationBranch_ExistingBranchWithoutBaseSilent verifies the
+// warning fires only on explicit --base — bare re-runs stay silent.
+func TestEnsureIntegrationBranch_ExistingBranchWithoutBaseSilent(t *testing.T) {
+	fix := setupDispatch(t)
+
+	out, err := exec.Command("git", "-C", fix.root, "branch", "tester/demo").CombinedOutput()
+	require.NoError(t, err, "pre-create branch: %s", string(out))
+
+	buf := &bytes.Buffer{}
+	d := &Dispatcher{Config: config.Defaults(), Root: fix.root, PlansDir: fix.plansDir, Out: buf}
+
+	_, err = d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "ignored", "no --base = no warning")
+}
+
+// TestEnsureIntegrationBranch_BaseBypassesDetachedHEADError verifies the
+// free side benefit: when --base is supplied, the auto-detect path that
+// errors on detached HEAD without main/master is skipped entirely.
+func TestEnsureIntegrationBranch_BaseBypassesDetachedHEADError(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	for _, args := range [][]string{
+		{"init", "--initial-branch=feature-only"},
+		{"config", "user.email", "tester@example.com"},
+		{"config", "user.name", "Test User"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# r\n"), 0o644))
+	for _, args := range [][]string{
+		{"add", "README.md"},
+		{"commit", "-m", "init"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	out, err := exec.Command("git", "-C", root, "checkout", "--detach", "HEAD").CombinedOutput()
+	require.NoError(t, err, "detach: %s", string(out))
+
+	plansDir := filepath.Join(root, ".plan-bender", "plans")
+	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "demo", "issues"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(plansDir, "demo", "prd.json"),
+		[]byte(dispatcherTestPrd), 0o644))
+
+	d := &Dispatcher{
+		Config:   config.Defaults(),
+		Root:     root,
+		PlansDir: plansDir,
+		Out:      &bytes.Buffer{},
+		Base:     "feature-only",
+	}
+
+	branch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err, "explicit --base must bypass detached-HEAD detection")
+	assert.Equal(t, "tester/demo", branch)
+}
+
 // TestDefaultBranch_RejectsDetachedHEAD ensures defaultBranch errors out instead
 // of returning the literal "HEAD" when the repo is in detached state and has no
 // main/master and no origin/HEAD — otherwise downstream `git branch user/slug

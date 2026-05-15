@@ -33,6 +33,12 @@ type Dispatcher struct {
 	// PlansDir overrides Config.PlansDir when set; mainly for tests.
 	PlansDir string
 
+	// Base overrides the auto-detected default branch as the fork point for
+	// the integration branch (or the merge target under `direct` strategy).
+	// Empty preserves the auto-detect path. Validated by the CLI layer before
+	// the Dispatcher runs.
+	Base string
+
 	// Out is where prefixed sub-agent stdout is streamed. Defaults to os.Stdout.
 	Out io.Writer
 
@@ -546,15 +552,25 @@ func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
 }
 
 // ensureIntegrationBranch returns the branch name dispatch will merge into.
-// "direct" → repo default branch, "integration" → user/<slug> created off default if missing.
+// "direct" → base ref, "integration" → user/<slug> forked off the base if missing.
+//
+// The base is d.Base when set (already validated by the CLI as a commit-ish),
+// otherwise the auto-detected repo default branch. When d.Base is set and the
+// integration branch already exists from a prior run, the flag is ignored and
+// a warning is emitted — re-forking would clobber merged work, and silently
+// ignoring the explicit flag would mislead the operator.
 func (d *Dispatcher) ensureIntegrationBranch(ctx context.Context, slug string) (string, error) {
-	defaultBranch, err := defaultBranch(ctx, d.Root)
-	if err != nil {
-		return "", err
+	base := d.Base
+	if base == "" {
+		auto, err := defaultBranch(ctx, d.Root)
+		if err != nil {
+			return "", err
+		}
+		base = auto
 	}
 
 	if d.strategy() == "direct" {
-		return defaultBranch, nil
+		return base, nil
 	}
 
 	user, err := gitUser(ctx, d.Root)
@@ -568,9 +584,13 @@ func (d *Dispatcher) ensureIntegrationBranch(ctx context.Context, slug string) (
 		return "", err
 	}
 	if !exists {
-		if err := runGit(ctx, d.Root, "branch", branch, defaultBranch); err != nil {
+		if err := runGit(ctx, d.Root, "branch", branch, base); err != nil {
 			return "", fmt.Errorf("creating integration branch %q: %w", branch, err)
 		}
+		return branch, nil
+	}
+	if d.Base != "" {
+		fmt.Fprintf(d.out(), "warning: integration branch %q already exists; --base %q ignored\n", branch, d.Base)
 	}
 	return branch, nil
 }

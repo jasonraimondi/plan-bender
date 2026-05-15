@@ -60,6 +60,8 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 1. Determine the integration branch from `pipeline.branch_strategy`:
    - `integration` (default) — `<git-user>/<slug>` created off the repo default branch.
    - `direct` — the repo default branch itself.
+
+   Pass `--base <commit-ish>` to override the auto-detected default branch. Any ref `git rev-parse` accepts is valid (local branch, `origin/x`, tag, SHA); invalid refs error before any worktree is created. Under `integration`, the integration branch is forked off `--base`; under `direct`, issue branches are merged into `--base`. When `<git-user>/<slug>` already exists from a prior run, the flag is honored only at creation — passing `--base` on a re-run emits a warning and reuses the existing branch (re-forking would clobber merged work).
 2. Loop until done:
    - Reload issues from disk; if every issue is `done` or `canceled`, exit 0.
    - Compute the AFK batch (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
