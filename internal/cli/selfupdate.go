@@ -109,8 +109,8 @@ func (sc *selfUpdateCmd) run(cmd *cobra.Command, args []string) error {
 }
 
 func defaultSyncPlanFiles(root string, out io.Writer) error {
-	cfgPath := filepath.Join(root, ".plan-bender.yaml")
-	localPath := filepath.Join(root, ".plan-bender.local.yaml")
+	cfgPath := filepath.Join(root, ".plan-bender.json")
+	localPath := filepath.Join(root, ".plan-bender.local.json")
 	_, errCfg := os.Stat(cfgPath)
 	_, errLocal := os.Stat(localPath)
 	if errors.Is(errCfg, os.ErrNotExist) && errors.Is(errLocal, os.ErrNotExist) {
