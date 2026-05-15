@@ -21,7 +21,7 @@ plan-bender turns vague product ideas into thin, dependency-ordered, agent-ready
 interview ──► PRD ──► thin-sliced issues ──► implementation ──► PR
 ```
 
-It is **not** an agent runtime. It writes YAML and skill markdown; your agent (Claude Code, opencode, openclaw, or Pi) does the work. The `pba dispatch` loop fans out parallel git worktrees so multiple AFK issues can run concurrently.
+It is **not** an agent runtime. It writes JSON and skill markdown; your agent (Claude Code, opencode, openclaw, or Pi) does the work. The `pba dispatch` loop fans out parallel git worktrees so multiple AFK issues can run concurrently.
 
 > [!NOTE]
 > plan-bender is pre-1.0. The CLI surface is stable for day-to-day use but expect rough edges. Feedback and issues welcome.
@@ -31,9 +31,9 @@ It is **not** an agent runtime. It writes YAML and skill markdown; your agent (C
 - **Opinionated planning workflow** — interview → PRD → issues → review → implement, each step a dedicated skill
 - **Thin vertical slices** — hard `max_points: 3` cap forces decomposition into tracer-bullet issues
 - **Autonomous dispatch** — `pba dispatch` runs the implementation loop end-to-end with parallel worktrees, dependency-ordered merge-back, and lifecycle hooks
-- **YAML state** — PRDs and issues live in `.plan-bender/plans/<slug>/` next to your code, diffable and reviewable
+- **JSON state** — PRDs and issues live in `.plan-bender/plans/<slug>/` next to your code, diffable and reviewable
 - **Multi-agent** — emits skills for `claude-code`, `opencode`, `openclaw`, and `pi`
-- **Optional Linear backend** — sync local issues with a Linear project; local YAML stays the source of truth
+- **Optional Linear backend** — sync local issues with a Linear project; local JSON stays the source of truth
 - **Structured CLI** — `plan-bender-agent` (`pba`) returns JSON for agents to consume; `plan-bender` (`pb`) is the human-friendly twin
 
 ## Install
@@ -306,7 +306,7 @@ The `locksafe` workflow runs `go run ./tools/locksafe/cmd/locksafe ./...`; maint
 
 - [CLI reference](docs/cli.md) — every command, dispatch lifecycle, recovery
 - [Configuration](docs/configuration.md) — full config keys, templates, agents
-- [Schema](docs/schema.md) — PRD and issue YAML shapes
+- [Schema](docs/schema.md) — PRD and issue JSON shapes
 
 ## License
 

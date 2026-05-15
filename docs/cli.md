@@ -76,7 +76,7 @@ Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`)
 
 ### Completion sentinel
 
-A sub-agent signals completion by calling `pba complete <slug> <id>`. The command flips the issue YAML to `status: in-review` and writes `<pba:complete issue-id="N"/>` to stdout. Dispatch treats a successful subprocess as `exit 0 AND status == in-review`. Exit 0 without the status flip is treated as failure (issue marked `blocked`).
+A sub-agent signals completion by calling `pba complete <slug> <id>`. The command flips the issue JSON to `status: in-review` and writes `<pba:complete issue-id="N"/>` to stdout. Dispatch treats a successful subprocess as `exit 0 AND status == in-review`. Exit 0 without the status flip is treated as failure (issue marked `blocked`).
 
 ## Recovering from a stuck dispatch
 

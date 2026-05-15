@@ -17,8 +17,8 @@
 | Maturity | v0.5.6, ~2.2k stars, MIT | v0.0.31, pre-1.0, two-binary split, goreleaser |
 | LoC | ~13k prod / ~21k tests | ~12k total (cmd+internal) |
 | Talks to Claude via | Shells out to `claude --print --output-format stream-json -p -` inside a container | Doesn't talk to Claude. Writes skill markdown; the user's Claude reads it |
-| User-facing artifact | A hand-edited `.sandcastle/main.mts` script | YAML PRD + issue files in `.plan-bender/plans/{slug}/` |
-| Task store | None — delegated to GitHub Issues / Beads (string substitution into prompts) | YAML files behind a `Backend` interface (yamlFS, linear) |
+| User-facing artifact | A hand-edited `.sandcastle/main.mts` script | JSON PRD + issue files in `.plan-bender/plans/{slug}/` |
+| Task store | None — delegated to GitHub Issues / Beads (string substitution into prompts) | JSON files in `internal/planrepo`; Linear sync via the `Backend` interface |
 | Workflow states | None for tasks; `<promise>COMPLETE</promise>` stops an iteration | Explicit list: `backlog → todo → in-progress → blocked → in-review → qa → done → canceled` |
 | Sandboxing | First-class — `bind-mount`/`isolated`/`none` × Docker/Podman/Vercel/Daytona | None. Runs in the user's checkout |
 | Worktrees | First-class TS primitive (`createWorktree()`, `WorktreeManager.ts`) | Prose in `bender-implement-prd.skill.tmpl` instructing the LLM to `git worktree add` |
@@ -41,7 +41,7 @@
 1. **Opinion about workflow.** Sandcastle: *"no opinions about workflow, task management, or context sources are imposed"* — verbatim. Plan-bender: a five-track taxonomy (`intent/experience/data/rules/resilience`), a hard 3-point cap, AFK/HITL labels, an 8-state workflow, principal-engineer review pass with auto-fix matrix.
 2. **What "isolation" means.** Sandcastle isolates the *runtime* (Docker/Podman/Vercel/Daytona, configurable bind-mount or sync). Plan-bender isolates *changes* (git worktrees off an integration branch) and trusts the local environment.
 3. **Where decision-making lives.** Sandcastle's planner *prompts the LLM* to emit a `<plan>` JSON dependency graph. Plan-bender refuses to: dependency ordering is a deterministic Go function (`internal/plan/next.go:46-180` — `Resolve` returns `Result{Issue, Reason, WasBlocked, RequiresHuman, AllDone, BlockedCount, Skipped}`).
-4. **Persistence model.** Sandcastle: no task store; GitHub Issues / Beads via prompt substitution. Plan-bender: YAML on disk behind a `Backend` interface, with Linear as a proper adapter (`internal/backend/backend.go:34-40`).
+4. **Persistence model.** Sandcastle: no task store; GitHub Issues / Beads via prompt substitution. Plan-bender: JSON on disk behind a `Backend` interface, with Linear as a proper adapter (`internal/backend/backend.go:34-40`).
 5. **Templates as code vs templates as docs.** Sandcastle's `main.mts` *is* the orchestration program — users edit it; the library is Effect-Layer plumbing. Plan-bender's templates are markdown skills; the orchestration logic is in the skill prompt and in `pba` Go code.
 6. **Two-binary split.** Plan-bender's `pb`/`pba` split (human TUI vs agent JSON) has no analog in sandcastle.
 
@@ -69,7 +69,7 @@ Sandcastle's hard-stop convention (`<promise>COMPLETE</promise>` in stdout) is d
 
 ### 5. Lifecycle hooks
 
-Sandcastle's `onSandboxReady` / `onIterationStart` / `onIterationEnd` / `onSandboxClose` (in `SandboxLifecycle.ts`) let users wire `pnpm install`, `bundle exec rspec`, `bun typecheck`, etc. into the loop without editing prompts. Plan-bender has nothing analogous. Adding a `hooks:` block to `.plan-bender.yaml` (with `before_issue:`, `after_issue:`, `before_pr:`) would give projects a clean place to put repo-specific commands instead of asking each issue prompt to remember them.
+Sandcastle's `onSandboxReady` / `onIterationStart` / `onIterationEnd` / `onSandboxClose` (in `SandboxLifecycle.ts`) let users wire `pnpm install`, `bundle exec rspec`, `bun typecheck`, etc. into the loop without editing prompts. Plan-bender has nothing analogous. Adding a `hooks:` block to `.plan-bender.json` (with `before_issue:`, `after_issue:`, `before_pr:`) would give projects a clean place to put repo-specific commands instead of asking each issue prompt to remember them.
 
 ### 6. Branch strategy as a configurable enum
 
@@ -91,7 +91,7 @@ Sandcastle copies the Claude session `*.jsonl` out of the sandbox after each ite
 
 Worth keeping; sandcastle has nothing like these.
 
-1. **The pure-function next-issue resolver** (`internal/plan/next.go`). Sandcastle asks the LLM to derive a dep graph in JSON every run; plan-bender computes it deterministically from YAML. Predictable, table-test-covered, debuggable.
+1. **The pure-function next-issue resolver** (`internal/plan/next.go`). Sandcastle asks the LLM to derive a dep graph in JSON every run; plan-bender computes it deterministically from JSON. Predictable, table-test-covered, debuggable.
 2. **Track taxonomy + 3-point cap.** The `intent/experience/data/rules/resilience` schema with forced thin-slicing is a real PM opinion that survives multiple agents and review passes.
 3. **AFK/HITL as first-class labels** with resolver semantics ("if any AFK is ready, drop all HITL from the pool"). Sandcastle has no human-gating story.
 4. **Two-binary split (`pb`/`pba`).** Cleaner human-vs-machine surface than sandcastle's single CLI. Errors as `{"error","code"}` JSON across `pba` is a small detail with big agent-side payoff.
@@ -101,7 +101,7 @@ Worth keeping; sandcastle has nothing like these.
 
 ## Could they compose?
 
-Yes, in principle. Plan-bender writes the YAML plan; the dispatcher in `bender-implement-prd` could shell out to sandcastle to run each issue inside a container instead of spawning a Task agent. Practical blockers: language mismatch (Go orchestrator + npm-distributed Node runtime + `claude` baked into a Docker image is a heavy ask for a Go-CLI user), and sandcastle assumes the user wrote a `main.mts` to drive its loop. The lighter integration: plan-bender borrows sandcastle's *patterns* (AgentProvider, BranchStrategy, lifecycle hooks, completion sentinel) without depending on the package.
+Yes, in principle. Plan-bender writes the JSON plan; the dispatcher in `bender-implement-prd` could shell out to sandcastle to run each issue inside a container instead of spawning a Task agent. Practical blockers: language mismatch (Go orchestrator + npm-distributed Node runtime + `claude` baked into a Docker image is a heavy ask for a Go-CLI user), and sandcastle assumes the user wrote a `main.mts` to drive its loop. The lighter integration: plan-bender borrows sandcastle's *patterns* (AgentProvider, BranchStrategy, lifecycle hooks, completion sentinel) without depending on the package.
 
 ## Bottom line
 
@@ -119,7 +119,7 @@ The single biggest improvement plan-bender could make, based on sandcastle's exa
 | `pba worktree create/gc` | First-class worktree management: branch naming, path return, cleanup on failure | LLM-driven `git worktree add` is brittle; this is the foundation Phase 1 depends on |
 | `pba dispatch <slug>` | Reads resolver, creates worktrees, spawns parallel Task agents, blocks until complete | Replaces 80-line bash-in-markdown in `bender-implement-prd`; enables everything below |
 | Completion sentinel | Sub-agent emits `<pba:complete>` (or calls `pba complete <slug> <id>`); dispatcher detects and flips status | Removes reliance on agent memory for status updates |
-| Lifecycle hooks | `hooks: { before_issue, after_issue, before_pr }` in `.plan-bender.yaml` | Cheap; high value for any project with a build step |
+| Lifecycle hooks | `hooks: { before_issue, after_issue, before_pr }` in `.plan-bender.json` | Cheap; high value for any project with a build step |
 | Branch strategy enum | `pipeline.branch_strategy: integration \| direct` config field | Config-only change; no code complexity; solo devs skip integration-branch ceremony |
 
 **Exit criteria**: `bender-implement-prd` skill body reduced to calling `pba dispatch`; all worktree and branch logic removed from markdown.
@@ -168,7 +168,7 @@ Phase 1 shipped in [PR #10](https://github.com/jasonraimondi/plan-bender/pull/10
 | `pba worktree create/gc` | ✅ done | `internal/worktree` package; `pba/pb worktree` subcommands; JSON in agent mode. GC preserves unmerged branches via merged-set whitelist + `branch -d` reachability guard. Worktree path namespaced by plan slug to prevent cross-plan collisions. |
 | `pba dispatch <slug>` | ✅ done | `internal/dispatch.Dispatcher.Run` loops Resolve → ReadyAFK → RunBatch → MergeBack until all-done or HITL-only. Parallel goroutines per AFK issue, git plumbing serialized under a mutex, integration branch + per-issue branches with `--` separator (avoids `refs/heads/foo/bar` colliding with `refs/heads/foo/bar/baz`). Exit codes: 0 all-done, 2 HITL-only, 1 other. |
 | Completion sentinel | ✅ done | `pba complete <slug> <id>` flips to `in-review` and emits `<pba:complete issue-id="N"/>`; refuses `done`/`canceled`. `bender-implement-issue` step 8 ends with this call. |
-| Lifecycle hooks | ✅ done | `hooks.before_issue` / `hooks.after_issue` / `hooks.after_batch` in `.plan-bender.yaml`. `before_issue` failure blocks the issue with hook stderr in notes; `after_*` failures log only. Hook lifetime bounded by ctx (10-minute default cap). Note: shipped as `after_batch` rather than the PRD's `before_pr`. |
+| Lifecycle hooks | ✅ done | `hooks.before_issue` / `hooks.after_issue` / `hooks.after_batch` in `.plan-bender.json`. `before_issue` failure blocks the issue with hook stderr in notes; `after_*` failures log only. Hook lifetime bounded by ctx (10-minute default cap). Note: shipped as `after_batch` rather than the PRD's `before_pr`. |
 | Branch strategy enum | ✅ done | `pipeline.branch_strategy: integration \| direct`. Validated at config load. |
 
 ### Phase 1 — extras not in original PRD
