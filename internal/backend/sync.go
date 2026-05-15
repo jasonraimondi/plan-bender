@@ -52,14 +52,14 @@ func SyncPush(ctx context.Context, plans *planrepo.Plans, be Backend, slug strin
 	for i := range issues {
 		issue := &issues[i]
 		if issue.LinearID != nil && *issue.LinearID != "" {
-			if _, err := be.UpdateIssue(ctx, issue); err != nil {
+			if _, err := be.UpdateIssue(ctx, issue, slug); err != nil {
 				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 				continue
 			}
 			result.Updated++
 			continue
 		}
-		remote, err := be.CreateIssue(ctx, issue, projectID)
+		remote, err := be.CreateIssue(ctx, issue, projectID, slug)
 		if err != nil {
 			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 			continue
@@ -139,11 +139,15 @@ func readSnapshot(plans *planrepo.Plans, slug string) (schema.PRD, []schema.Issu
 }
 
 // ensureRemoteProject returns the projectID to push issues against. When the
-// PRD already has a Linear ProjectID it is used as-is; otherwise CreateProject
-// is called (no lock held) and the returned ID is written back to the PRD via
-// a fresh session.
+// PRD already has a Linear ProjectID the remote project is refreshed via
+// UpdateProject so its description and content track the local PRD; otherwise
+// CreateProject is called and the returned ID is written back to the PRD via
+// a fresh session. Both calls run with no lock held.
 func ensureRemoteProject(ctx context.Context, plans *planrepo.Plans, be Backend, slug string, prd *schema.PRD, cfg config.Config) (string, error) {
 	if prd.Linear != nil && prd.Linear.ProjectID != "" {
+		if _, err := be.UpdateProject(ctx, prd); err != nil {
+			return "", fmt.Errorf("updating project: %w", err)
+		}
 		return prd.Linear.ProjectID, nil
 	}
 	project, err := be.CreateProject(ctx, prd)

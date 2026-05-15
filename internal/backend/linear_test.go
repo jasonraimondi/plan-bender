@@ -1,12 +1,47 @@
 package backend
 
 import (
+	"bytes"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/linear"
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// captureTransport records the outgoing request body and replays a canned response.
+type captureTransport struct {
+	body     string
+	response string
+}
+
+func (t *captureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	b, _ := io.ReadAll(req.Body)
+	t.body = string(b)
+	return &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(t.response)),
+	}, nil
+}
+
+func backendWithCapture(response string, estimationEnabled bool) (*linearBackend, *captureTransport) {
+	ct := &captureTransport{response: response}
+	client := linear.NewClientWithHTTP(&http.Client{Transport: ct})
+	b := &linearBackend{
+		client:            client,
+		cfg:               config.Defaults(),
+		teamID:            "team-1",
+		stateIDs:          map[string]string{"Backlog": "state-1"},
+		estimationEnabled: estimationEnabled,
+	}
+	return b, ct
+}
 
 func TestMapPriority(t *testing.T) {
 	tests := []struct {
@@ -96,6 +131,114 @@ func TestLinearIssueToRemote_NilAssignee(t *testing.T) {
 	assert.Equal(t, "", remote.Assignee)
 	assert.Equal(t, "medium", remote.Priority)
 	assert.Nil(t, remote.Labels)
+}
+
+// roundTripFunc adapts a function to http.RoundTripper.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// routingClient returns a Linear client whose responses are selected by
+// matching a substring of the GraphQL request body against routes.
+func routingClient(t *testing.T, routes map[string]string) *linear.Client {
+	t.Helper()
+	return linear.NewClientWithHTTP(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body, _ := io.ReadAll(req.Body)
+			for substr, resp := range routes {
+				if strings.Contains(string(body), substr) {
+					return &http.Response{
+						StatusCode: 200,
+						Header:     http.Header{"Content-Type": []string{"application/json"}},
+						Body:       io.NopCloser(bytes.NewBufferString(resp)),
+					}, nil
+				}
+			}
+			t.Fatalf("no route for request body: %s", body)
+			return nil, nil
+		}),
+	})
+}
+
+func TestResolveLabels_Empty(t *testing.T) {
+	b := &linearBackend{teamID: "team-1"}
+	ids, err := b.resolveLabels(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Nil(t, ids)
+}
+
+func TestResolveLabels_CaseInsensitive(t *testing.T) {
+	// Only a labels-list route — a create attempt would Fatalf.
+	b := &linearBackend{
+		teamID: "team-1",
+		client: routingClient(t, map[string]string{
+			"labels": `{"data":{"team":{"labels":{"nodes":[{"id":"label-1","name":"HITL"}]}}}}`,
+		}),
+	}
+
+	ids, err := b.resolveLabels(t.Context(), []string{"hitl"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"label-1"}, ids)
+}
+
+func TestResolveLabels_CreateOnMiss(t *testing.T) {
+	b := &linearBackend{
+		teamID: "team-1",
+		client: routingClient(t, map[string]string{
+			"labels":           `{"data":{"team":{"labels":{"nodes":[{"id":"label-1","name":"AFK"}]}}}}`,
+			"issueLabelCreate": `{"data":{"issueLabelCreate":{"success":true,"issueLabel":{"id":"label-9","name":"HITL"}}}}`,
+		}),
+	}
+
+	ids, err := b.resolveLabels(t.Context(), []string{"AFK", "HITL"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"label-1", "label-9"}, ids)
+
+	// The freshly created label is cached for subsequent lookups.
+	assert.Equal(t, "label-9", b.labelIDs["hitl"])
+}
+
+const createIssueResponse = `{"data":{"issueCreate":{"success":true,"issue":{"id":"i1","title":"T","state":{"name":"Backlog"}}}}}`
+const updateIssueResponse = `{"data":{"issueUpdate":{"success":true,"issue":{"id":"i1","title":"T","state":{"name":"Backlog"}}}}}`
+
+func TestCreateIssue_EstimationEnabled(t *testing.T) {
+	b, ct := backendWithCapture(createIssueResponse, true)
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
+
+	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.NoError(t, err)
+	assert.Contains(t, ct.body, `"estimate":5`)
+}
+
+func TestCreateIssue_EstimationDisabled(t *testing.T) {
+	b, ct := backendWithCapture(createIssueResponse, false)
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
+
+	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.NoError(t, err)
+	assert.NotContains(t, ct.body, "estimate")
+}
+
+func TestUpdateIssue_EstimationEnabled(t *testing.T) {
+	b, ct := backendWithCapture(updateIssueResponse, true)
+	linearID := "lin-1"
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
+
+	_, err := b.UpdateIssue(t.Context(), issue, "slug")
+	require.NoError(t, err)
+	assert.Contains(t, ct.body, `"estimate":3`)
+}
+
+func TestUpdateIssue_EstimationDisabled(t *testing.T) {
+	b, ct := backendWithCapture(updateIssueResponse, false)
+	linearID := "lin-1"
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
+
+	_, err := b.UpdateIssue(t.Context(), issue, "slug")
+	require.NoError(t, err)
+	assert.NotContains(t, ct.body, "estimate")
 }
 
 func TestLinearIssueToRemote_MultipleLabels(t *testing.T) {

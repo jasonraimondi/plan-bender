@@ -26,10 +26,12 @@ var linearToPriority = map[int]string{
 }
 
 type linearBackend struct {
-	client   *linear.Client
-	cfg      config.Config
-	teamID   string
-	stateIDs map[string]string
+	client            *linear.Client
+	cfg               config.Config
+	teamID            string
+	stateIDs          map[string]string
+	labelIDs          map[string]string // lowercased label name → Linear label id; nil until first load
+	estimationEnabled bool
 }
 
 func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
@@ -43,36 +45,72 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 	client := linear.NewClient(cfg.Linear.APIKey)
 
 	// Pre-fetch workflow states; also resolves team key → UUID for mutations.
-	teamID, states, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
+	teamID, states, estimationType, err := client.ListWorkflowStates(ctx, cfg.Linear.Team)
 	if err != nil {
 		return nil, fmt.Errorf("fetching workflow states: %w", err)
 	}
 
+	estimationEnabled := estimationType != "" && estimationType != "notUsed"
+	if !estimationEnabled {
+		slog.Info("team has estimation disabled; issue points will not be synced", "team", cfg.Linear.Team)
+	}
+
 	return &linearBackend{
-		client:   client,
-		cfg:      cfg,
-		teamID:   teamID,
-		stateIDs: states,
+		client:            client,
+		cfg:               cfg,
+		teamID:            teamID,
+		stateIDs:          states,
+		estimationEnabled: estimationEnabled,
 	}, nil
 }
 
 func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
-	project, err := b.client.CreateProject(ctx, prd.Name, b.teamID)
+	description, content := renderProjectBody(prd)
+	project, err := b.client.CreateProject(ctx, linear.ProjectCreateInput{
+		Name:        prd.Name,
+		TeamIDs:     []string{b.teamID},
+		Description: description,
+		Content:     content,
+	})
 	if err != nil {
 		return RemoteProject{}, err
 	}
 	return RemoteProject{ID: project.ID, Name: project.Name, URL: project.URL}, nil
 }
 
-func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
+func (b *linearBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
+	if prd.Linear == nil || prd.Linear.ProjectID == "" {
+		return RemoteProject{}, fmt.Errorf("PRD has no linear project_id")
+	}
+	description, content := renderProjectBody(prd)
+	project, err := b.client.UpdateProject(ctx, prd.Linear.ProjectID, linear.ProjectUpdateInput{
+		Description: description,
+		Content:     content,
+	})
+	if err != nil {
+		return RemoteProject{}, err
+	}
+	return RemoteProject{ID: project.ID, Name: project.Name, URL: project.URL}, nil
+}
+
+func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error) {
+	labelIDs, err := b.resolveLabels(ctx, issue.Labels)
+	if err != nil {
+		return RemoteIssue{}, err
+	}
+
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueCreateInput{
 		Title:       issue.Name,
-		Description: issue.Outcome,
+		Description: renderIssueBody(issue, slug),
 		TeamID:      b.teamID,
 		ProjectID:   projectID,
 		Priority:    mapPriority(issue.Priority),
 		StateID:     stateID,
+		LabelIDs:    labelIDs,
+	}
+	if b.estimationEnabled {
+		input.Estimate = issue.Points
 	}
 
 	created, err := b.client.CreateIssue(ctx, input)
@@ -82,16 +120,26 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, pr
 	return linearIssueToRemote(created), nil
 }
 
-func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error) {
+func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, slug string) (RemoteIssue, error) {
 	if issue.LinearID == nil || *issue.LinearID == "" {
 		return RemoteIssue{}, fmt.Errorf("issue #%d has no linear_id", issue.ID)
 	}
 
+	labelIDs, err := b.resolveLabels(ctx, issue.Labels)
+	if err != nil {
+		return RemoteIssue{}, err
+	}
+
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueUpdateInput{
-		Title:    issue.Name,
-		StateID:  stateID,
-		Priority: mapPriority(issue.Priority),
+		Title:       issue.Name,
+		Description: renderIssueBody(issue, slug),
+		StateID:     stateID,
+		Priority:    mapPriority(issue.Priority),
+		LabelIDs:    labelIDs,
+	}
+	if b.estimationEnabled {
+		input.Estimate = issue.Points
 	}
 
 	updated, err := b.client.UpdateIssue(ctx, *issue.LinearID, input)
@@ -144,6 +192,42 @@ func (b *linearBackend) resolveStateID(status string) string {
 
 	slog.Warn("no matching Linear state for status", "status", status)
 	return ""
+}
+
+// resolveLabels maps plan label names to Linear label ids, creating any label
+// missing from the team. Lookup is case-insensitive: the cache is keyed on the
+// lowercased name so "HITL" and "hitl" resolve to the same label.
+func (b *linearBackend) resolveLabels(ctx context.Context, labels []string) ([]string, error) {
+	if len(labels) == 0 {
+		return nil, nil
+	}
+
+	if b.labelIDs == nil {
+		existing, err := b.client.ListIssueLabels(ctx, b.teamID)
+		if err != nil {
+			return nil, fmt.Errorf("listing issue labels: %w", err)
+		}
+		b.labelIDs = make(map[string]string, len(existing))
+		for _, l := range existing {
+			b.labelIDs[strings.ToLower(l.Name)] = l.ID
+		}
+	}
+
+	ids := make([]string, 0, len(labels))
+	for _, name := range labels {
+		key := strings.ToLower(name)
+		id, ok := b.labelIDs[key]
+		if !ok {
+			created, err := b.client.CreateIssueLabel(ctx, b.teamID, name)
+			if err != nil {
+				return nil, fmt.Errorf("creating issue label %q: %w", name, err)
+			}
+			id = created.ID
+			b.labelIDs[key] = id
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func mapPriority(priority string) int {
