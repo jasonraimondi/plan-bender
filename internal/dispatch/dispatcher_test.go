@@ -272,9 +272,6 @@ func TestEnsureIntegrationBranch_IntegrationStrategyCreatesUserSlugBranch(t *tes
 	assert.Contains(t, string(out), "tester/demo")
 }
 
-// TestEnsureIntegrationBranch_BaseOverridesDefault_Integration covers the
-// happy path for --base under integration strategy: the integration branch
-// is forked off the supplied ref instead of the auto-detected default.
 func TestEnsureIntegrationBranch_BaseOverridesDefault_Integration(t *testing.T) {
 	fix := setupDispatch(t)
 
@@ -296,7 +293,6 @@ func TestEnsureIntegrationBranch_BaseOverridesDefault_Integration(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, "tester/demo", branch)
 
-	// Integration branch's tip must match feature-x, not main.
 	integrationSHA, err := exec.Command("git", "-C", fix.root, "rev-parse", "tester/demo").Output()
 	require.NoError(t, err)
 	featureSHA, err := exec.Command("git", "-C", fix.root, "rev-parse", "feature-x").Output()
@@ -304,9 +300,6 @@ func TestEnsureIntegrationBranch_BaseOverridesDefault_Integration(t *testing.T) 
 	assert.Equal(t, strings.TrimSpace(string(featureSHA)), strings.TrimSpace(string(integrationSHA)))
 }
 
-// TestEnsureIntegrationBranch_BaseOverridesDefault_Direct covers --base under
-// the direct strategy: ensureIntegrationBranch returns the supplied ref so
-// MergeBack merges issue branches into it instead of the default branch.
 func TestEnsureIntegrationBranch_BaseOverridesDefault_Direct(t *testing.T) {
 	fix := setupDispatch(t)
 
@@ -324,8 +317,6 @@ func TestEnsureIntegrationBranch_BaseOverridesDefault_Direct(t *testing.T) {
 	assert.Equal(t, "feature-x", branch, "direct strategy must return --base as merge target")
 }
 
-// TestEnsureIntegrationBranch_BaseAcceptsSHA covers the "any commit-ish"
-// contract: a SHA is a valid --base.
 func TestEnsureIntegrationBranch_BaseAcceptsSHA(t *testing.T) {
 	fix := setupDispatch(t)
 
@@ -345,10 +336,6 @@ func TestEnsureIntegrationBranch_BaseAcceptsSHA(t *testing.T) {
 	assert.Equal(t, sha, strings.TrimSpace(string(integrationSHA)))
 }
 
-// TestEnsureIntegrationBranch_ExistingBranchWithBaseWarns covers the
-// warn-and-continue rule: when <user>/<slug> already exists and --base was
-// explicitly passed, dispatch warns and reuses the existing branch rather
-// than re-forking (which would clobber merged work).
 func TestEnsureIntegrationBranch_ExistingBranchWithBaseWarns(t *testing.T) {
 	fix := setupDispatch(t)
 
@@ -373,8 +360,6 @@ func TestEnsureIntegrationBranch_ExistingBranchWithBaseWarns(t *testing.T) {
 	assert.Contains(t, buf.String(), "ignored")
 }
 
-// TestEnsureIntegrationBranch_ExistingBranchWithoutBaseSilent verifies the
-// warning fires only on explicit --base — bare re-runs stay silent.
 func TestEnsureIntegrationBranch_ExistingBranchWithoutBaseSilent(t *testing.T) {
 	fix := setupDispatch(t)
 
@@ -389,9 +374,6 @@ func TestEnsureIntegrationBranch_ExistingBranchWithoutBaseSilent(t *testing.T) {
 	assert.NotContains(t, buf.String(), "ignored", "no --base = no warning")
 }
 
-// TestEnsureIntegrationBranch_BaseBypassesDetachedHEADError verifies the
-// free side benefit: when --base is supplied, the auto-detect path that
-// errors on detached HEAD without main/master is skipped entirely.
 func TestEnsureIntegrationBranch_BaseBypassesDetachedHEADError(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "repo")

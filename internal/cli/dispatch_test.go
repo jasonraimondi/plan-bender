@@ -127,9 +127,6 @@ func TestDispatchCmd_UnknownPlanReturnsError(t *testing.T) {
 	assert.False(t, IsHITLOnly(err), "unknown plan must not be confused with HITL")
 }
 
-// TestDispatchCmd_InvalidBaseErrors verifies the --base validation rejects
-// refs that don't rev-parse before any dispatch work begins. Error must name
-// the bad ref so the user knows what to fix.
 func TestDispatchCmd_InvalidBaseErrors(t *testing.T) {
 	setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, ".", "done", "AFK")
@@ -145,9 +142,7 @@ func TestDispatchCmd_InvalidBaseErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "does-not-exist")
 }
 
-// TestDispatchCmd_ValidBaseAccepted verifies --base with a valid ref passes
-// validation and reaches the dispatch loop. Uses an all-done plan to short-
-// circuit so we don't need to stub claude.
+// All-done plan short-circuits the loop so no claude stub is needed.
 func TestDispatchCmd_ValidBaseAccepted(t *testing.T) {
 	root := setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, root, "done", "AFK")
