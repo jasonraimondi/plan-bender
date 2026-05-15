@@ -126,3 +126,32 @@ func TestDispatchCmd_UnknownPlanReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, IsHITLOnly(err), "unknown plan must not be confused with HITL")
 }
+
+func TestDispatchCmd_InvalidBaseErrors(t *testing.T) {
+	setupDispatchCLI(t)
+	writeDispatchCLIIssue(t, ".", "done", "AFK")
+
+	cmd := NewDispatchCmd()
+	cmd.SetArgs([]string{"demo", "--base", "does-not-exist"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does-not-exist")
+}
+
+// All-done plan short-circuits the loop so no claude stub is needed.
+func TestDispatchCmd_ValidBaseAccepted(t *testing.T) {
+	root := setupDispatchCLI(t)
+	writeDispatchCLIIssue(t, root, "done", "AFK")
+
+	cmd := NewDispatchCmd()
+	cmd.SetArgs([]string{"demo", "--base", "main"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	require.NoError(t, cmd.Execute())
+}
