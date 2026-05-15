@@ -30,13 +30,13 @@ Ask the user to pick one. Show the consequences before they choose:
 ```
 Sync direction:
 
-  1. local → linear   PUSH local YAML to Linear
+  1. local → linear   PUSH local JSON to Linear
                         - if no project_id: creates Linear project "<PRD name>"
                         - issues without linear_id: creates them in Linear
                         - issues with linear_id: updates title/status/priority in Linear
                         - one-way: local wins on every field
 
-  2. linear → local   PULL Linear state into local YAML
+  2. linear → local   PULL Linear state into local JSON
                         - requires linear.project_id on the PRD
                         - matches by linear_id; updates status/priority/assignee
                         - one-way: Linear wins on those fields
@@ -61,7 +61,7 @@ If the user picked **local → linear** and `linear.project_id` exists:
 
 > "This will update the existing Linear project and sync N issues (M new, K updates). Proceed?"
 
-For **linear → local**, no confirmation needed — local YAML is git-tracked, easy to revert.
+For **linear → local**, no confirmation needed — local JSON is git-tracked, easy to revert.
 
 ## Step 4 — run the sync
 

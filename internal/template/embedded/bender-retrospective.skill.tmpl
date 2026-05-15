@@ -20,7 +20,7 @@ Most signal lives in conversation memory — the other sources corroborate or su
 1. **Conversation memory** — review the session and identify:
    - `pb` / `pba` commands that needed a retry, a flag the user had to guess, or stdout/stderr you had to interpret.
    - Skill instructions that were ambiguous, contradicted each other, or sent you down a dead-end before you course-corrected.
-   - Steps you had to do manually because the skill didn't cover them (e.g., editing YAML by hand, fixing a `blocked_by` mismatch the skill should have caught).
+   - Steps you had to do manually because the skill didn't cover them (e.g., editing JSON by hand, fixing a `blocked_by` mismatch the skill should have caught).
    - User corrections — every "no, do X instead" is a signal a skill or command nudged you wrong.
    - Moments where you asked the user a question the skill or a `pb` command should have answered.
 
@@ -35,7 +35,7 @@ Most signal lives in conversation memory — the other sources corroborate or su
    - Issues whose `state` is `in_progress` but whose `updated` field predates this session's first command.
    - `blocked_by` on issue A names B, but B's `blocking` does not name A (or vice versa).
    - Worktrees listed by `pba worktree list` (if available) that have no issue in a non-terminal state.
-   - Plan YAML where `git log -1 -- <file>` shows a commit but the corresponding `pb` / `pba` command in the session never ran (i.e., the user hand-edited).
+   - Plan JSON where `git log -1 -- <file>` shows a commit but the corresponding `pb` / `pba` command in the session never ran (i.e., the user hand-edited).
 
 ## Finding categories
 
