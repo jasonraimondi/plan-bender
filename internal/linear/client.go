@@ -121,6 +121,7 @@ type IssueCreateInput struct {
 	ProjectID   string `json:"projectId,omitempty"`
 	Priority    int    `json:"priority,omitempty"`
 	StateID     string `json:"stateId,omitempty"`
+	Estimate    int    `json:"estimate,omitempty"`
 }
 
 // UpdateIssue updates a Linear issue.
@@ -149,6 +150,7 @@ type IssueUpdateInput struct {
 	Description string `json:"description,omitempty"`
 	StateID     string `json:"stateId,omitempty"`
 	Priority    int    `json:"priority,omitempty"`
+	Estimate    int    `json:"estimate,omitempty"`
 }
 
 // GetIssue fetches a Linear issue by ID.
@@ -196,13 +198,16 @@ func (c *Client) GetProject(ctx context.Context, projectID string) (*Project, []
 	return project, query.Project.Issues.Nodes, nil
 }
 
-// ListWorkflowStates fetches the resolved team UUID and workflow states for a team.
+// ListWorkflowStates fetches the resolved team UUID, workflow states, and
+// estimation type for a team.
 // teamKey may be a team key (e.g. "ENG") or a UUID; the returned resolvedID is always a UUID.
-func (c *Client) ListWorkflowStates(ctx context.Context, teamKey string) (resolvedID string, states map[string]string, err error) {
+// estimationType is the team's issue estimation scale; "notUsed" means estimation is disabled.
+func (c *Client) ListWorkflowStates(ctx context.Context, teamKey string) (resolvedID string, states map[string]string, estimationType string, err error) {
 	var query struct {
 		Team struct {
-			ID     string
-			States struct {
+			ID                  string
+			IssueEstimationType string
+			States              struct {
 				Nodes []struct {
 					ID   string
 					Name string
@@ -216,14 +221,14 @@ func (c *Client) ListWorkflowStates(ctx context.Context, teamKey string) (resolv
 	}
 
 	if err := c.gql.Query(ctx, &query, vars); err != nil {
-		return "", nil, fmt.Errorf("fetching workflow states: %w", err)
+		return "", nil, "", fmt.Errorf("fetching workflow states: %w", err)
 	}
 
 	states = make(map[string]string)
 	for _, s := range query.Team.States.Nodes {
 		states[s.Name] = s.ID
 	}
-	return query.Team.ID, states, nil
+	return query.Team.ID, states, query.Team.IssueEstimationType, nil
 }
 
 // CreateAttachment creates a URL attachment on an issue.

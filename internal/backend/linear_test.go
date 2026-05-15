@@ -1,12 +1,46 @@
 package backend
 
 import (
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/linear"
+	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// captureTransport records the outgoing request body and replays a canned response.
+type captureTransport struct {
+	body     string
+	response string
+}
+
+func (t *captureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	b, _ := io.ReadAll(req.Body)
+	t.body = string(b)
+	return &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(t.response)),
+	}, nil
+}
+
+func backendWithCapture(response string, estimationEnabled bool) (*linearBackend, *captureTransport) {
+	ct := &captureTransport{response: response}
+	client := linear.NewClientWithHTTP(&http.Client{Transport: ct})
+	b := &linearBackend{
+		client:            client,
+		cfg:               config.Defaults(),
+		teamID:            "team-1",
+		stateIDs:          map[string]string{"Backlog": "state-1"},
+		estimationEnabled: estimationEnabled,
+	}
+	return b, ct
+}
 
 func TestMapPriority(t *testing.T) {
 	tests := []struct {
@@ -96,6 +130,47 @@ func TestLinearIssueToRemote_NilAssignee(t *testing.T) {
 	assert.Equal(t, "", remote.Assignee)
 	assert.Equal(t, "medium", remote.Priority)
 	assert.Nil(t, remote.Labels)
+}
+
+const createIssueResponse = `{"data":{"issueCreate":{"success":true,"issue":{"id":"i1","title":"T","state":{"name":"Backlog"}}}}}`
+const updateIssueResponse = `{"data":{"issueUpdate":{"success":true,"issue":{"id":"i1","title":"T","state":{"name":"Backlog"}}}}}`
+
+func TestCreateIssue_EstimationEnabled(t *testing.T) {
+	b, ct := backendWithCapture(createIssueResponse, true)
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
+
+	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.NoError(t, err)
+	assert.Contains(t, ct.body, `"estimate":5`)
+}
+
+func TestCreateIssue_EstimationDisabled(t *testing.T) {
+	b, ct := backendWithCapture(createIssueResponse, false)
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
+
+	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.NoError(t, err)
+	assert.NotContains(t, ct.body, "estimate")
+}
+
+func TestUpdateIssue_EstimationEnabled(t *testing.T) {
+	b, ct := backendWithCapture(updateIssueResponse, true)
+	linearID := "lin-1"
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
+
+	_, err := b.UpdateIssue(t.Context(), issue, "slug")
+	require.NoError(t, err)
+	assert.Contains(t, ct.body, `"estimate":3`)
+}
+
+func TestUpdateIssue_EstimationDisabled(t *testing.T) {
+	b, ct := backendWithCapture(updateIssueResponse, false)
+	linearID := "lin-1"
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
+
+	_, err := b.UpdateIssue(t.Context(), issue, "slug")
+	require.NoError(t, err)
+	assert.NotContains(t, ct.body, "estimate")
 }
 
 func TestLinearIssueToRemote_MultipleLabels(t *testing.T) {
