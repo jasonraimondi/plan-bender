@@ -30,6 +30,7 @@ type linearBackend struct {
 	cfg      config.Config
 	teamID   string
 	stateIDs map[string]string
+	labelIDs map[string]string // lowercased label name → Linear label id; nil until first load
 }
 
 func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
@@ -86,6 +87,11 @@ func (b *linearBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (Rem
 }
 
 func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error) {
+	labelIDs, err := b.resolveLabels(ctx, issue.Labels)
+	if err != nil {
+		return RemoteIssue{}, err
+	}
+
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueCreateInput{
 		Title:       issue.Name,
@@ -94,6 +100,7 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, pr
 		ProjectID:   projectID,
 		Priority:    mapPriority(issue.Priority),
 		StateID:     stateID,
+		LabelIDs:    labelIDs,
 	}
 
 	created, err := b.client.CreateIssue(ctx, input)
@@ -108,12 +115,18 @@ func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, sl
 		return RemoteIssue{}, fmt.Errorf("issue #%d has no linear_id", issue.ID)
 	}
 
+	labelIDs, err := b.resolveLabels(ctx, issue.Labels)
+	if err != nil {
+		return RemoteIssue{}, err
+	}
+
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueUpdateInput{
 		Title:       issue.Name,
 		Description: renderIssueBody(issue, slug),
 		StateID:     stateID,
 		Priority:    mapPriority(issue.Priority),
+		LabelIDs:    labelIDs,
 	}
 
 	updated, err := b.client.UpdateIssue(ctx, *issue.LinearID, input)
@@ -166,6 +179,42 @@ func (b *linearBackend) resolveStateID(status string) string {
 
 	slog.Warn("no matching Linear state for status", "status", status)
 	return ""
+}
+
+// resolveLabels maps plan label names to Linear label ids, creating any label
+// missing from the team. Lookup is case-insensitive: the cache is keyed on the
+// lowercased name so "HITL" and "hitl" resolve to the same label.
+func (b *linearBackend) resolveLabels(ctx context.Context, labels []string) ([]string, error) {
+	if len(labels) == 0 {
+		return nil, nil
+	}
+
+	if b.labelIDs == nil {
+		existing, err := b.client.ListIssueLabels(ctx, b.teamID)
+		if err != nil {
+			return nil, fmt.Errorf("listing issue labels: %w", err)
+		}
+		b.labelIDs = make(map[string]string, len(existing))
+		for _, l := range existing {
+			b.labelIDs[strings.ToLower(l.Name)] = l.ID
+		}
+	}
+
+	ids := make([]string, 0, len(labels))
+	for _, name := range labels {
+		key := strings.ToLower(name)
+		id, ok := b.labelIDs[key]
+		if !ok {
+			created, err := b.client.CreateIssueLabel(ctx, b.teamID, name)
+			if err != nil {
+				return nil, fmt.Errorf("creating issue label %q: %w", name, err)
+			}
+			id = created.ID
+			b.labelIDs[key] = id
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func mapPriority(priority string) int {

@@ -161,12 +161,13 @@ func (c *Client) CreateIssue(ctx context.Context, input IssueCreateInput) (*Issu
 
 // IssueCreateInput is the input for creating a Linear issue.
 type IssueCreateInput struct {
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	TeamID      string `json:"teamId"`
-	ProjectID   string `json:"projectId,omitempty"`
-	Priority    int    `json:"priority,omitempty"`
-	StateID     string `json:"stateId,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	TeamID      string   `json:"teamId"`
+	ProjectID   string   `json:"projectId,omitempty"`
+	Priority    int      `json:"priority,omitempty"`
+	StateID     string   `json:"stateId,omitempty"`
+	LabelIDs    []string `json:"labelIds,omitempty"`
 }
 
 // UpdateIssue updates a Linear issue.
@@ -191,10 +192,11 @@ func (c *Client) UpdateIssue(ctx context.Context, issueID string, input IssueUpd
 
 // IssueUpdateInput is the input for updating a Linear issue.
 type IssueUpdateInput struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	StateID     string `json:"stateId,omitempty"`
-	Priority    int    `json:"priority,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
+	StateID     string   `json:"stateId,omitempty"`
+	Priority    int      `json:"priority,omitempty"`
+	LabelIDs    []string `json:"labelIds,omitempty"`
 }
 
 // GetIssue fetches a Linear issue by ID.
@@ -290,4 +292,53 @@ func (c *Client) CreateAttachment(ctx context.Context, issueID, url, title strin
 		return fmt.Errorf("creating attachment: %w", err)
 	}
 	return nil
+}
+
+// IssueLabel is a Linear issue label.
+type IssueLabel struct {
+	ID   string
+	Name string
+}
+
+// ListIssueLabels fetches the issue labels available to a team.
+func (c *Client) ListIssueLabels(ctx context.Context, teamID string) ([]IssueLabel, error) {
+	var query struct {
+		Team struct {
+			Labels struct {
+				Nodes []IssueLabel
+			}
+		} `graphql:"team(id: $id)"`
+	}
+
+	vars := map[string]any{
+		"id": graphql.String(teamID),
+	}
+
+	if err := c.gql.Query(ctx, &query, vars); err != nil {
+		return nil, fmt.Errorf("listing issue labels: %w", err)
+	}
+	return query.Team.Labels.Nodes, nil
+}
+
+// CreateIssueLabel creates a team-scoped issue label.
+func (c *Client) CreateIssueLabel(ctx context.Context, teamID, name string) (*IssueLabel, error) {
+	var mutation struct {
+		IssueLabelCreate struct {
+			Success    bool
+			IssueLabel IssueLabel
+		} `graphql:"issueLabelCreate(input: {name: $name, teamId: $teamID})"`
+	}
+
+	vars := map[string]any{
+		"name":   graphql.String(name),
+		"teamID": graphql.String(teamID),
+	}
+
+	if err := c.gql.Mutate(ctx, &mutation, vars); err != nil {
+		return nil, fmt.Errorf("creating issue label: %w", err)
+	}
+	if !mutation.IssueLabelCreate.Success {
+		return nil, fmt.Errorf("creating issue label: mutation returned success=false")
+	}
+	return &mutation.IssueLabelCreate.IssueLabel, nil
 }

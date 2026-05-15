@@ -170,6 +170,54 @@ func TestUpdateIssue(t *testing.T) {
 	assert.Nil(t, issue.Assignee)
 }
 
+func TestListIssueLabels(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {
+			"team": {
+				"labels": {
+					"nodes": [
+						{"id": "label-1", "name": "AFK"},
+						{"id": "label-2", "name": "HITL"}
+					]
+				}
+			}
+		}
+	}`)
+
+	labels, err := c.ListIssueLabels(t.Context(), "team-1")
+	require.NoError(t, err)
+	require.Len(t, labels, 2)
+	assert.Equal(t, "label-1", labels[0].ID)
+	assert.Equal(t, "AFK", labels[0].Name)
+	assert.Equal(t, "label-2", labels[1].ID)
+	assert.Equal(t, "HITL", labels[1].Name)
+}
+
+func TestCreateIssueLabel(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {
+			"issueLabelCreate": {
+				"success": true,
+				"issueLabel": {"id": "label-9", "name": "AFK"}
+			}
+		}
+	}`)
+
+	label, err := c.CreateIssueLabel(t.Context(), "team-1", "AFK")
+	require.NoError(t, err)
+	assert.Equal(t, "label-9", label.ID)
+	assert.Equal(t, "AFK", label.Name)
+}
+
+func TestCreateIssueLabel_Failure(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {"issueLabelCreate": {"success": false, "issueLabel": {"id": "", "name": ""}}}
+	}`)
+
+	_, err := c.CreateIssueLabel(t.Context(), "team-1", "AFK")
+	require.Error(t, err)
+}
+
 func TestGetProject(t *testing.T) {
 	c := clientWithResponse(`{
 		"data": {
