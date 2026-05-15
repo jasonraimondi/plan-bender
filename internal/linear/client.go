@@ -62,8 +62,23 @@ type Issue struct {
 	URL      string
 }
 
+// ProjectCreateInput is the input for creating a Linear project. Description
+// is the short summary; Content is the full markdown body.
+type ProjectCreateInput struct {
+	Name        string   `json:"name"`
+	TeamIDs     []string `json:"teamIds"`
+	Description string   `json:"description,omitempty"`
+	Content     string   `json:"content,omitempty"`
+}
+
+// ProjectUpdateInput is the input for updating a Linear project.
+type ProjectUpdateInput struct {
+	Description string `json:"description,omitempty"`
+	Content     string `json:"content,omitempty"`
+}
+
 // CreateProject creates a new Linear project.
-func (c *Client) CreateProject(ctx context.Context, name, teamID string) (*Project, error) {
+func (c *Client) CreateProject(ctx context.Context, input ProjectCreateInput) (*Project, error) {
 	var mutation struct {
 		ProjectCreate struct {
 			Success bool
@@ -72,12 +87,11 @@ func (c *Client) CreateProject(ctx context.Context, name, teamID string) (*Proje
 				Name string
 				URL  string `graphql:"url"`
 			}
-		} `graphql:"projectCreate(input: {name: $name, teamIds: [$teamID]})"`
+		} `graphql:"projectCreate(input: $input)"`
 	}
 
 	vars := map[string]any{
-		"name":   graphql.String(name),
-		"teamID": graphql.String(teamID),
+		"input": input,
 	}
 
 	if err := c.gql.Mutate(ctx, &mutation, vars); err != nil {
@@ -91,6 +105,38 @@ func (c *Client) CreateProject(ctx context.Context, name, teamID string) (*Proje
 		ID:   mutation.ProjectCreate.Project.ID,
 		Name: mutation.ProjectCreate.Project.Name,
 		URL:  mutation.ProjectCreate.Project.URL,
+	}, nil
+}
+
+// UpdateProject updates a Linear project's description and content.
+func (c *Client) UpdateProject(ctx context.Context, projectID string, input ProjectUpdateInput) (*Project, error) {
+	var mutation struct {
+		ProjectUpdate struct {
+			Success bool
+			Project struct {
+				ID   string
+				Name string
+				URL  string `graphql:"url"`
+			}
+		} `graphql:"projectUpdate(id: $id, input: $input)"`
+	}
+
+	vars := map[string]any{
+		"id":    graphql.ID(projectID),
+		"input": input,
+	}
+
+	if err := c.gql.Mutate(ctx, &mutation, vars); err != nil {
+		return nil, fmt.Errorf("updating project: %w", err)
+	}
+	if !mutation.ProjectUpdate.Success {
+		return nil, fmt.Errorf("updating project: mutation returned success=false")
+	}
+
+	return &Project{
+		ID:   mutation.ProjectUpdate.Project.ID,
+		Name: mutation.ProjectUpdate.Project.Name,
+		URL:  mutation.ProjectUpdate.Project.URL,
 	}, nil
 }
 

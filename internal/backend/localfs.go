@@ -38,6 +38,21 @@ func (y *localFS) CreateProject(_ context.Context, prd *schema.PRD) (RemoteProje
 	return RemoteProject{ID: prd.Slug, Name: prd.Name}, nil
 }
 
+func (y *localFS) UpdateProject(_ context.Context, prd *schema.PRD) (RemoteProject, error) {
+	sess, err := y.plans.Open(prd.Slug)
+	if err != nil {
+		return RemoteProject{}, err
+	}
+	defer sess.Close()
+	if err := sess.UpdatePrd(*prd); err != nil {
+		return RemoteProject{}, err
+	}
+	if err := sess.Commit(y.cfg); err != nil {
+		return RemoteProject{}, err
+	}
+	return RemoteProject{ID: prd.Slug, Name: prd.Name}, nil
+}
+
 func (y *localFS) CreateIssue(_ context.Context, issue *schema.Issue, projectID, _ string) (RemoteIssue, error) {
 	sess, err := y.plans.Open(projectID)
 	if err != nil {

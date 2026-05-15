@@ -59,11 +59,47 @@ func TestCreateProject(t *testing.T) {
 		}
 	}`)
 
-	project, err := c.CreateProject(t.Context(), "Test Project", "team-1")
+	project, err := c.CreateProject(t.Context(), ProjectCreateInput{
+		Name:        "Test Project",
+		TeamIDs:     []string{"team-1"},
+		Description: "Short description.",
+		Content:     "## Why\n\nFull body.",
+	})
 	require.NoError(t, err)
 	assert.Equal(t, "proj-123", project.ID)
 	assert.Equal(t, "Test Project", project.Name)
 	assert.Equal(t, "https://linear.app/team/project/proj-123", project.URL)
+}
+
+func TestUpdateProject(t *testing.T) {
+	c := clientWithResponse(`{
+		"data": {
+			"projectUpdate": {
+				"success": true,
+				"project": {
+					"id": "proj-123",
+					"name": "Test Project",
+					"url": "https://linear.app/team/project/proj-123"
+				}
+			}
+		}
+	}`)
+
+	project, err := c.UpdateProject(t.Context(), "proj-123", ProjectUpdateInput{
+		Description: "Refreshed description.",
+		Content:     "## Why\n\nRefreshed body.",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "proj-123", project.ID)
+	assert.Equal(t, "Test Project", project.Name)
+}
+
+func TestUpdateProject_SuccessFalse(t *testing.T) {
+	c := clientWithResponse(`{"data": {"projectUpdate": {"success": false, "project": {"id": "", "name": "", "url": ""}}}}`)
+
+	_, err := c.UpdateProject(t.Context(), "proj-123", ProjectUpdateInput{Content: "x"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "success=false")
 }
 
 func TestCreateIssue(t *testing.T) {
