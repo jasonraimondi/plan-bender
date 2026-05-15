@@ -32,9 +32,16 @@ Sync direction:
 
   1. local → linear   PUSH local JSON to Linear
                         - if no project_id: creates Linear project "<PRD name>"
+                          with the full PRD body (description + content)
+                        - if project_id exists: refreshes the project's
+                          description and content body from the local PRD
                         - issues without linear_id: creates them in Linear
-                        - issues with linear_id: updates title/status/priority in Linear
-                        - one-way: local wins on every field
+                        - issues with linear_id: updates them in Linear
+                        - create and update both publish the full issue:
+                          title, full issue body, status, priority, labels,
+                          and estimate (from points)
+                        - one-way: local wins; Linear body content is
+                          overwritten wholesale on every push
 
   2. linear → local   PULL Linear state into local JSON
                         - requires linear.project_id on the PRD
@@ -48,8 +55,15 @@ Sync direction:
 Notes to surface explicitly:
 
 - v1 has **no conflict detection** — whichever side you pick wins, full stop.
-- pull only reconciles `status`, `priority`, `assignee` — title/description changes in Linear are not pulled back yet.
-- push only sends title/description on **create**; updates push title/status/priority.
+- push publishes the **full** issue and project bodies on every run — create
+  and update alike — and overwrites whatever body content exists in Linear. A
+  teammate's manual edits to an issue body or project doc get stomped.
+- labels missing from the Linear team are auto-created on push.
+- estimate is synced from `points` only when the Linear team has estimation
+  enabled; it is silently skipped otherwise.
+- `assignee` is never pushed — Linear owns it; pull carries it back.
+- pull only reconciles `status`, `priority`, `assignee` — title, body, labels,
+  and estimate changes in Linear are not pulled back yet.
 
 ## Step 3 — confirm before mutating Linear (push only)
 
