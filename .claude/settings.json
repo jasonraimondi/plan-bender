@@ -29,9 +29,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "staged=$(git diff --cached --name-only 2>/dev/null); cli_go=$(echo \"$staged\" | grep -E '^(cmd/|internal/cli/).*\\.go$'); docs=$(echo \"$staged\" | grep -E '^(README\\.md|docs/)'); if [ -n \"$cli_go\" ] && [ -z \"$docs\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"CLI-facing Go files changed but no docs updated. Verify README.md reflects any command, flag, or behavior changes.\"}}'; fi",
+            "command": "staged=$(git diff --cached --name-only 2>/dev/null); cli_go=$(echo \"$staged\" | grep -E '^(cmd/|internal/cli/).*\\.go$'); docs=$(echo \"$staged\" | grep -E '^(README\\.md|docs/|skills/plan-bender-cli/)'); if [ -n \"$cli_go\" ] && [ -z \"$docs\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"CLI-facing Go files changed but no docs updated. Verify README.md, docs/cli.md, and skills/plan-bender-cli/SKILL.md reflect any command, flag, output, or exit-code changes.\"}}'; fi",
             "timeout": 5,
             "statusMessage": "Checking docs freshness..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); echo \"$f\" | grep -qE '/(cmd/plan-bender/|cmd/plan-bender-agent/|internal/cli/).*\\.go$' && printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"CLI-defining Go file edited. If this changes commands, flags, output shape, or exit codes, update skills/plan-bender-cli/SKILL.md and docs/cli.md in this same turn.\"}}'; true",
+            "timeout": 5,
+            "statusMessage": "Checking CLI doc sync..."
           }
         ]
       }
