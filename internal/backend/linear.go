@@ -64,11 +64,11 @@ func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (Rem
 	return RemoteProject{ID: project.ID, Name: project.Name, URL: project.URL}, nil
 }
 
-func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID string) (RemoteIssue, error) {
+func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error) {
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueCreateInput{
 		Title:       issue.Name,
-		Description: issue.Outcome,
+		Description: renderIssueBody(issue, slug),
 		TeamID:      b.teamID,
 		ProjectID:   projectID,
 		Priority:    mapPriority(issue.Priority),
@@ -82,16 +82,17 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, pr
 	return linearIssueToRemote(created), nil
 }
 
-func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue) (RemoteIssue, error) {
+func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, slug string) (RemoteIssue, error) {
 	if issue.LinearID == nil || *issue.LinearID == "" {
 		return RemoteIssue{}, fmt.Errorf("issue #%d has no linear_id", issue.ID)
 	}
 
 	stateID := b.resolveStateID(issue.Status)
 	input := linear.IssueUpdateInput{
-		Title:    issue.Name,
-		StateID:  stateID,
-		Priority: mapPriority(issue.Priority),
+		Title:       issue.Name,
+		Description: renderIssueBody(issue, slug),
+		StateID:     stateID,
+		Priority:    mapPriority(issue.Priority),
 	}
 
 	updated, err := b.client.UpdateIssue(ctx, *issue.LinearID, input)

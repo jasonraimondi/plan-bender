@@ -52,14 +52,14 @@ func SyncPush(ctx context.Context, plans *planrepo.Plans, be Backend, slug strin
 	for i := range issues {
 		issue := &issues[i]
 		if issue.LinearID != nil && *issue.LinearID != "" {
-			if _, err := be.UpdateIssue(ctx, issue); err != nil {
+			if _, err := be.UpdateIssue(ctx, issue, slug); err != nil {
 				result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 				continue
 			}
 			result.Updated++
 			continue
 		}
-		remote, err := be.CreateIssue(ctx, issue, projectID)
+		remote, err := be.CreateIssue(ctx, issue, projectID, slug)
 		if err != nil {
 			result.Errors = append(result.Errors, SyncError{IssueID: issue.ID, Err: err})
 			continue

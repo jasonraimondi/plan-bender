@@ -45,7 +45,7 @@ func TestSyncPush_NoLockDuringRemoteCreateIssue(t *testing.T) {
 	probed := false
 	probeOK := false
 	be := &mockBackend{
-		createIssue: func(_ context.Context, issue *schema.Issue, _ string) (RemoteIssue, error) {
+		createIssue: func(_ context.Context, issue *schema.Issue, _, _ string) (RemoteIssue, error) {
 			if !probed {
 				probed = true
 				probeOK = tryOpenWithin(fix.plans, "test", 500*time.Millisecond)
