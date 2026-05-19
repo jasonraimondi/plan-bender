@@ -183,7 +183,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 				d.printHITLSummary(issues)
 				return ErrHITLOnly
 			}
-			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %d blocked", res.BlockedCount)
+			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %s", blockedSummary(issues))
 		}
 
 		results, err := d.RunBatch(ctx, slug, batch, integrationBranch)
@@ -536,6 +536,26 @@ func hasLabel(labels []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// blockedSummary describes the blocked issues in a snapshot for the "stuck"
+// error. It deliberately does not reuse plan.Resolve's BlockedCount: that field
+// counts only dependency-blocked issues (blocked status AND unresolved deps),
+// so an issue blocked operationally — a killed sub-agent, a merge conflict, a
+// failed hook — has no open deps and is undercounted, producing the misleading
+// "0 blocked" on a run that just blocked an issue. The stuck path needs the
+// literal count, plus the IDs so the operator knows what to unblock.
+func blockedSummary(issues []schema.Issue) string {
+	var ids []string
+	for _, iss := range issues {
+		if iss.Status == "blocked" {
+			ids = append(ids, fmt.Sprintf("#%d", iss.ID))
+		}
+	}
+	if len(ids) == 0 {
+		return "0 blocked"
+	}
+	return fmt.Sprintf("%d blocked (issues %s)", len(ids), strings.Join(ids, ", "))
 }
 
 func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {

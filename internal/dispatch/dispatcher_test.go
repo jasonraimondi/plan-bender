@@ -462,6 +462,11 @@ func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {
 	err := d.Run(context.Background(), "demo")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stuck")
+	// Issue 1 is blocked with no open dependency blockers — the operationally
+	// blocked case. The stuck message must count it (and name it), not report
+	// the misleading "0 blocked" that plan.Resolve's BlockedCount would yield.
+	assert.Contains(t, err.Error(), "1 blocked")
+	assert.Contains(t, err.Error(), "#1")
 }
 
 // timeBoxRun cancels the context if Run hangs longer than the deadline.
