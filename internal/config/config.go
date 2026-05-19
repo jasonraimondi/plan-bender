@@ -10,6 +10,20 @@ import (
 
 const defaultSubprocessTimeout = 30 * time.Minute
 
+// defaultMaxParallel caps batch concurrency when pipeline.max_parallel is
+// unset. Each claude subprocess is heavy (model API + MCP servers + a git
+// worktree), so the default stays low.
+const defaultMaxParallel = 3
+
+// ResolvedMaxParallel returns the configured batch concurrency cap, or
+// defaultMaxParallel when unset. validate() rejects a value < 1 at Load time.
+func (p PipelineConfig) ResolvedMaxParallel() int {
+	if p.MaxParallel == nil {
+		return defaultMaxParallel
+	}
+	return *p.MaxParallel
+}
+
 // validate() rejects unparseable values at Load time, so this never returns an error.
 func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
 	if p.SubprocessTimeout == "" {
@@ -43,6 +57,9 @@ type PipelineConfig struct {
 	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
 	// otherwise blocks dispatch indefinitely. Empty falls back to defaultSubprocessTimeout.
 	SubprocessTimeout string `json:"subprocess_timeout,omitempty"`
+	// MaxParallel caps how many claude subprocesses RunBatch runs at once.
+	// Nil falls back to defaultMaxParallel.
+	MaxParallel *int `json:"max_parallel,omitempty"`
 }
 
 type HooksConfig struct {

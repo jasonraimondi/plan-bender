@@ -91,3 +91,11 @@ func TestPartialConfig_InterviewWithDocsOmittedWhenNil(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "interview_with_docs")
 }
+
+func TestResolvedMaxParallel_DefaultsWhenUnset(t *testing.T) {
+	assert.Equal(t, 3, PipelineConfig{}.ResolvedMaxParallel())
+}
+
+func TestResolvedMaxParallel_UsesConfiguredValue(t *testing.T) {
+	assert.Equal(t, 8, PipelineConfig{MaxParallel: ptr(8)}.ResolvedMaxParallel())
+}

@@ -226,6 +226,19 @@ func TestMerge_BranchStrategyOverride(t *testing.T) {
 	assert.Equal(t, []string{}, result.Pipeline.Skip)
 }
 
+func TestMerge_MaxParallelOverride(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{Pipeline: &PipelineConfig{MaxParallel: ptr(6)}})
+	require.NotNil(t, result.Pipeline.MaxParallel)
+	assert.Equal(t, 6, *result.Pipeline.MaxParallel)
+}
+
+func TestMerge_MaxParallelUnsetStaysNil(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{Pipeline: &PipelineConfig{BranchStrategy: "direct"}})
+	assert.Nil(t, result.Pipeline.MaxParallel)
+}
+
 func TestMerge_PipelineSkipPreservesBranchStrategy(t *testing.T) {
 	base := Defaults()
 	base.Pipeline.BranchStrategy = "direct"
