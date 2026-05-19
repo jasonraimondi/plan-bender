@@ -52,6 +52,9 @@ func RunHook(ctx context.Context, cmd, dir string, outWriter io.Writer) (string,
 		return "", fmt.Errorf("attaching stdout: %w", err)
 	}
 
+	configureProcessGroup(c)
+	c.WaitDelay = subprocessWaitDelay
+
 	if err := c.Start(); err != nil {
 		return "", fmt.Errorf("starting hook %q: %w", cmd, err)
 	}
