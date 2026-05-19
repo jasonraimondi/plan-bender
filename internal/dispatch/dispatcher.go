@@ -52,13 +52,17 @@ type Dispatcher struct {
 	outWriter io.Writer
 
 	// ownerOnce + owner memoize the status.Owner so every status write in a
-	// Run goes through the same lock-aware adapter without re-allocating.
+	// Run goes through one lock-aware adapter without re-allocating. The Owner
+	// wraps its own planrepo.Plans handle (NewProdStatusOwner), distinct from
+	// `plans` below but rooted at the same plansDir.
 	ownerOnce sync.Once
 	owner     *status.Owner
 
-	// plansOnce + plans memoize the planrepo.Plans handle used for resolver
-	// and merge-order snapshots. Sharing one handle across a Run keeps every
-	// read path on the same persistence boundary as status writes.
+	// plansOnce + plans memoize the planrepo.Plans handle for every read in a
+	// Run: the resolver and merge-order snapshots, plus the post-subprocess
+	// loadIssue read passed into RunSubprocess. It does not back status writes
+	// — those go through the Owner's own handle (see ownerOnce) — but all
+	// handles target the same plansDir, the single on-disk persistence boundary.
 	plansOnce sync.Once
 	plans     *planrepo.Plans
 }
@@ -269,7 +273,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
 	defer cancel()
-	res := RunSubprocess(subCtx, d.statusOwner(), slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
+	res := RunSubprocess(subCtx, d.statusOwner(), d.plansRepo(), slug, issue, prompt, wt.Path, logDir, d.out())
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {

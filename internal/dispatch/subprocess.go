@@ -32,14 +32,15 @@ type SubResult struct {
 // any other Outcome it transitions the issue to blocked with Outcome.Reason()
 // and returns Success=false with Err carrying the reason.
 //
-// plansDir is the absolute path to the parent repo's plans dir. logDir receives
-// the full output transcript at logDir/{id}.log.
+// plans is the shared planrepo handle; the post-run loadIssue read flows
+// through it. logDir receives the full output transcript at logDir/{id}.log.
 func RunSubprocess(
 	ctx context.Context,
 	owner *status.Owner,
+	plans *planrepo.Plans,
 	slug string,
 	issue schema.Issue,
-	prompt, worktreePath, plansDir, logDir string,
+	prompt, worktreePath, logDir string,
 	outWriter io.Writer,
 ) SubResult {
 	res := SubResult{IssueID: issue.ID}
@@ -118,7 +119,7 @@ func RunSubprocess(
 		}
 	}
 
-	post, loadErr := loadIssue(plansDir, slug, issue.ID)
+	post, loadErr := loadIssue(plans, slug, issue.ID)
 
 	// Wrap waitErr with stderr so the persisted blocked-state note retains
 	// observability. %w preserves the unwrap chain so Verdict's errors.As
@@ -159,8 +160,8 @@ func truncateForNotes(s string) string {
 	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
-func loadIssue(plansDir, slug string, id int) (*schema.Issue, error) {
-	sess, err := planrepo.NewProd(plansDir).Open(slug)
+func loadIssue(plans *planrepo.Plans, slug string, id int) (*schema.Issue, error) {
+	sess, err := plans.Open(slug)
 	if err != nil {
 		return nil, err
 	}

@@ -118,8 +118,8 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.True(t, res.Success, "expected success, got err: %v, out: %s", res.Err, out.String())
 	assert.Contains(t, out.String(), "[issue-5] ")
@@ -147,8 +147,8 @@ exit 1
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -176,8 +176,8 @@ func TestRunSubprocess_TimeoutReportedAsSubprocessTimeout(t *testing.T) {
 	defer cancel()
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(ctx, newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(ctx, newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -206,8 +206,8 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	post := loadIssueFromDisk(t, plansDir, "ship", 5)
@@ -234,8 +234,8 @@ exit 0
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -252,8 +252,8 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -282,8 +282,8 @@ exit 0
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	prompt := "---\nname: bender-implement-issue\n---\n\n# Implement\n\nDo the thing."
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		prompt, worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		prompt, worktree, "", &out)
 	require.True(t, res.Success, "expected success, got err: %v", res.Err)
 
 	args, err := os.ReadFile(argsFile)
@@ -310,8 +310,8 @@ exit 1
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 	require.False(t, res.Success)
 
 	post := loadIssueFromDisk(t, plansDir, "ship", 5)
