@@ -36,6 +36,13 @@ func validate(cfg *Config) error {
 		})
 	}
 
+	if cfg.Pipeline.MaxParallel != nil && *cfg.Pipeline.MaxParallel < 1 {
+		errs = append(errs, FieldError{
+			Field:   "pipeline.max_parallel",
+			Message: fmt.Sprintf("must be at least 1, got %d", *cfg.Pipeline.MaxParallel),
+		})
+	}
+
 	if cfg.Pipeline.SubprocessTimeout != "" {
 		if d, err := time.ParseDuration(cfg.Pipeline.SubprocessTimeout); err != nil {
 			errs = append(errs, FieldError{

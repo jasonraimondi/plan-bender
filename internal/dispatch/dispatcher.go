@@ -186,10 +186,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %s", blockedSummary(issues))
 		}
 
-		results, err := d.RunBatch(ctx, slug, batch, integrationBranch)
-		if err != nil {
-			return fmt.Errorf("running batch: %w", err)
-		}
+		results := d.RunBatch(ctx, slug, batch, integrationBranch)
 
 		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
 			return fmt.Errorf("merging batch: %w", err)
@@ -197,25 +194,29 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 }
 
-// RunBatch fans out one goroutine per issue, each creating a worktree off
-// integrationBranch, rendering a prompt, and running a claude subprocess.
-// Results come back via a buffered channel and are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) ([]SubResult, error) {
+// RunBatch dispatches issues through a worker pool capped at
+// ResolvedMaxParallel(): at most that many claude subprocesses run
+// concurrently. Each worker creates a worktree off integrationBranch, renders
+// a prompt, and runs a claude subprocess. Results are returned in input order.
+func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) []SubResult {
 	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
 
 	results := make([]SubResult, len(issues))
+	sem := make(chan struct{}, d.Config.Pipeline.ResolvedMaxParallel())
 	var wg sync.WaitGroup
 
 	for i := range issues {
 		wg.Add(1)
 		go func(idx int, issue schema.Issue) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
 		}(i, issues[i])
 	}
 
 	wg.Wait()
-	return results, nil
+	return results
 }
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {

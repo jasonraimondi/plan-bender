@@ -29,6 +29,21 @@ func TestValidate_ZeroMaxPoints(t *testing.T) {
 	assertFieldError(t, err, "max_points")
 }
 
+func TestValidate_MaxParallelBelowOne(t *testing.T) {
+	cfg := Defaults()
+	cfg.Pipeline.MaxParallel = ptr(0)
+	err := validate(&cfg)
+	require.Error(t, err)
+	assertFieldError(t, err, "pipeline.max_parallel")
+}
+
+func TestValidate_MaxParallelUnsetPasses(t *testing.T) {
+	cfg := Defaults()
+	cfg.Pipeline.MaxParallel = nil
+	err := validate(&cfg)
+	assert.NoError(t, err)
+}
+
 func TestValidate_LinearEnabledRequiresAPIKeyAndTeam(t *testing.T) {
 	cfg := Defaults()
 	cfg.Linear.Enabled = true

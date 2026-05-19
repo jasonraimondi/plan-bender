@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -467,6 +468,67 @@ func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {
 	// the misleading "0 blocked" that plan.Resolve's BlockedCount would yield.
 	assert.Contains(t, err.Error(), "1 blocked")
 	assert.Contains(t, err.Error(), "#1")
+}
+
+// TestDispatcher_RunBatchRespectsMaxParallelCap dispatches more ready issues
+// than the configured max_parallel and asserts no more than that many claude
+// subprocesses ever run at once. Each stub drops a marker file while running;
+// every invocation samples the live marker count, and the peak sample must
+// stay at or below the cap.
+func TestDispatcher_RunBatchRespectsMaxParallelCap(t *testing.T) {
+	fix := setupDispatch(t)
+	installSkillFile(t, fix.root)
+
+	const numIssues = 5
+	const maxPar = 2
+	for i := 1; i <= numIssues; i++ {
+		writeIssue(t, fix.plansDir, mkAFKIssue(i, fmt.Sprintf("iss%d", i), "todo"))
+	}
+
+	countDir := t.TempDir()
+	samplesFile := filepath.Join(t.TempDir(), "samples")
+	t.Setenv("PB_COUNTDIR", countDir)
+	t.Setenv("PB_SAMPLES", samplesFile)
+
+	var cases strings.Builder
+	for i := 1; i <= numIssues; i++ {
+		fmt.Fprintf(&cases, "  *'\"slug\": \"iss%d\"'*) target=\"%s/demo/issues/%d-iss%d.json\" ;;\n",
+			i, fix.plansDir, i, i)
+	}
+
+	// Marker-file dance: create a uniquely-named marker, sample how many markers
+	// are live (= concurrent subprocesses), sleep to force overlap, then clear
+	// the marker and flip the issue to in-review.
+	body := fmt.Sprintf(`prompt=$(cat)
+mine=$(mktemp "$PB_COUNTDIR/run.XXXXXX")
+ls "$PB_COUNTDIR" | wc -l | tr -d ' ' >> "$PB_SAMPLES"
+sleep 0.4
+rm -f "$mine"
+target=""
+case "$prompt" in
+%sesac
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "$target"
+exit 0
+`, cases.String())
+	installClaudeStub(t, body)
+
+	d := newDispatcher(fix)
+	limit := maxPar
+	d.Config.Pipeline.MaxParallel = &limit
+	require.NoError(t, timeBoxRun(t, d, "demo", 60*time.Second))
+
+	data, err := os.ReadFile(samplesFile)
+	require.NoError(t, err)
+	peak := 0
+	for _, field := range strings.Fields(string(data)) {
+		n, convErr := strconv.Atoi(field)
+		require.NoError(t, convErr)
+		if n > peak {
+			peak = n
+		}
+	}
+	assert.LessOrEqual(t, peak, maxPar, "peak concurrent subprocesses must not exceed max_parallel")
+	assert.GreaterOrEqual(t, peak, 2, "expected the batch to run subprocesses in parallel")
 }
 
 // timeBoxRun cancels the context if Run hangs longer than the deadline.

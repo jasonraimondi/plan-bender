@@ -45,7 +45,8 @@ All available keys with their default values:
   "pipeline": {
     "skip": [],
     "branch_strategy": "integration",
-    "subprocess_timeout": "30m"
+    "subprocess_timeout": "30m",
+    "max_parallel": 3
   },
   "hooks": {
     "before_issue": "",
@@ -80,6 +81,7 @@ Field notes:
 - `pipeline.skip` — skill names to exclude, e.g. `["bender-interview-me"]`.
 - `pipeline.branch_strategy` — `integration` (dispatch creates `<user>/<slug>` off the default branch and merges issue branches there) or `direct` (dispatch merges issue branches straight into the default branch).
 - `pipeline.subprocess_timeout` — Go duration string (`"30m"`, `"2h"`). Per-subprocess cap on each `claude --print` invocation; also caps `before_issue` / `after_issue` hooks. Validated at config load.
+- `pipeline.max_parallel` — cap on concurrent `claude` subprocesses inside one `dispatch` batch. Default `3`. Each subprocess is heavy (model API + MCP servers + a git worktree). Must be at least `1`.
 - `hooks.before_issue` — runs in the worktree dir before each subprocess; non-zero exit blocks the issue and skips the subprocess.
 - `hooks.after_issue` — runs in the worktree dir after each subprocess; failures are logged but do not change issue status.
 - `hooks.after_batch` — runs in the repo root after merge-back; non-fatal.
