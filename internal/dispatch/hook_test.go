@@ -50,6 +50,30 @@ func TestRunHook_RunsInProvidedDir(t *testing.T) {
 	assert.Contains(t, out.String(), "[hook] ok")
 }
 
+// A timed-out hook backgrounds a grandchild that inherits the stdout pipe and
+// outlives the hook by a wide margin. RunHook must still return on a bounded
+// delay: the process-group kill reaps the grandchild and cmd.WaitDelay backstops
+// cmd.Wait(). Without either, the stdout-copy goroutine blocks on the surviving
+// pipe write end and Wait() hangs for the full grandchild lifetime.
+func TestRunHook_TimeoutReturnsDespiteSurvivingGrandchild(t *testing.T) {
+	const grandchildLifetime = 60 * time.Second
+	cmd := fmt.Sprintf(`sleep %d & sleep %d`,
+		int(grandchildLifetime.Seconds()), int(grandchildLifetime.Seconds()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	var out bytes.Buffer
+	start := time.Now()
+	_, err := RunHook(ctx, cmd, t.TempDir(), &out)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 30*time.Second,
+		"RunHook must return on a bounded delay, not wait out the grandchild lifetime")
+}
+
 // Wiring: before_issue hook failure marks the issue blocked and skips the
 // subprocess.
 func TestDispatcher_BeforeIssueHookFailureBlocksIssue(t *testing.T) {

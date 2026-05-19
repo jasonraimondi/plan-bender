@@ -12,11 +12,19 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
+
+// subprocessWaitDelay bounds how long cmd.Wait blocks after the process exits
+// or after a ctx-cancel kill: once it elapses, os/exec force-kills the process
+// and closes the pipe fds it owns, unblocking the I/O-copy goroutine even if a
+// surviving grandchild still holds the pipe's write end. Shared by RunSubprocess
+// and RunHook.
+const subprocessWaitDelay = 10 * time.Second
 
 // SubResult is the outcome of a single sub-agent subprocess.
 type SubResult struct {
@@ -76,6 +84,9 @@ func RunSubprocess(
 	if err != nil {
 		return block(fmt.Sprintf("attaching stdout pipe: %v", err))
 	}
+
+	configureProcessGroup(cmd)
+	cmd.WaitDelay = subprocessWaitDelay
 
 	if err := cmd.Start(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
