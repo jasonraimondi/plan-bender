@@ -23,11 +23,12 @@ func fixtureContext() map[string]any {
 			{"name": "Interview", "description": "Stress-test your plan", "skill": "bender-interview-me"},
 			{"name": "Write PRD", "description": "Create a PRD", "skill": "bender-write-prd"},
 		},
-		"custom_fields":      []map[string]any{},
-		"track_descriptions": []map[string]string{},
-		"agent":              "claude-code",
-		"review_with_user":   false,
-		"report_bugs":        false,
+		"custom_fields":       []map[string]any{},
+		"track_descriptions":  []map[string]string{},
+		"agent":               "claude-code",
+		"review_with_user":    false,
+		"report_bugs":         false,
+		"interview_with_docs": false,
 		"commands": map[string]string{
 			"context":         "plan-bender-agent context",
 			"validate":        "plan-bender-agent validate",
@@ -286,6 +287,76 @@ func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
 			assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
 		})
 	}
+}
+
+func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+	content := tmpls["bender-interview-me.skill.tmpl"]
+
+	t.Run("off renders identical to absent and keeps the question-tool intro", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["interview_with_docs"] = false
+		off, err := Render("interview", content, ctx)
+		require.NoError(t, err)
+
+		absent := fixtureContext()
+		delete(absent, "interview_with_docs")
+		none, err := Render("interview", content, absent)
+		require.NoError(t, err)
+
+		assert.Equal(t, none, off, "false must render byte-identical to an absent flag")
+		assert.NotContains(t, off, "Domain awareness")
+		assert.Contains(t, off, "AskUserQuestionTool")
+	})
+
+	t.Run("on swaps the intro and appends the grill block", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["interview_with_docs"] = true
+		out, err := Render("interview", content, ctx)
+		require.NoError(t, err)
+
+		assert.NotContains(t, out, "AskUserQuestionTool")
+		assert.Contains(t, out, "one at a time")
+		assert.Contains(t, out, "## Domain awareness")
+		assert.Contains(t, out, "Update CONTEXT.md inline")
+		assert.Contains(t, out, "Offer ADRs sparingly")
+		assert.Contains(t, out, "docs/adr/")
+	})
+}
+
+func TestWritePrdTemplate_InterviewWithDocsBlock(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+	content := tmpls["bender-write-prd.skill.tmpl"]
+
+	t.Run("off renders identical to absent without the grill block", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["interview_with_docs"] = false
+		off, err := Render("write-prd", content, ctx)
+		require.NoError(t, err)
+
+		absent := fixtureContext()
+		delete(absent, "interview_with_docs")
+		none, err := Render("write-prd", content, absent)
+		require.NoError(t, err)
+
+		assert.Equal(t, none, off, "false must render byte-identical to an absent flag")
+		assert.NotContains(t, off, "Domain awareness")
+	})
+
+	t.Run("on appends the grill block before Process", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["interview_with_docs"] = true
+		out, err := Render("write-prd", content, ctx)
+		require.NoError(t, err)
+
+		assert.Contains(t, out, "## Domain awareness")
+		assert.Contains(t, out, "Update CONTEXT.md inline")
+		assert.Contains(t, out, "Offer ADRs sparingly")
+		assert.Less(t, strings.Index(out, "## Domain awareness"), strings.Index(out, "## Process"),
+			"grill block must precede the Process section")
+	})
 }
 
 func TestSyncCommands_RenderWithLinearTool(t *testing.T) {

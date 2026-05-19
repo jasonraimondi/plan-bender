@@ -137,6 +137,26 @@ func TestMerge_ReportBugsOverrideToTrue(t *testing.T) {
 	assert.True(t, result.ReportBugs)
 }
 
+func TestMerge_InterviewWithDocsDefaultFalse(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.False(t, result.InterviewWithDocs)
+}
+
+func TestMerge_InterviewWithDocsOverrideToTrue(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{InterviewWithDocs: ptr(true)})
+	assert.True(t, result.InterviewWithDocs)
+}
+
+func TestMerge_InterviewWithDocsThreeLayer(t *testing.T) {
+	base := Defaults()
+	layer1 := PartialConfig{InterviewWithDocs: ptr(true)}
+	layer2 := PartialConfig{InterviewWithDocs: ptr(false)}
+	result := merge(merge(base, layer1), layer2)
+	assert.False(t, result.InterviewWithDocs)
+}
+
 func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{

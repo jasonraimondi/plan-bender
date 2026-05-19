@@ -93,6 +93,16 @@ func TestSkillRequiresBackend(t *testing.T) {
 	assert.False(t, SkillRequiresBackend("does-not-exist"))
 }
 
+func TestBuildContext_InterviewWithDocs(t *testing.T) {
+	cfg := config.Defaults()
+	off := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+	assert.Equal(t, false, off["interview_with_docs"])
+
+	cfg.InterviewWithDocs = true
+	on := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+	assert.Equal(t, true, on["interview_with_docs"])
+}
+
 func TestBuildContext_CommandsIncludesWorkflowCommands(t *testing.T) {
 	cfg := config.Defaults()
 	agent := config.ResolvedAgent{Name: "claude-code"}

@@ -117,6 +117,7 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 	ctx["commands"] = defaultCommands
 	ctx["review_with_user"] = cfg.ReviewWithUser
 	ctx["report_bugs"] = cfg.ReportBugs
+	ctx["interview_with_docs"] = cfg.InterviewWithDocs
 
 	return ctx
 }
