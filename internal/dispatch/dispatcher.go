@@ -395,20 +395,24 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 	return false, nil
 }
 
+// blockFromStatuses is the set of statuses from which a dispatch failure may
+// transition an issue to blocked. Backlog is included because ReadyAFK accepts
+// backlog issues: a failure before the sub-agent flips backlog→todo→in-progress
+// would otherwise leave the issue stuck at backlog while CAS rejects every
+// block attempt — the dispatch loop would then re-pick the same issue forever
+// (the popar-py CAS-loop bug).
+var blockFromStatuses = []status.Status{
+	status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview,
+}
+
 // markBlockedAndWarn flips the issue to blocked via the status owner and warns
 // to stderr if the transition fails. Callers are already on a failure path; a
 // warn-and-continue is preferable to bubbling the error and masking the
 // original cause. ErrAlreadyInState (issue already blocked) is silently
 // ignored — that's a no-op the operator doesn't need to see.
-//
-// Backlog is included in the from-set because ReadyAFK accepts backlog issues
-// and a runOne failure before the sub-agent has a chance to flip
-// backlog→todo→in-progress would otherwise leave the issue stuck at backlog
-// while CAS rejects every block attempt — the dispatch loop would then re-pick
-// the same issue forever (the popar-py CAS-loop bug).
 func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string) {
 	err := d.statusOwner().Transition(ctx, slug, id,
-		[]status.Status{status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+		blockFromStatuses,
 		status.StatusBlocked, reason)
 	if err == nil || errors.Is(err, status.ErrAlreadyInState) {
 		return
@@ -519,23 +523,14 @@ func hitlOnlyRemaining(issues []schema.Issue) bool {
 		case "done", "canceled", "in-review":
 			continue
 		}
-		if hasLabel(iss.Labels, "AFK") && !hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("AFK") && !iss.HasLabel("HITL") {
 			return false
 		}
-		if hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("HITL") {
 			hasHITL = true
 		}
 	}
 	return hasHITL
-}
-
-func hasLabel(labels []string, want string) bool {
-	for _, l := range labels {
-		if l == want {
-			return true
-		}
-	}
-	return false
 }
 
 // blockedSummary describes the blocked issues in a snapshot for the "stuck"
@@ -565,7 +560,7 @@ func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
 		case "done", "canceled", "in-review":
 			continue
 		}
-		if hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("HITL") {
 			fmt.Fprintf(d.out(), "  - #%d %s (%s)\n", iss.ID, iss.Name, iss.Status)
 		}
 	}

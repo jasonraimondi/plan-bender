@@ -59,7 +59,7 @@ func ReadyAFK(issues []schema.Issue) []schema.Issue {
 		if iss.Assignee != nil && *iss.Assignee != "" {
 			continue
 		}
-		if !hasLabel(iss.Labels, "AFK") {
+		if !iss.HasLabel("AFK") {
 			continue
 		}
 		if len(openBlockers(iss.BlockedBy, byID)) > 0 {
@@ -144,7 +144,7 @@ func Resolve(issues []schema.Issue) Result {
 
 	hasAFK := false
 	for _, c := range candidates {
-		if hasLabel(c.issue.Labels, "AFK") {
+		if c.issue.HasLabel("AFK") {
 			hasAFK = true
 			break
 		}
@@ -152,7 +152,7 @@ func Resolve(issues []schema.Issue) Result {
 
 	pool := make([]candidate, 0, len(candidates))
 	for _, c := range candidates {
-		if hasAFK && hasLabel(c.issue.Labels, "HITL") && !hasLabel(c.issue.Labels, "AFK") {
+		if hasAFK && c.issue.HasLabel("HITL") && !c.issue.HasLabel("AFK") {
 			skipped = append(skipped, SkippedIssue{
 				ID:     c.issue.ID,
 				Slug:   c.issue.Slug,
@@ -189,7 +189,7 @@ func Resolve(issues []schema.Issue) Result {
 	})
 
 	chosen := pool[0]
-	requiresHuman := !hasAFK && hasLabel(chosen.issue.Labels, "HITL")
+	requiresHuman := !hasAFK && chosen.issue.HasLabel("HITL")
 
 	for _, c := range pool[1:] {
 		skipped = append(skipped, SkippedIssue{
@@ -221,15 +221,6 @@ func openBlockers(deps []int, byID map[int]*schema.Issue) []int {
 		}
 	}
 	return open
-}
-
-func hasLabel(labels []string, want string) bool {
-	for _, l := range labels {
-		if l == want {
-			return true
-		}
-	}
-	return false
 }
 
 func statusRank(c candidate) int {
