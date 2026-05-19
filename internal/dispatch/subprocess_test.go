@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -156,6 +157,38 @@ exit 1
 	assert.Equal(t, "blocked", post.Status)
 	require.NotNil(t, post.Notes)
 	assert.Contains(t, *post.Notes, "boom")
+}
+
+func TestRunSubprocess_TimeoutReportedAsSubprocessTimeout(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	// `exec sleep` so the claude process *is* sleep — the deadline SIGKILL
+	// lands directly on it, closing stdout immediately instead of waiting on
+	// an orphaned child.
+	installFakeClaude(t, "exec sleep 5\n")
+
+	worktree := t.TempDir()
+	logDir := filepath.Join(t.TempDir(), "logs")
+	var out bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(ctx, newTestOwner(plansDir), "ship", issue,
+		"some prompt", worktree, plansDir, logDir, &out)
+
+	require.False(t, res.Success)
+	require.Error(t, res.Err)
+	// A deadline SIGKILL must name the subprocess_timeout knob, not surface as
+	// the opaque "code -1: signal: killed" that an OOM-kill produces.
+	assert.Contains(t, res.Err.Error(), "subprocess_timeout")
+
+	post := loadIssueFromDisk(t, plansDir, "ship", 5)
+	assert.Equal(t, "blocked", post.Status)
+	require.NotNil(t, post.Notes)
+	assert.Contains(t, *post.Notes, "timed out")
 }
 
 func TestRunSubprocess_ExitZeroButStatusNotInReviewMarksBlocked(t *testing.T) {

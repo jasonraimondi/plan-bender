@@ -125,8 +125,17 @@ func RunSubprocess(
 	// against *exec.ExitError still recovers the exit code. Cap the stderr
 	// portion so a verbose subprocess error cannot bloat the issue JSON.
 	exitErr := waitErr
-	if exitErr != nil && strings.TrimSpace(stderrText) != "" {
-		exitErr = fmt.Errorf("%w\n%s", waitErr, truncateForNotes(strings.TrimSpace(stderrText)))
+	if exitErr != nil {
+		// A SIGKILL from exec.CommandContext's deadline is otherwise
+		// indistinguishable from an OS OOM-kill — both surface as
+		// "signal: killed" with exit code -1. Naming the subprocess_timeout
+		// here gives the operator an actionable knob instead of a guess.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			exitErr = fmt.Errorf("subprocess timed out (exceeded subprocess_timeout); SIGKILL sent: %w", waitErr)
+		}
+		if stderr := strings.TrimSpace(stderrText); stderr != "" {
+			exitErr = fmt.Errorf("%w\n%s", exitErr, truncateForNotes(stderr))
+		}
 	}
 
 	outcome := Verdict(exitErr, loadErr, post)
