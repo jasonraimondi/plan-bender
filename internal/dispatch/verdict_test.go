@@ -98,6 +98,15 @@ func TestVerdict(t *testing.T) {
 			want:    ExitNonZero{Code: 1, Err: exit1},
 		},
 		{
+			// The sub-agent ran `pba complete` (status -> in-review) and was
+			// then SIGKILLed during wrap-up. Finished work must not be
+			// downgraded to blocked by the post-completion kill.
+			name:    "in-review post-status beats exitErr",
+			exitErr: exit137,
+			post:    inReview,
+			want:    Success{},
+		},
+		{
 			name:    "loadErr beats both exitErr and wrong status",
 			exitErr: exit1,
 			loadErr: loadErr,

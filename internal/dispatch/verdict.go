@@ -58,12 +58,20 @@ func (Unreadable) IsSuccess() bool { return false }
 // Precedence (highest first):
 //  1. loadErr != nil — Unreadable. A missing or corrupt post-run file beats every
 //     other signal: without it we cannot know what the sub-agent did.
-//  2. exitErr != nil — ExitNonZero. We trust the exit code over a stale issue file.
-//  3. post != nil and post.Status != "in-review" — WrongPostStatus.
-//  4. otherwise — Success.
+//  2. post.Status == "in-review" — Success. The sub-agent runs `pba complete` as
+//     its final step, so an in-review status means the work was committed. A
+//     non-zero exit or SIGKILL during the subprocess's wrap-up — after the issue
+//     already reached in-review — must not downgrade finished work to blocked.
+//  3. exitErr != nil — ExitNonZero. With the work not yet complete, trust the
+//     exit code over a partial issue file.
+//  4. post != nil and post.Status != "in-review" — WrongPostStatus.
+//  5. otherwise — Success.
 func Verdict(exitErr error, loadErr error, post *schema.Issue) Outcome {
 	if loadErr != nil {
 		return Unreadable{Err: loadErr}
+	}
+	if post != nil && post.Status == "in-review" {
+		return Success{}
 	}
 	if exitErr != nil {
 		code := -1
