@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
@@ -174,17 +175,26 @@ func loadIssue(plansDir, slug string, id int) (*schema.Issue, error) {
 	return nil, fmt.Errorf("issue #%d not found in %q", id, slug)
 }
 
+// separatorPrefix marks the start of one dispatch run inside a per-issue log.
+// writeLog appends rather than truncates, so a re-dispatched issue keeps its
+// prior runs; each run is delimited by a separator carrying a UTC timestamp.
+const separatorPrefix = "=== dispatch run "
+
 func writeLog(logDir string, id int, stdout, stderr []byte) error {
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return err
 	}
 	path := filepath.Join(logDir, fmt.Sprintf("%d.log", id))
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
+	header := separatorPrefix + time.Now().UTC().Format(time.RFC3339) + " ===\n"
+	if _, err := f.WriteString(header); err != nil {
+		return err
+	}
 	if _, err := f.Write(stdout); err != nil {
 		return err
 	}

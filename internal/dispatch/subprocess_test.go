@@ -320,6 +320,29 @@ exit 1
 	assert.Contains(t, *post.Notes, "truncated")
 }
 
+func TestWriteLog_AppendsRunsWithSeparatorHeader(t *testing.T) {
+	logDir := filepath.Join(t.TempDir(), "logs")
+
+	require.NoError(t, writeLog(logDir, 5, []byte("first run output\n"), nil))
+	require.NoError(t, writeLog(logDir, 5, []byte("second run output\n"), []byte("second run stderr\n")))
+
+	logBytes, err := os.ReadFile(filepath.Join(logDir, "5.log"))
+	require.NoError(t, err)
+	log := string(logBytes)
+
+	// Both runs survive — re-dispatch appends instead of truncating.
+	assert.Contains(t, log, "first run output")
+	assert.Contains(t, log, "second run output")
+	assert.Contains(t, log, "second run stderr")
+	assert.Less(t, strings.Index(log, "first run output"), strings.Index(log, "second run output"),
+		"first run must precede second run")
+
+	// Each run is preceded by a timestamped separator header.
+	assert.Equal(t, 2, strings.Count(log, separatorPrefix))
+	assert.True(t, strings.HasPrefix(log, separatorPrefix),
+		"a first run still produces a clean log starting with a header")
+}
+
 func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {
 	worktree := t.TempDir()
 	skillDir := filepath.Join(worktree, ".claude", "skills", "bender-implement-issue")
