@@ -637,6 +637,36 @@ func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	assert.Contains(t, *alpha.Notes, "building prompt", "block reason should reference the failure")
 }
 
+// TestDispatcher_ClaimFailureRemovesLeakedWorktree asserts that when runOne
+// fails after worktree.Create but before the subprocess starts, the orphaned
+// worktree is removed instead of left on disk. The Claim is forced to fail by
+// seeding the issue in `done` — a status outside Claim's CAS from-set — so
+// Create succeeds but Claim returns a mismatch.
+func TestDispatcher_ClaimFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "done")
+	writeIssue(t, fix.plansDir, iss)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "claiming issue")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+
+	out, err := exec.Command("git", "-C", fix.root, "worktree", "list", "--porcelain").Output()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), wtPath, "git must no longer track the removed worktree")
+}
+
 // TestDispatcher_MergeBackRestoresParentHEAD asserts the parent repo's HEAD
 // returns to its starting branch after a successful dispatch, instead of
 // silently leaving the user on the integration branch.

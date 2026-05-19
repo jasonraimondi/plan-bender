@@ -242,6 +242,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 		reason := fmt.Sprintf("claiming issue: %v", err)
 		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
@@ -254,6 +255,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if err := linkPlansDir(d.Root, wt.Path, d.out()); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
 		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
@@ -261,6 +263,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
 			d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+			d.cleanupWorktree(wt.Path)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
 	}
@@ -269,6 +272,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
 		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
@@ -423,6 +427,21 @@ func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int
 		return
 	}
 	fmt.Fprintf(d.out(), "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
+}
+
+// cleanupWorktree removes a worktree leaked by a runOne failure between
+// worktree.Create and RunSubprocess, so a failed claim/link/hook/prompt does
+// not leave an orphaned worktree on disk. A fresh context is used so a
+// canceled parent ctx (Ctrl-C) still tears the worktree down. A removal
+// failure is warned but not returned — the caller is already surfacing the
+// original failure and must not have it masked.
+func (d *Dispatcher) cleanupWorktree(path string) {
+	d.gitMu.Lock()
+	err := worktree.Remove(context.Background(), d.Root, path)
+	d.gitMu.Unlock()
+	if err != nil {
+		fmt.Fprintf(d.out(), "warning: failed to remove leaked worktree %q: %v\n", path, err)
+	}
 }
 
 func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
