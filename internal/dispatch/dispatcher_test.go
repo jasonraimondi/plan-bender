@@ -769,3 +769,61 @@ exit 1
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
 }
+
+func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".claude", "skills"), 0o755))
+
+	// The worktree already has a real, committed .claude/skills directory.
+	wtSkills := filepath.Join(wt, ".claude", "skills")
+	require.NoError(t, os.MkdirAll(wtSkills, 0o755))
+	marker := filepath.Join(wtSkills, "committed.txt")
+	require.NoError(t, os.WriteFile(marker, []byte("x"), 0o644))
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	// The real committed dir survives untouched — not clobbered, not a symlink.
+	info, err := os.Lstat(wtSkills)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.Zero(t, info.Mode()&os.ModeSymlink)
+	_, err = os.Stat(marker)
+	assert.NoError(t, err, "committed file should survive")
+
+	// .plan-bender still got linked despite skills being skipped.
+	pbInfo, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
+	require.NoError(t, err)
+	assert.NotZero(t, pbInfo.Mode()&os.ModeSymlink)
+}
+
+func TestLinkPlansDir_RefreshesExistingSymlink(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+
+	// A stale symlink pointing at the wrong place.
+	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(wt, ".plan-bender")))
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	target, err := os.Readlink(filepath.Join(wt, ".plan-bender"))
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(parent, ".plan-bender"), target)
+}
+
+func TestLinkPlansDir_MissingSourceSkippedSilently(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	_, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
+	assert.True(t, os.IsNotExist(err))
+	assert.Empty(t, logBuf.String())
+}

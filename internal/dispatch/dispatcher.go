@@ -247,7 +247,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	branchCopy := wt.Branch
 	issue.Branch = &branchCopy
 
-	if err := linkPlansDir(d.Root, wt.Path); err != nil {
+	if err := linkPlansDir(d.Root, wt.Path, d.out()); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
 		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
@@ -697,7 +697,7 @@ func runGitOutput(ctx context.Context, dir string, args ...string) (string, erro
 // into the worktree. Both are typically gitignored, so a fresh worktree
 // checkout doesn't have them — sub-agent calls to `pba complete` and
 // BuildPrompt's skill lookup both depend on these.
-func linkPlansDir(parent, worktreePath string) error {
+func linkPlansDir(parent, worktreePath string, log io.Writer) error {
 	for _, rel := range []string{".plan-bender", filepath.Join(".claude", "skills")} {
 		src := filepath.Join(parent, rel)
 		dst := filepath.Join(worktreePath, rel)
@@ -708,11 +708,16 @@ func linkPlansDir(parent, worktreePath string) error {
 			return err
 		}
 		if info, err := os.Lstat(dst); err == nil {
-			// Only nuke a pre-existing symlink. A real directory at dst is the
-			// user's data — refuse to clobber it; let Symlink fail with EEXIST.
-			if info.Mode()&os.ModeSymlink != 0 {
-				_ = os.Remove(dst)
+			if info.Mode()&os.ModeSymlink == 0 {
+				// A real directory at dst is the worktree's own committed data
+				// (e.g. a checked-in .claude/skills). Don't clobber it, and
+				// don't fail the issue by letting Symlink hit EEXIST — just
+				// skip and use what's already there.
+				fmt.Fprintf(log, "warning: %s already exists in worktree as a real path; using it instead of linking\n", rel)
+				continue
 			}
+			// A stale symlink — refresh it.
+			_ = os.Remove(dst)
 		}
 		if err := os.Symlink(src, dst); err != nil {
 			return fmt.Errorf("symlinking %s -> %s: %w", dst, src, err)
