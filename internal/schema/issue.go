@@ -39,6 +39,16 @@ type Issue struct {
 	Notes              *string  `json:"notes,omitempty"`
 }
 
+// HasLabel reports whether the issue carries the given label.
+func (i *Issue) HasLabel(label string) bool {
+	for _, l := range i.Labels {
+		if l == label {
+			return true
+		}
+	}
+	return false
+}
+
 // Validate checks structural rules and config-dependent rules.
 func (i *Issue) Validate(cfg config.Config) []ValidationError {
 	var errs []ValidationError
