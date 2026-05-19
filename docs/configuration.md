@@ -57,6 +57,7 @@ All available keys with their default values:
   },
   "review_with_user": false,
   "report_bugs": false,
+  "interview_with_docs": false,
   "update_check": true,
   "manage_gitignore": false,
   "linear": {
@@ -114,6 +115,7 @@ Templates receive a context map built from your config:
 | `has_backend_sync` | bool | `linear.enabled` config |
 | `review_with_user` | bool | `review_with_user` config |
 | `report_bugs` | bool | `report_bugs` config |
+| `interview_with_docs` | bool | `interview_with_docs` config |
 | `agent` | string | Current agent name |
 | `commands` | map | CLI command strings (see below) |
 | `custom_fields` | []map | `issue_schema.custom_fields` config |

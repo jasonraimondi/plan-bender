@@ -69,3 +69,25 @@ func TestAgentEntry_UnmarshalJSON_InvalidKind(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &m)
 	require.Error(t, err)
 }
+
+func TestDefaults_InterviewWithDocsFalse(t *testing.T) {
+	assert.False(t, Defaults().InterviewWithDocs)
+}
+
+func TestPartialConfig_InterviewWithDocsRoundTrip(t *testing.T) {
+	pc := PartialConfig{InterviewWithDocs: ptr(true)}
+	data, err := json.Marshal(pc)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"interview_with_docs":true`)
+
+	var got PartialConfig
+	require.NoError(t, json.Unmarshal(data, &got))
+	require.NotNil(t, got.InterviewWithDocs)
+	assert.True(t, *got.InterviewWithDocs)
+}
+
+func TestPartialConfig_InterviewWithDocsOmittedWhenNil(t *testing.T) {
+	data, err := json.Marshal(PartialConfig{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "interview_with_docs")
+}

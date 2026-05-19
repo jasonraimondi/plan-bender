@@ -183,34 +183,36 @@ type ResolvedAgent struct {
 }
 
 type Config struct {
-	Tracks          []string        `json:"tracks"`
-	WorkflowStates  []string        `json:"workflow_states"`
-	PlansDir        string          `json:"plans_dir"`
-	MaxPoints       int             `json:"max_points"`
-	Agents          []ResolvedAgent `json:"agents"`
-	rawAgents       map[string]*AgentEntry
-	Pipeline        PipelineConfig    `json:"pipeline"`
-	IssueSchema     IssueSchemaConfig `json:"issue_schema"`
-	Linear          LinearConfig      `json:"linear"`
-	Hooks           HooksConfig       `json:"hooks"`
-	UpdateCheck     bool              `json:"update_check"`
-	ManageGitignore bool              `json:"manage_gitignore"`
-	ReviewWithUser  bool              `json:"review_with_user"`
-	ReportBugs      bool              `json:"report_bugs"`
+	Tracks            []string        `json:"tracks"`
+	WorkflowStates    []string        `json:"workflow_states"`
+	PlansDir          string          `json:"plans_dir"`
+	MaxPoints         int             `json:"max_points"`
+	Agents            []ResolvedAgent `json:"agents"`
+	rawAgents         map[string]*AgentEntry
+	Pipeline          PipelineConfig    `json:"pipeline"`
+	IssueSchema       IssueSchemaConfig `json:"issue_schema"`
+	Linear            LinearConfig      `json:"linear"`
+	Hooks             HooksConfig       `json:"hooks"`
+	UpdateCheck       bool              `json:"update_check"`
+	ManageGitignore   bool              `json:"manage_gitignore"`
+	ReviewWithUser    bool              `json:"review_with_user"`
+	ReportBugs        bool              `json:"report_bugs"`
+	InterviewWithDocs bool              `json:"interview_with_docs"`
 }
 
 type PartialConfig struct {
-	Tracks          []string               `json:"tracks,omitempty"`
-	WorkflowStates  []string               `json:"workflow_states,omitempty"`
-	PlansDir        *string                `json:"plans_dir,omitempty"`
-	MaxPoints       *int                   `json:"max_points,omitempty"`
-	Agents          map[string]*AgentEntry `json:"agents,omitempty"`
-	Pipeline        *PipelineConfig        `json:"pipeline,omitempty"`
-	IssueSchema     *IssueSchemaConfig     `json:"issue_schema,omitempty"`
-	Linear          *LinearConfig          `json:"linear,omitempty"`
-	Hooks           *HooksConfig           `json:"hooks,omitempty"`
-	UpdateCheck     *bool                  `json:"update_check,omitempty"`
-	ManageGitignore *bool                  `json:"manage_gitignore,omitempty"`
-	ReviewWithUser  *bool                  `json:"review_with_user,omitempty"`
-	ReportBugs      *bool                  `json:"report_bugs,omitempty"`
+	Tracks            []string               `json:"tracks,omitempty"`
+	WorkflowStates    []string               `json:"workflow_states,omitempty"`
+	PlansDir          *string                `json:"plans_dir,omitempty"`
+	MaxPoints         *int                   `json:"max_points,omitempty"`
+	Agents            map[string]*AgentEntry `json:"agents,omitempty"`
+	Pipeline          *PipelineConfig        `json:"pipeline,omitempty"`
+	IssueSchema       *IssueSchemaConfig     `json:"issue_schema,omitempty"`
+	Linear            *LinearConfig          `json:"linear,omitempty"`
+	Hooks             *HooksConfig           `json:"hooks,omitempty"`
+	UpdateCheck       *bool                  `json:"update_check,omitempty"`
+	ManageGitignore   *bool                  `json:"manage_gitignore,omitempty"`
+	ReviewWithUser    *bool                  `json:"review_with_user,omitempty"`
+	ReportBugs        *bool                  `json:"report_bugs,omitempty"`
+	InterviewWithDocs *bool                  `json:"interview_with_docs,omitempty"`
 }

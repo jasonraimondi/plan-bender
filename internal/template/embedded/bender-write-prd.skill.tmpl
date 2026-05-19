@@ -17,7 +17,34 @@ Every PRD lives in its own directory:
   issues/          # created later by /bender-prd-to-issues
 ```
 
-## Process
+{{if .interview_with_docs}}## Domain awareness
+
+During codebase exploration, also look for existing documentation: a root `CONTEXT.md` (the project glossary) and `docs/adr/` (architecture decision records). If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts — read it to find where each `CONTEXT.md` lives. Create these files lazily — only when you have something to write.
+
+As you interview, work the plan against the domain model:
+
+- **Challenge against the glossary.** When a term conflicts with the existing language in `CONTEXT.md`, call it out immediately: "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
+- **Sharpen fuzzy language.** When a term is vague or overloaded, propose a precise canonical term: "You're saying 'account' — do you mean the Customer or the User? Those are different things."
+- **Stress-test with scenarios.** When domain relationships come up, invent concrete scenarios that probe edge cases and force precision about the boundaries between concepts.
+- **Cross-reference with code.** When the user states how something works, check whether the code agrees. Surface contradictions: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
+
+### Update CONTEXT.md inline
+
+When a term is resolved, update `CONTEXT.md` right there — don't batch them up. `CONTEXT.md` is a glossary and nothing else: no implementation details, no specs, no scratch notes.
+
+Format it as a `# {Context Name}` heading with a one-sentence description, then: a `## Language` section with one entry per term (bold term name, a one-sentence definition of what it IS, and an `_Avoid_:` line listing aliases to reject); a `## Relationships` section expressing cardinality between bold terms; an `## Example dialogue` between a dev and a domain expert; and a `## Flagged ambiguities` section recording terms used ambiguously and how they were resolved. Be opinionated — when multiple words exist for one concept, pick the best and list the rest as aliases. Keep definitions to one sentence. Only include terms specific to this project's domain; general programming concepts do not belong.
+
+### Offer ADRs sparingly
+
+Only offer to create an ADR when all three are true:
+
+1. **Hard to reverse** — the cost of changing your mind later is meaningful.
+2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
+3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons.
+
+If any one is missing, skip the ADR. ADRs live in `docs/adr/` with sequential numbering (`0001-slug.md`, `0002-slug.md`, ...); scan for the highest existing number and increment. Keep them minimal — a `# {Short title}` heading and 1-3 sentences covering the context, the decision, and why. An ADR can be a single paragraph; the value is recording *that* a decision was made and *why*. Add optional `Status` frontmatter, `Considered Options`, or `Consequences` only when they add genuine value.
+
+{{end}}## Process
 
 ### 1. Clarify the problem
 

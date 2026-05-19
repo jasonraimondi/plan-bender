@@ -36,6 +36,7 @@ Three layers, deep-merged — later wins:
   },
   "review_with_user": false,
   "report_bugs": false,
+  "interview_with_docs": false,
   "update_check": true,
   "manage_gitignore": false
 }
