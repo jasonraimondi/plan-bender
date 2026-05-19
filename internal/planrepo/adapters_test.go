@@ -1,6 +1,7 @@
 package planrepo
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -32,7 +33,7 @@ func TestNew_UsesInjectedLockAndSurfacesErrors(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
+		Lock: func(_ context.Context, _ string) (func(), error) {
 			return nil, wantErr
 		},
 	}
@@ -54,7 +55,7 @@ func TestNew_LockReleasedExactlyOnceOnClose(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
+		Lock: func(_ context.Context, _ string) (func(), error) {
 			return func() { releases++ }, nil
 		},
 	}
@@ -76,7 +77,7 @@ func TestNew_LockReleasedWhenSnapshotLoadFails(t *testing.T) {
 		FS:    os.DirFS(plansDir),
 		Write: func(_ string, _ []byte, _ fs.FileMode) error { return nil },
 		Mkdir: func(_ string, _ fs.FileMode) error { return nil },
-		Lock: func(_ string) (func(), error) {
+		Lock: func(_ context.Context, _ string) (func(), error) {
 			return func() { releases++ }, nil
 		},
 	}

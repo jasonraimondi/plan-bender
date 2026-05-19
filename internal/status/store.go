@@ -1,13 +1,20 @@
 package status
 
-import "github.com/jasonraimondi/plan-bender/internal/schema"
+import (
+	"context"
+
+	"github.com/jasonraimondi/plan-bender/internal/schema"
+)
 
 // Store opens one Session per Owner read-modify-commit cycle. The session
 // shape lets the production adapter back Owner with a single plan-repository
 // session that spans Open → mutation → Commit, instead of three independent
 // Lock/Load/Save calls that would each re-acquire the plan lock.
 type Store interface {
-	OpenSession(slug string) (Session, error)
+	// OpenSession opens a lock-holding session for slug. ctx governs plan
+	// lock acquisition: a canceled or timed-out ctx interrupts a wait for a
+	// contended lock instead of blocking unkillably.
+	OpenSession(ctx context.Context, slug string) (Session, error)
 }
 
 // Session is one open lock-holding view onto a plan. It must be Closed once;

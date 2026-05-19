@@ -1,6 +1,8 @@
 package planrepo
 
 import (
+	"context"
+
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
@@ -27,8 +29,8 @@ func NewProdStatusOwner(plansDir string, cfg config.Config) *status.Owner {
 	return status.New(newProdStatusStore(plansDir, cfg))
 }
 
-func (s *prodStatusStore) OpenSession(slug string) (status.Session, error) {
-	sess, err := s.plans.Open(slug)
+func (s *prodStatusStore) OpenSession(ctx context.Context, slug string) (status.Session, error) {
+	sess, err := s.plans.OpenContext(ctx, slug)
 	if err != nil {
 		return nil, err
 	}

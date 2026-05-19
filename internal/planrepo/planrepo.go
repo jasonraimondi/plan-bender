@@ -11,7 +11,17 @@
 // writes, recursive mkdir, and a process-shared flock on the plans dir.
 package planrepo
 
-import "io/fs"
+import (
+	"context"
+	"io/fs"
+	"time"
+)
+
+// lockPollInterval bounds how long a contended LockPlanDir waits between
+// non-blocking flock attempts. The uncontended path never sleeps — its first
+// attempt succeeds — so this only caps acquisition latency once another
+// holder actually owns the lock.
+const lockPollInterval = 20 * time.Millisecond
 
 // WriteFunc writes data to an absolute path on disk.
 type WriteFunc func(path string, data []byte, perm fs.FileMode) error
@@ -20,8 +30,9 @@ type WriteFunc func(path string, data []byte, perm fs.FileMode) error
 type MkdirFunc func(path string, perm fs.FileMode) error
 
 // LockFunc acquires the plan lock for plansDir and returns a release closure.
-// Callers invoke release exactly once when the session ends.
-type LockFunc func(plansDir string) (release func(), err error)
+// Callers invoke release exactly once when the session ends. A canceled or
+// timed-out ctx interrupts a wait for a contended lock.
+type LockFunc func(ctx context.Context, plansDir string) (release func(), err error)
 
 // Adapters bundles the I/O dependencies a Plans repository needs.
 type Adapters struct {
