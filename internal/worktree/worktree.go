@@ -162,6 +162,18 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 	return removed, nil
 }
 
+// Remove deletes the git worktree at path. It cleans up a worktree that
+// Create produced when a later dispatch step (Claim, linkPlansDir, a hook,
+// BuildPrompt) failed before the sub-agent started — at that point the
+// worktree holds no committed work worth preserving. --force is required
+// because dispatch symlinks .plan-bender/ and .claude/skills/ into the
+// worktree, leaving untracked entries the non-forcing form would refuse to
+// remove. The branch is left intact so a re-entered runOne can reattach a
+// fresh worktree to it (see Create's idempotency contract).
+func Remove(ctx context.Context, root, path string) error {
+	return runGit(ctx, root, "worktree", "remove", "--force", path)
+}
+
 type worktreeEntry struct {
 	path   string
 	branch string
