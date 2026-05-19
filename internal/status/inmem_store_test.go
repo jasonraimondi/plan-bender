@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -41,7 +42,7 @@ func (s *inMemStore) Load(slug string) ([]schema.Issue, error) {
 	return cp, nil
 }
 
-func (s *inMemStore) OpenSession(slug string) (Session, error) {
+func (s *inMemStore) OpenSession(_ context.Context, slug string) (Session, error) {
 	s.mu.Lock()
 	m, ok := s.locks[slug]
 	if !ok {

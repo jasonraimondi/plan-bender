@@ -38,9 +38,7 @@ func New(store Store) *Owner {
 //     when reason is non-empty, update the Updated date, and emit a single
 //     slog.Info audit line.
 func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Status, to Status, reason string) error {
-	_ = ctx
-
-	sess, err := o.store.OpenSession(slug)
+	sess, err := o.store.OpenSession(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("opening session for plan %q: %w", slug, err)
 	}
@@ -109,13 +107,11 @@ func (o *Owner) Transition(ctx context.Context, slug string, id int, from []Stat
 // in-review, done, canceled) is refused via *ErrCASMismatch — claiming a
 // completed issue is almost certainly a mistake worth surfacing.
 func (o *Owner) Claim(ctx context.Context, slug string, id int, branch, reason string) error {
-	_ = ctx
-
 	if branch == "" {
 		return fmt.Errorf("claim: branch is required")
 	}
 
-	sess, err := o.store.OpenSession(slug)
+	sess, err := o.store.OpenSession(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("opening session for plan %q: %w", slug, err)
 	}
