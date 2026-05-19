@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,32 @@ func TestRunHook_RunsInProvidedDir(t *testing.T) {
 	_, err := RunHook(context.Background(), `cat marker`, dir, &out)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "[hook] ok")
+}
+
+// The truncation race: a hook line emitted immediately before exit must still
+// reach the prefixed stream. The legacy StdoutPipe + late wg.Wait() pattern
+// could lose the tail when cmd.Wait closed the pipe before the reader drained.
+func TestRunHook_FinalLineBeforeExitNotLost(t *testing.T) {
+	var out bytes.Buffer
+	_, err := RunHook(context.Background(), `echo FINAL_HOOK_TAIL; exit 0`, t.TempDir(), &out)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "[hook] FINAL_HOOK_TAIL")
+}
+
+// A single hook output line larger than any pipe-read chunk must arrive whole
+// behind a single [hook] prefix — not split across multiple prefixed lines.
+func TestRunHook_LargeSingleLineNotSplitOrTruncated(t *testing.T) {
+	const bigLen = 256 * 1024
+	cmd := fmt.Sprintf(`head -c %d /dev/zero | tr '\0' X`, bigLen)
+	var out bytes.Buffer
+	_, err := RunHook(context.Background(), cmd, t.TempDir(), &out)
+	require.NoError(t, err)
+
+	streamed := out.String()
+	assert.Contains(t, streamed, "[hook] "+strings.Repeat("X", bigLen),
+		"the entire 256KB line must arrive whole behind a single prefix")
+	assert.Equal(t, 1, strings.Count(streamed, "[hook] X"),
+		"the big line must not be split across multiple prefixed output lines")
 }
 
 // A timed-out hook backgrounds a grandchild that inherits the stdout pipe and

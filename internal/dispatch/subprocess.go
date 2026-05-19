@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -11,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
@@ -78,10 +76,15 @@ func RunSubprocess(
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return block(fmt.Sprintf("attaching stdout pipe: %v", err))
-	}
+
+	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
+	var logBuf bytes.Buffer
+	// Setting cmd.Stdout (rather than calling StdoutPipe) lets os/exec own the
+	// copy goroutine. cmd.Wait then waits for that goroutine before closing the
+	// pipe — so the tail can't be lost to a Wait/reader ordering race, and
+	// WaitDelay still bounds the whole sequence.
+	lw := &linePrefixWriter{prefix: prefix, out: outWriter, log: &logBuf}
+	cmd.Stdout = lw
 
 	configureProcessGroup(cmd)
 	cmd.WaitDelay = subprocessWaitDelay
@@ -93,31 +96,8 @@ func RunSubprocess(
 		return block(fmt.Sprintf("starting claude: %v", err))
 	}
 
-	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
-	var logBuf bytes.Buffer
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// bufio.Reader (not Scanner) so a single stream-json event embedding a
-		// large tool result can exceed any fixed buffer cap.
-		reader := bufio.NewReader(stdout)
-		for {
-			line, err := reader.ReadString('\n')
-			if line != "" {
-				stripped := strings.TrimRight(line, "\n")
-				fmt.Fprintln(outWriter, prefix+stripped)
-				logBuf.WriteString(stripped)
-				logBuf.WriteByte('\n')
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
 	waitErr := cmd.Wait()
-	wg.Wait()
+	lw.Flush()
 
 	stderrText := stderrBuf.String()
 

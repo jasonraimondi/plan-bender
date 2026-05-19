@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -47,10 +45,12 @@ func RunHook(ctx context.Context, cmd, dir string, outWriter io.Writer) (string,
 
 	var stderrBuf bytes.Buffer
 	c.Stderr = &stderrBuf
-	stdout, err := c.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("attaching stdout: %w", err)
-	}
+
+	// Setting c.Stdout (rather than calling StdoutPipe) lets os/exec own the
+	// copy goroutine, so cmd.Wait + WaitDelay together remain the sole
+	// synchronization point — no separate reader to outlive the pipe close.
+	lw := &linePrefixWriter{prefix: "[hook] ", out: outWriter}
+	c.Stdout = lw
 
 	configureProcessGroup(c)
 	c.WaitDelay = subprocessWaitDelay
@@ -59,24 +59,8 @@ func RunHook(ctx context.Context, cmd, dir string, outWriter io.Writer) (string,
 		return "", fmt.Errorf("starting hook %q: %w", cmd, err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		reader := bufio.NewReader(stdout)
-		for {
-			line, err := reader.ReadString('\n')
-			if line != "" {
-				fmt.Fprintln(outWriter, "[hook] "+strings.TrimRight(line, "\n"))
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
 	waitErr := c.Wait()
-	wg.Wait()
+	lw.Flush()
 
 	stderr := strings.TrimRight(stderrBuf.String(), "\n")
 	if waitErr != nil {
