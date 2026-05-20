@@ -21,6 +21,7 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
+	"github.com/jasonraimondi/plan-bender/internal/worktree"
 )
 
 // dispatcherTestPrd is the PRD body written by setupDispatch. It is fully
@@ -759,10 +760,148 @@ func TestDispatcher_LinkPlansDirFailureRemovesLeakedWorktree(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
 }
 
-// TestDispatcher_MergeBackRestoresParentHEAD asserts the parent repo's HEAD
-// returns to its starting branch after a successful dispatch, instead of
-// silently leaving the user on the integration branch.
-func TestDispatcher_MergeBackRestoresParentHEAD(t *testing.T) {
+// TestDispatcher_MergeBackRecoversFromStaleMergeState asserts that when an
+// integration worktree from a prior crashed run is left with MERGE_HEAD set
+// and a dirty file in the tree, the next MergeBack resets the worktree clean
+// and proceeds with the new merge. This is the foundational reset-on-entry
+// contract — without it, every crashed dispatch would require manual cleanup.
+func TestDispatcher_MergeBackRecoversFromStaleMergeState(t *testing.T) {
+	fix := setupDispatch(t)
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	branch := "tester/demo--1-alpha"
+	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
+
+	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Branch = &branch
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	// Pre-create the iwt and inject stale state, mimicking a crashed prior run.
+	iwt, err := worktree.CreateIntegration(context.Background(), d.Root, d.Config, "demo")
+	require.NoError(t, err)
+
+	gitDirOut, err := exec.Command("git", "-C", iwt.Path, "rev-parse", "--git-dir").Output()
+	require.NoError(t, err)
+	gitDir := strings.TrimSpace(string(gitDirOut))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(iwt.Path, gitDir)
+	}
+	branchTip, err := exec.Command("git", "-C", fix.root, "rev-parse", branch).Output()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "MERGE_HEAD"), branchTip, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(iwt.Path, "garbage.txt"), []byte("crash leftover\n"), 0o644))
+
+	// Stub fails the test if invoked — recovery must not spawn a sub-agent.
+	installClaudeStub(t, "echo 'should not be called' >&2\nexit 99\n")
+
+	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
+
+	// MERGE_HEAD cleared, garbage file removed.
+	_, statErr := os.Stat(filepath.Join(gitDir, "MERGE_HEAD"))
+	assert.True(t, os.IsNotExist(statErr), "MERGE_HEAD must be cleared by ResetIntegration")
+	_, statErr = os.Stat(filepath.Join(iwt.Path, "garbage.txt"))
+	assert.True(t, os.IsNotExist(statErr), "untracked file must be cleaned by ResetIntegration")
+
+	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "done", post.Status, "issue must reach done after the recovered merge")
+
+	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
+	require.NoError(t, err, "git log: %s", string(logOut))
+	assert.Contains(t, string(logOut), "merge issue #1", "integration branch must carry the merge commit")
+}
+
+// TestDispatcher_CrossSlugParallelRuns asserts two Run calls on distinct slugs
+// in the same parent repo complete without interfering, and the parent HEAD
+// never moves. This is the headline acceptance criterion for the integration-
+// worktree refactor — go test -race surfaces any unprotected shared state.
+func TestDispatcher_CrossSlugParallelRuns(t *testing.T) {
+	fix := setupDispatch(t)
+	installSkillFile(t, fix.root)
+
+	// Add a second plan "demo2" alongside the existing "demo".
+	require.NoError(t, os.MkdirAll(filepath.Join(fix.plansDir, "demo2", "issues"), 0o755))
+	demo2PRD := strings.Replace(strings.Replace(dispatcherTestPrd,
+		`"slug": "demo"`, `"slug": "demo2"`, 1),
+		`"name": "Demo"`, `"name": "Demo2"`, 1)
+	require.NoError(t, os.WriteFile(filepath.Join(fix.plansDir, "demo2", "prd.json"),
+		[]byte(demo2PRD), 0o644))
+
+	// One issue per plan. writeIssue hardcodes "demo" so demo2's issue is
+	// written by hand here.
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	beta := mkAFKIssue(1, "beta", "todo")
+	betaData, err := json.MarshalIndent(beta, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(fix.plansDir, "demo2", "issues", "1-beta.json"), betaData, 0o644))
+
+	body := fmt.Sprintf(`prompt=$(cat)
+case "$prompt" in
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
+    exit 0
+    ;;
+  *"\"slug\": \"beta\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo2/issues/1-beta.json"
+    exit 0
+    ;;
+esac
+exit 1
+`, fix.plansDir, fix.plansDir)
+	installClaudeStub(t, body)
+
+	refBefore, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+	shaBefore, err := exec.Command("git", "-C", fix.root, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+
+	d1 := newDispatcher(fix)
+	d2 := newDispatcher(fix)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 2)
+	go func() { errCh <- d1.Run(ctx, "demo") }()
+	go func() { errCh <- d2.Run(ctx, "demo2") }()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errCh:
+			require.NoError(t, err)
+		case <-ctx.Done():
+			t.Fatal("parallel Run did not complete within deadline")
+		}
+	}
+
+	refAfter, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+	shaAfter, err := exec.Command("git", "-C", fix.root, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(string(refBefore)), strings.TrimSpace(string(refAfter)),
+		"parent symbolic ref must not move across parallel dispatches")
+	assert.Equal(t, strings.TrimSpace(string(shaBefore)), strings.TrimSpace(string(shaAfter)),
+		"parent HEAD commit must not move across parallel dispatches")
+
+	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
+	assert.Equal(t, "done", alpha.Status)
+
+	betaPath := filepath.Join(fix.plansDir, "demo2", "issues", "1-beta.json")
+	betaData, err = os.ReadFile(betaPath)
+	require.NoError(t, err)
+	var betaPost schema.Issue
+	require.NoError(t, json.Unmarshal(betaData, &betaPost))
+	assert.Equal(t, "done", betaPost.Status)
+}
+
+// TestDispatcher_MergeBackDoesNotMoveParentHEAD asserts the parent repo's HEAD
+// is byte-identical before and after a successful dispatch. With MergeBack
+// routed through the integration worktree, the parent symbolic ref AND its
+// resolved commit must both be unchanged.
+func TestDispatcher_MergeBackDoesNotMoveParentHEAD(t *testing.T) {
 	fix := setupDispatch(t)
 	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
 	installSkillFile(t, fix.root)
@@ -778,38 +917,22 @@ exit 1
 `, fix.plansDir)
 	installClaudeStub(t, body)
 
-	headBefore, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	refBefore, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+	shaBefore, err := exec.Command("git", "-C", fix.root, "rev-parse", "HEAD").Output()
 	require.NoError(t, err)
 
 	d := newDispatcher(fix)
 	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
 
-	headAfter, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
+	refAfter, err := exec.Command("git", "-C", fix.root, "symbolic-ref", "--short", "HEAD").Output()
 	require.NoError(t, err)
-	assert.Equal(t, strings.TrimSpace(string(headBefore)), strings.TrimSpace(string(headAfter)),
-		"parent HEAD must be restored after dispatch")
-}
-
-// TestDispatcher_DirtyParentRefuses asserts MergeBack bails before touching
-// HEAD if the parent repo has uncommitted tracked-file changes.
-func TestDispatcher_DirtyParentRefuses(t *testing.T) {
-	fix := setupDispatch(t)
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
-	installSkillFile(t, fix.root)
-
-	body := fmt.Sprintf(`prompt=$(cat)
-sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
-exit 0
-`, fix.plansDir)
-	installClaudeStub(t, body)
-
-	// Modify a tracked file (README.md was committed in setup).
-	require.NoError(t, os.WriteFile(filepath.Join(fix.root, "README.md"), []byte("# repo\nlocal edits\n"), 0o644))
-
-	d := newDispatcher(fix)
-	err := timeBoxRun(t, d, "demo", 10*time.Second)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "uncommitted changes")
+	shaAfter, err := exec.Command("git", "-C", fix.root, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(string(refBefore)), strings.TrimSpace(string(refAfter)),
+		"parent symbolic ref must not move")
+	assert.Equal(t, strings.TrimSpace(string(shaBefore)), strings.TrimSpace(string(shaAfter)),
+		"parent HEAD commit must not move")
 }
 
 // TestDispatcher_RecoversInReviewWithUnmergedBranch asserts Run reconciles an
@@ -826,8 +949,6 @@ func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
 	// Branch with an unmerged commit, mimicking a sub-agent that committed
 	// then exited before MergeBack ran.
 	branch := "tester/demo--1-alpha"
-	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
-	require.NoError(t, err, "checkout: %s", string(out))
 	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
 
 	iss := mkAFKIssue(1, "alpha", "in-review")
@@ -861,8 +982,6 @@ func TestDispatcher_RecoveryUnblocksDependents(t *testing.T) {
 	require.NoError(t, err)
 
 	branch1 := "tester/demo--1-first"
-	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
-	require.NoError(t, err, "checkout: %s", string(out))
 	makeMergeableBranch(t, fix.root, integrationBranch, branch1, "first.txt")
 
 	iss1 := mkAFKIssue(1, "first", "in-review")
