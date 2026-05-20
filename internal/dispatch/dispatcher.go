@@ -229,7 +229,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
@@ -241,7 +241,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	// strict JSON decoder then rejects on every subsequent Load.
 	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 		reason := fmt.Sprintf("claiming issue: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
@@ -254,7 +254,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 
 	if err := linkPlansDir(d.Root, wt.Path, d.out()); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
@@ -262,7 +262,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+			d.markBlockedAndWarn(slug, issue.ID, reason)
 			d.cleanupWorktree(wt.Path)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
@@ -271,7 +271,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
@@ -341,7 +341,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, d.Root, "merge", "--abort")
-			d.markBlockedAndWarn(ctx, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
+			d.markBlockedAndWarn(slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
 		merged[r.Branch] = true
@@ -418,7 +418,14 @@ var blockFromStatuses = []status.Status{
 // warn-and-continue is preferable to bubbling the error and masking the
 // original cause. ErrAlreadyInState (issue already blocked) is silently
 // ignored — that's a no-op the operator doesn't need to see.
-func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string) {
+//
+// The transition uses a fresh ctx detached from the parent: a canceled parent
+// (Ctrl-C, or the subprocess_timeout when the merge-conflict path runs after
+// a SIGKILL'd run) would otherwise drop the blocked-state write and leave the
+// issue in-progress for the next loop to re-pick.
+func (d *Dispatcher) markBlockedAndWarn(slug string, id int, reason string) {
+	ctx, cancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+	defer cancel()
 	err := d.statusOwner().Transition(ctx, slug, id,
 		blockFromStatuses,
 		status.StatusBlocked, reason)

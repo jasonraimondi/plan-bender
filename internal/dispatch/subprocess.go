@@ -24,6 +24,13 @@ import (
 // and RunHook.
 const subprocessWaitDelay = 10 * time.Second
 
+// blockTransitionTimeout bounds the failure-path blocked-status write. The
+// transition uses a fresh ctx (detached from any caller-supplied deadline) so
+// a subprocess_timeout SIGKILL — or a Ctrl-C canceling the dispatch loop —
+// cannot drop the write and leave the issue in-progress for the next loop to
+// re-pick.
+const blockTransitionTimeout = 30 * time.Second
+
 // SubResult is the outcome of a single sub-agent subprocess.
 type SubResult struct {
 	IssueID int
@@ -58,7 +65,9 @@ func RunSubprocess(
 	block := func(reason string) SubResult {
 		res.Success = false
 		res.Err = errors.New(reason)
-		err := owner.Transition(ctx, slug, issue.ID,
+		txCtx, cancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+		defer cancel()
+		err := owner.Transition(txCtx, slug, issue.ID,
 			blockFromStatuses,
 			status.StatusBlocked, reason)
 		if err != nil && !errors.Is(err, status.ErrAlreadyInState) {
