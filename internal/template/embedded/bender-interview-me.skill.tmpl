@@ -9,13 +9,11 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 ## Locating the plan
 
-This project's plans dir is `{{.plans_dir}}` (resolved from the current project's plan-bender config — relative paths are relative to the project root, absolute paths are absolute). Resolve the plan strictly from there:
+**Default to new work.** Unless the user explicitly names an existing plan by slug, assume this is a brand new plan or new research session. Do not scan `{{.plans_dir}}/` looking for an in-progress plan to attach to, and do not infer the topic from earlier conversation snippets, transcripts, or paths from other projects.
 
-1. If the user named a slug, read `{{.plans_dir}}/<slug>/prd.json` and any files under `{{.plans_dir}}/<slug>/issues/`.
-2. If the user did not name a slug, list `{{.plans_dir}}/` and pick the one in-progress plan; if there are zero or multiple, ask which one.
-3. If `{{.plans_dir}}/` does not exist or is empty, ASK the user which plan to interview about. Do not infer from earlier conversation snippets, transcripts, or paths from other projects.
+This project's plans dir is `{{.plans_dir}}` (resolved from the current project's plan-bender config — relative paths are relative to the project root, absolute paths are absolute). Only when the user names a slug outright, read `{{.plans_dir}}/<slug>/prd.json` and any files under `{{.plans_dir}}/<slug>/issues/`.
 
-Never read a PRD from any path outside `{{.plans_dir}}/`. A plan referenced from another project's transcript is not in scope here — ask, don't fetch.
+Never read a PRD from any path outside `{{.plans_dir}}/`. A plan referenced from another project's transcript is not in scope here — treat it as new work unless the user names a local slug.
 {{if .interview_with_docs}}
 ## Domain awareness
 
