@@ -227,7 +227,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {
 	d.gitMu.Lock()
-	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
+	wt, err := worktree.Create(ctx, d.Config, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
