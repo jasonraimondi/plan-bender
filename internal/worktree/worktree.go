@@ -207,18 +207,28 @@ func worktreePathForBranch(ctx context.Context, root, branch string) (string, er
 }
 
 // GC removes plan-bender worktrees whose branch matches {user}/{slug}--.
+// When includeIntegration is true, the per-slug integration worktree on
+// branch {user}/{slug} (no `--` suffix) is also a candidate; dispatch passes
+// true only on the AllDone exit path so an in-flight or HITL-only run
+// preserves the iwt for resumption. The CLI `pba worktree gc` always passes
+// true — operators invoke it to clean up everything.
 //
 // `safe` filters which branches GC may delete: pass an explicit set to allow
 // only those branches (e.g. branches confirmed merged into integration); pass
 // nil to consider every matching branch a candidate. Either way, GC uses the
-// non-forcing forms of `worktree remove` and `branch -d`, so a worktree with
-// uncommitted changes or a branch whose commits aren't reachable from current
-// HEAD is preserved with a warning. Caller is expected to invoke GC while HEAD
-// is on the integration branch so `branch -d`'s reachability check matches.
+// non-forcing form of `branch -d`, so a branch whose commits aren't reachable
+// from current HEAD is preserved with a warning. Caller is expected to invoke
+// GC while HEAD is on the integration branch so `branch -d`'s reachability
+// check matches.
+//
+// `worktree remove` is non-forcing for issue worktrees (uncommitted changes
+// are preserved) but forcing for the integration worktree, which is
+// dispatch-owned: linkPlansDir leaves untracked symlinks the non-forcing form
+// would refuse to remove, and no user state ever lives there to lose.
 //
 // Returns the list of paths actually removed. `out` receives one line per
 // preserved entry; pass io.Discard to silence.
-func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Writer) ([]string, error) {
+func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Writer, includeIntegration bool) ([]string, error) {
 	if out == nil {
 		out = io.Discard
 	}
@@ -227,6 +237,7 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 		return nil, err
 	}
 	prefix := fmt.Sprintf("%s/%s--", user, slug)
+	integrationBranch := fmt.Sprintf("%s/%s", user, slug)
 
 	entries, err := listWorktrees(ctx, root)
 	if err != nil {
@@ -235,14 +246,23 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 
 	var removed []string
 	for _, e := range entries {
-		if !strings.HasPrefix(e.branch, prefix) {
+		isIntegration := includeIntegration && e.branch == integrationBranch
+		isIssue := strings.HasPrefix(e.branch, prefix)
+		if !isIssue && !isIntegration {
 			continue
 		}
-		if safe != nil && !safe[e.branch] {
+		// safe-set filtering applies only to issue branches: the set represents
+		// "branches confirmed merged into integration", a concept that has no
+		// meaning for the integration branch itself.
+		if isIssue && safe != nil && !safe[e.branch] {
 			fmt.Fprintf(out, "preserving worktree %q (branch %q not in safe set; recover manually)\n", e.path, e.branch)
 			continue
 		}
-		if err := runGit(ctx, root, "worktree", "remove", e.path); err != nil {
+		removeArgs := []string{"worktree", "remove", e.path}
+		if isIntegration {
+			removeArgs = []string{"worktree", "remove", "--force", e.path}
+		}
+		if err := runGit(ctx, root, removeArgs...); err != nil {
 			fmt.Fprintf(out, "preserving worktree %q (uncommitted changes or removal failed): %v\n", e.path, err)
 			continue
 		}

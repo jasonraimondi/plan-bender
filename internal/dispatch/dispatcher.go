@@ -190,6 +190,14 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 
 		res := plan.Resolve(issues)
 		if res.AllDone {
+			// Final cleanup: remove the per-slug integration worktree along with
+			// any remaining issue worktrees. Runs from d.Root (not the iwt) so
+			// `git worktree remove` can target the iwt itself, and `branch -d`
+			// resolves reachability against the parent's HEAD — an unmerged
+			// integration branch is preserved with a warning rather than dropped.
+			if _, err := worktree.GC(ctx, d.Root, slug, nil, d.out(), true); err != nil {
+				return fmt.Errorf("final worktree gc: %w", err)
+			}
 			return nil
 		}
 
@@ -356,8 +364,10 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 
 	// GC runs from the iwt so `branch -d`'s reachability check resolves against
 	// integration's HEAD (which now contains the merge commits), not the
-	// parent's HEAD (which is some unrelated user-facing branch).
-	if _, err := worktree.GC(ctx, iwt.Path, slug, merged, d.out()); err != nil {
+	// parent's HEAD (which is some unrelated user-facing branch). includeIntegration
+	// is false here — the iwt is the cwd we're operating from, and an in-flight
+	// run still needs it for the next batch.
+	if _, err := worktree.GC(ctx, iwt.Path, slug, merged, d.out(), false); err != nil {
 		return fmt.Errorf("worktree gc: %w", err)
 	}
 

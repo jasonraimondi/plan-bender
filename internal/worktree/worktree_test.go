@@ -211,7 +211,7 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 	require.NoError(t, err)
 
 	safe := map[string]bool{a.Branch: true, b.Branch: true}
-	removed, err := GC(context.Background(), root, "auth", safe, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", safe, io.Discard, false)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{a.Path, b.Path}, removed)
 
@@ -234,7 +234,7 @@ func TestGC_RemovesMatchingSlug(t *testing.T) {
 func TestGC_NoMatchesReturnsEmpty(t *testing.T) {
 	root := initRepo(t)
 
-	removed, err := GC(context.Background(), root, "ghost", nil, io.Discard)
+	removed, err := GC(context.Background(), root, "ghost", nil, io.Discard, false)
 	require.NoError(t, err)
 	require.Empty(t, removed)
 }
@@ -248,7 +248,7 @@ func TestGC_EmptySafeSetPreservesAll(t *testing.T) {
 	a, err := Create(context.Background(), config.Config{}, root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
 
-	removed, err := GC(context.Background(), root, "auth", map[string]bool{}, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", map[string]bool{}, io.Discard, false)
 	require.NoError(t, err)
 	require.Empty(t, removed)
 
@@ -280,13 +280,72 @@ func TestGC_PreservesUnmergedCommits(t *testing.T) {
 	}
 
 	// Caller mistakenly marks it safe.
-	removed, err := GC(context.Background(), root, "auth", map[string]bool{a.Branch: true}, io.Discard)
+	removed, err := GC(context.Background(), root, "auth", map[string]bool{a.Branch: true}, io.Discard, false)
 	require.NoError(t, err)
 	require.Empty(t, removed, "GC must not delete unmerged branch even if marked safe")
 
 	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", a.Branch).Output()
 	require.NoError(t, err)
 	require.Contains(t, string(branchOut), a.Branch, "branch must survive")
+}
+
+// TestGC_IncludeIntegrationRemovesIntegrationWorktree asserts that when
+// includeIntegration=true GC removes both the issue worktrees and the
+// per-slug integration worktree at {user}/{slug} (no `--` suffix).
+func TestGC_IncludeIntegrationRemovesIntegrationWorktree(t *testing.T) {
+	root := initRepo(t)
+
+	// Pre-create the integration branch (caller responsibility — dispatch
+	// normally handles this via ensureIntegrationBranch).
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	a, err := Create(context.Background(), config.Config{}, root, "auth", 1, "alpha", "")
+	require.NoError(t, err)
+
+	safe := map[string]bool{a.Branch: true}
+	removed, err := GC(context.Background(), root, "auth", safe, io.Discard, true)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{a.Path, iwt.Path}, removed)
+
+	_, err = os.Stat(iwt.Path)
+	require.True(t, os.IsNotExist(err), "integration worktree must be removed")
+
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", iwt.Branch).Output()
+	require.NoError(t, err)
+	require.NotContains(t, string(branchOut), iwt.Branch, "integration branch must be deleted")
+}
+
+// TestGC_WithoutIncludeIntegrationPreservesIntegrationWorktree asserts the
+// flag defaults to off: an integration worktree on `{user}/{slug}` (no `--`)
+// is left alone when the flag is false. This is the per-batch GC contract
+// from MergeBack — only the issue worktrees may be cleaned mid-run.
+func TestGC_WithoutIncludeIntegrationPreservesIntegrationWorktree(t *testing.T) {
+	root := initRepo(t)
+
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	a, err := Create(context.Background(), config.Config{}, root, "auth", 1, "alpha", "")
+	require.NoError(t, err)
+
+	safe := map[string]bool{a.Branch: true}
+	removed, err := GC(context.Background(), root, "auth", safe, io.Discard, false)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{a.Path}, removed)
+
+	_, err = os.Stat(iwt.Path)
+	require.NoError(t, err, "integration worktree must be preserved")
+
+	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", iwt.Branch).Output()
+	require.NoError(t, err)
+	require.Contains(t, string(branchOut), iwt.Branch, "integration branch must survive")
 }
 
 func TestResolveBase(t *testing.T) {

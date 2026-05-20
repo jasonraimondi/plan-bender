@@ -897,6 +897,100 @@ exit 1
 	assert.Equal(t, "done", betaPost.Status)
 }
 
+// TestDispatcher_AllDoneRemovesIntegrationWorktree asserts the final GC pass on
+// the AllDone exit path tears down the per-slug integration worktree along with
+// any issue worktrees. HITL-only and error exits preserve the iwt for
+// resumption (covered by adjacent tests that exit non-zero).
+func TestDispatcher_AllDoneRemovesIntegrationWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	// Real-world projects gitignore both .plan-bender and .claude so linkPlansDir's
+	// symlinks register as ignored entries — without this, the per-batch
+	// non-forcing `worktree remove` preserves issue worktrees and the slug dir
+	// would never reach empty even after AllDone.
+	// Patterns are slash-less because linkPlansDir installs symlinks (not real
+	// directories) and gitignore's trailing-slash form only matches directories.
+	require.NoError(t, os.WriteFile(filepath.Join(fix.root, ".gitignore"),
+		[]byte(".plan-bender\n.claude\n"), 0o644))
+	for _, args := range [][]string{
+		{"add", ".gitignore"},
+		{"commit", "-m", "gitignore"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", fix.root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	installSkillFile(t, fix.root)
+
+	body := fmt.Sprintf(`prompt=$(cat)
+case "$prompt" in
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
+    exit 0
+    ;;
+esac
+exit 1
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	d := newDispatcher(fix)
+	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	slugDir := filepath.Join(parent, "repo-wt", "demo")
+
+	iwtPath := filepath.Join(slugDir, "_integration")
+	_, statErr := os.Stat(iwtPath)
+	assert.True(t, os.IsNotExist(statErr), "integration worktree must be removed at %s", iwtPath)
+
+	out, err := exec.Command("git", "-C", fix.root, "worktree", "list", "--porcelain").Output()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), iwtPath, "git must no longer track the integration worktree")
+
+	if entries, err := os.ReadDir(slugDir); err == nil {
+		assert.Empty(t, entries, "slug worktree dir must be empty after AllDone GC")
+	}
+}
+
+// TestDispatcher_HITLOnlyExitPreservesIntegrationWorktree asserts that the HITL
+// exit path leaves the per-slug integration worktree on disk so a subsequent
+// `pba dispatch` run (after the HITL issue is resolved) can re-enter MergeBack
+// against the same worktree without recreating it.
+func TestDispatcher_HITLOnlyExitPreservesIntegrationWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+
+	// One HITL issue so dispatch exits via ErrHITLOnly. We also pre-merge an
+	// AFK issue to force MergeBack to create the iwt before the HITL exit.
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	hitl := mkAFKIssue(2, "decide", "todo")
+	hitl.Labels = []string{"HITL"}
+	writeIssue(t, fix.plansDir, hitl)
+	installSkillFile(t, fix.root)
+
+	body := fmt.Sprintf(`prompt=$(cat)
+case "$prompt" in
+  *"\"slug\": \"alpha\""*)
+    sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
+    exit 0
+    ;;
+esac
+exit 1
+`, fix.plansDir)
+	installClaudeStub(t, body)
+
+	d := newDispatcher(fix)
+	err := timeBoxRun(t, d, "demo", 15*time.Second)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrHITLOnly), "expected ErrHITLOnly, got %v", err)
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	iwtPath := filepath.Join(parent, "repo-wt", "demo", "_integration")
+	info, statErr := os.Stat(iwtPath)
+	require.NoError(t, statErr, "iwt must survive HITL exit")
+	assert.True(t, info.IsDir())
+}
+
 // TestDispatcher_MergeBackDoesNotMoveParentHEAD asserts the parent repo's HEAD
 // is byte-identical before and after a successful dispatch. With MergeBack
 // routed through the integration worktree, the parent symbolic ref AND its

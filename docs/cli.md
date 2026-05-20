@@ -16,7 +16,7 @@
 | `pb dispatch <slug>` | Run the autonomous implementation loop for a plan |
 | `pb complete <slug> <id>` | Flip an issue to in-review and emit the dispatch sentinel |
 | `pb worktree create <slug> <id>` | Create a git branch and worktree for one issue |
-| `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan (preserves unmerged) |
+| `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan, including the per-slug integration worktree (preserves unmerged) |
 | `pb status <slug>` | Per-issue state for a plan: status counts, labels, blocked notes, branch/PR |
 | `pb retry <slug> <id>` | Reset a blocked issue to `todo` (appends a structured transition note) |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish |
@@ -47,7 +47,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 | `plan-bender-agent dispatch <slug>` | Autonomous implementation loop (see below) |
 | `plan-bender-agent complete <slug> <id>` | Mark issue in-review + emit completion sentinel |
 | `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch, status}` — status is the post-claim issue status (`in-progress`) |
-| `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; unmerged branches are preserved and logged to stderr |
+| `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; cleans issue worktrees and the per-slug integration worktree, unmerged branches are preserved and logged to stderr |
 | `plan-bender-agent status <slug>` | JSON `{plan, issues}` — per-issue id, status, labels, branch, full notes |
 | `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] blocked→todo: retry` note. Refuses non-blocked status. |
 
@@ -63,7 +63,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 
    Pass `--base <commit-ish>` to override the auto-detected default branch. Any ref `git rev-parse` accepts is valid (local branch, `origin/x`, tag, SHA); invalid refs error before any worktree is created. Under `integration`, the integration branch is forked off `--base`; under `direct`, issue branches are merged into `--base`. When `<git-user>/<slug>` already exists from a prior run, the flag is honored only at creation — passing `--base` on a re-run emits a warning and reuses the existing branch (re-forking would clobber merged work).
 2. Loop until done:
-   - Reload issues from disk; if every issue is `done` or `canceled`, exit 0.
+   - Reload issues from disk; if every issue is `done` or `canceled`, GC the per-slug integration worktree along with any remaining issue worktrees and exit 0. HITL-only or error exits preserve the integration worktree for resumption.
    - Compute the AFK batch (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
    - If no batch and only HITL issues remain, print a summary and exit 2; resolve with `/bender-implement-hitl <slug>`.
    - For each batch issue, create the worktree → atomically claim the issue (`status: in-progress` + `branch: <name>` written through the canonical struct round-trip) → run `before_issue` hook → spawn `claude --print` in the worktree → run `after_issue` hook. The pre-spawn claim is what keeps the issue JSON parseable: without it, sub-agents follow the implement-issue skill's "set branch / set status" instructions and a naive Edit produces duplicate keys that the strict decoder then rejects. Per-issue stdout is serialized through a locked writer and streams as `[issue-N] …`; the full transcript lands at `.plan-bender/logs/{slug}/{id}.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`); timeouts mark the issue `blocked` with reason `timed out`.
