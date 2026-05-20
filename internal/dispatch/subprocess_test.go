@@ -324,14 +324,16 @@ exit 1
 // The truncation race: a line emitted immediately before exit must reach both
 // the streamed output and the on-disk log. The legacy StdoutPipe + late
 // wg.Wait() pattern could lose the tail when cmd.Wait closed the pipe before
-// the reader drained it.
+// the reader drained it. printf (no trailing \n) leaves the tail in
+// linePrefixWriter's partial-line buffer so only the post-Wait Flush() can
+// rescue it — exactly the path the regression touched.
 func TestRunSubprocess_FinalLineBeforeExitInStreamAndLog(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")
 
 	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
 	body := `sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
-echo 'FINAL_TAIL_LINE'
+printf FINAL_TAIL_LINE
 exit 0
 `
 	installFakeClaude(t, body)

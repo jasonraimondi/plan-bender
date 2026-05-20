@@ -54,9 +54,12 @@ func TestRunHook_RunsInProvidedDir(t *testing.T) {
 // The truncation race: a hook line emitted immediately before exit must still
 // reach the prefixed stream. The legacy StdoutPipe + late wg.Wait() pattern
 // could lose the tail when cmd.Wait closed the pipe before the reader drained.
+// printf (no trailing \n) leaves the tail in linePrefixWriter's partial-line
+// buffer so only the post-Wait Flush() can rescue it — exactly the path the
+// regression touched.
 func TestRunHook_FinalLineBeforeExitNotLost(t *testing.T) {
 	var out bytes.Buffer
-	_, err := RunHook(context.Background(), `echo FINAL_HOOK_TAIL; exit 0`, t.TempDir(), &out)
+	_, err := RunHook(context.Background(), `printf FINAL_HOOK_TAIL; exit 0`, t.TempDir(), &out)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "[hook] FINAL_HOOK_TAIL")
 }

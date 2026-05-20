@@ -667,6 +667,97 @@ func TestDispatcher_ClaimFailureRemovesLeakedWorktree(t *testing.T) {
 	assert.NotContains(t, string(out), wtPath, "git must no longer track the removed worktree")
 }
 
+// TestDispatcher_BuildPromptFailureRemovesLeakedWorktree asserts the worktree
+// is removed when BuildPrompt fails (no SKILL.md installed) — earlier than
+// the Claim path but still post-worktree.Create. Without cleanup the next
+// loop iteration would hit "worktree already exists" on every retry.
+func TestDispatcher_BuildPromptFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	// Intentionally no installSkillFile — BuildPrompt will fail on missing SKILL.md.
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "building prompt")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+}
+
+// TestDispatcher_BeforeIssueHookFailureRemovesLeakedWorktree asserts the
+// worktree is removed when a configured before_issue hook fails. Same leak
+// pattern as the Claim/BuildPrompt paths, different trigger.
+func TestDispatcher_BeforeIssueHookFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	d := newDispatcher(fix)
+	d.Config.Hooks.BeforeIssue = "exit 1"
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "before_issue hook")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+}
+
+// TestDispatcher_LinkPlansDirFailureRemovesLeakedWorktree asserts the worktree
+// is removed when linkPlansDir rejects a real .plan-bender dir already
+// present in the checkout. Committing .plan-bender to the integration branch
+// reproduces the rejection path inside runOne.
+func TestDispatcher_LinkPlansDirFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	// Commit a .plan-bender dir to main so the integration branch's checkout
+	// contains it as a real path. linkPlansDir then errors instead of
+	// symlinking, which is the failure path under test.
+	keep := filepath.Join(fix.root, ".plan-bender", ".keep")
+	require.NoError(t, os.WriteFile(keep, []byte(""), 0o644))
+	for _, args := range [][]string{
+		{"add", ".plan-bender/.keep"},
+		{"commit", "-m", "commit .plan-bender"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", fix.root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "linking plans dir")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+}
+
 // TestDispatcher_MergeBackRestoresParentHEAD asserts the parent repo's HEAD
 // returns to its starting branch after a successful dispatch, instead of
 // silently leaving the user on the integration branch.
@@ -826,6 +917,23 @@ func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
 	pbInfo, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
 	require.NoError(t, err)
 	assert.NotZero(t, pbInfo.Mode()&os.ModeSymlink)
+}
+
+func TestLinkPlansDir_RejectsRealPlanBenderDir(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	// A real .plan-bender in the worktree would route sub-agent status writes
+	// away from the parent's on-disk state — the dispatch loop wouldn't see
+	// them. linkPlansDir must reject rather than tolerate.
+	require.NoError(t, os.MkdirAll(filepath.Join(wt, ".plan-bender"), 0o755))
+
+	var logBuf bytes.Buffer
+	err := linkPlansDir(parent, wt, &logBuf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ".plan-bender")
+	assert.Contains(t, err.Error(), "real path")
 }
 
 func TestLinkPlansDir_RefreshesExistingSymlink(t *testing.T) {
