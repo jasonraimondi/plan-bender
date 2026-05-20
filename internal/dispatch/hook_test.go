@@ -177,15 +177,18 @@ exit 0
 	data, err := os.ReadFile(markerPath)
 	require.NoError(t, err)
 
-	// pwd in the hook may resolve symlinks; EvalSymlinks the expected path to match.
+	// pwd in the hook may resolve symlinks; EvalSymlinks the expected path to
+	// match. The iwt itself is GC'd at AllDone, so we resolve symlinks on the
+	// parent dir (which survives) and append the iwt basename rather than
+	// EvalSymlinks'ing the leaf path directly.
 	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
 	require.NoError(t, err)
 	expected := filepath.Join(parent, "repo-wt", "demo", "_integration")
-	gotCwd, err := filepath.EvalSymlinks(strings.TrimSpace(string(data)))
+	gotCwdRaw := strings.TrimSpace(string(data))
+	gotParent, err := filepath.EvalSymlinks(filepath.Dir(gotCwdRaw))
 	require.NoError(t, err)
-	expectedReal, err := filepath.EvalSymlinks(expected)
-	require.NoError(t, err)
-	assert.Equal(t, expectedReal, gotCwd,
+	gotCwd := filepath.Join(gotParent, filepath.Base(gotCwdRaw))
+	assert.Equal(t, expected, gotCwd,
 		"after_batch hook cwd must be the integration worktree path")
 }
 
