@@ -12,6 +12,31 @@ import (
 	"time"
 )
 
+// TryFlock takes a non-blocking exclusive POSIX advisory lock (flock) on path.
+// On contention it returns ErrLocked immediately, without polling. The
+// returned release closure unlocks and closes the file descriptor; the kernel
+// also drops the lock on FD close if the holding process crashes.
+func TryFlock(path string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("creating lock parent dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("opening lock file: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ErrLocked
+		}
+		return nil, fmt.Errorf("acquiring lock: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
+}
+
 // LockPlanDir takes an exclusive POSIX advisory lock (flock) on a sentinel
 // file inside plansDir. The returned release closes the file and drops the
 // lock.

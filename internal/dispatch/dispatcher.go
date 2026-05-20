@@ -155,6 +155,16 @@ func (d *Dispatcher) strategy() string {
 // Run executes the full dispatch loop until all_done or HITL-only.
 // Returns ErrHITLOnly when only human-input issues remain.
 func (d *Dispatcher) Run(ctx context.Context, slug string) error {
+	lockPath := filepath.Join(d.plansDir(), slug, ".dispatch.lock")
+	release, err := planrepo.TryFlock(lockPath)
+	if err != nil {
+		if errors.Is(err, planrepo.ErrLocked) {
+			return fmt.Errorf("dispatch already running for slug %q (lock: %s)", slug, lockPath)
+		}
+		return fmt.Errorf("acquiring dispatch lock for slug %q: %w", slug, err)
+	}
+	defer release()
+
 	integrationBranch, err := d.ensureIntegrationBranch(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("setting up integration branch: %w", err)

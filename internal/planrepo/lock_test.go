@@ -57,6 +57,48 @@ func TestLockPlanDir_CanceledContextInterruptsHeldLock(t *testing.T) {
 	}
 }
 
+// TestTryFlock_UncontendedAcquiresImmediately asserts an uncontended lock is
+// taken on the first attempt and a release closure is returned.
+func TestTryFlock_UncontendedAcquiresImmediately(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "x.lock")
+
+	release, err := TryFlock(path)
+	require.NoError(t, err)
+	require.NotNil(t, release)
+	release()
+}
+
+// TestTryFlock_ContendedReturnsErrLockedFast proves a second TryFlock against
+// a held path returns ErrLocked immediately, without polling.
+func TestTryFlock_ContendedReturnsErrLockedFast(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.lock")
+
+	release, err := TryFlock(path)
+	require.NoError(t, err)
+	defer release()
+
+	start := time.Now()
+	rel2, err := TryFlock(path)
+	require.Error(t, err)
+	require.Nil(t, rel2)
+	require.ErrorIs(t, err, ErrLocked)
+	require.Less(t, time.Since(start), 500*time.Millisecond, "contended TryFlock must not poll")
+}
+
+// TestTryFlock_ReleaseAllowsReacquisition proves the release closure unwinds
+// the lock so a subsequent caller can take it.
+func TestTryFlock_ReleaseAllowsReacquisition(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.lock")
+
+	release, err := TryFlock(path)
+	require.NoError(t, err)
+	release()
+
+	rel2, err := TryFlock(path)
+	require.NoError(t, err)
+	rel2()
+}
+
 // TestLockPlanDir_DeadlineInterruptsHeldLock proves a timed-out context also
 // unwinds a wait for a contended lock.
 func TestLockPlanDir_DeadlineInterruptsHeldLock(t *testing.T) {

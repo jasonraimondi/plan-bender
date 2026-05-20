@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
+	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
@@ -889,6 +890,55 @@ exit 1
 	second := loadIssueJSON(t, fix.plansDir, 2, "second")
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
+}
+
+// TestDispatcher_RejectsParallelDispatchOnSameSlug asserts a second Run
+// against a slug whose dispatch lock is held fails fast (no poll) with an
+// error that names both the slug and the absolute lock path. Holding the
+// lock from the same process via planrepo.TryFlock exercises the exact same
+// flock contention as a second `pba dispatch` process would trigger.
+func TestDispatcher_RejectsParallelDispatchOnSameSlug(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+
+	lockPath := filepath.Join(fix.plansDir, "demo", ".dispatch.lock")
+	release, err := planrepo.TryFlock(lockPath)
+	require.NoError(t, err)
+	defer release()
+
+	installClaudeStub(t, "echo 'should not be called'\nexit 99\n")
+
+	d := newDispatcher(fix)
+	start := time.Now()
+	err = d.Run(context.Background(), "demo")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.Less(t, elapsed, 500*time.Millisecond, "second Run must fail fast without polling")
+	assert.Contains(t, err.Error(), "demo", "error should name the contended slug")
+	assert.Contains(t, err.Error(), lockPath, "error should include the absolute lock path")
+}
+
+// TestDispatcher_DifferentSlugLockDoesNotBlock asserts that holding one
+// slug's dispatch lock does not block dispatch on a different slug — each
+// slug's lock is independent so parallel runs across plans are allowed.
+func TestDispatcher_DifferentSlugLockDoesNotBlock(t *testing.T) {
+	fix := setupDispatch(t)
+	// "demo" plan has only done issues; Run should reach snapshot, find
+	// AllDone, and return nil — so a successful return proves the lock
+	// acquisition phase passed.
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "done"))
+
+	otherLock := filepath.Join(fix.plansDir, "other", ".dispatch.lock")
+	release, err := planrepo.TryFlock(otherLock)
+	require.NoError(t, err)
+	defer release()
+
+	installClaudeStub(t, "echo 'should not be called'\nexit 99\n")
+
+	d := newDispatcher(fix)
+	require.NoError(t, d.Run(context.Background(), "demo"),
+		"a held lock on slug %q must not block dispatch on slug %q", "other", "demo")
 }
 
 func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
