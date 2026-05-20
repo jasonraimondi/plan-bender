@@ -62,17 +62,22 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
    - `direct` — the repo default branch itself.
 
    Pass `--base <commit-ish>` to override the auto-detected default branch. Any ref `git rev-parse` accepts is valid (local branch, `origin/x`, tag, SHA); invalid refs error before any worktree is created. Under `integration`, the integration branch is forked off `--base`; under `direct`, issue branches are merged into `--base`. When `<git-user>/<slug>` already exists from a prior run, the flag is honored only at creation — passing `--base` on a re-run emits a warning and reuses the existing branch (re-forking would clobber merged work).
-2. Loop until done:
+2. Acquire the per-slug dispatch lock at `{plans_dir}/{slug}/.dispatch.lock` (POSIX flock, non-blocking). A second `pba dispatch` on the same slug fails fast with the holding pid and lock path. Different slugs in the same repo can run concurrently.
+3. Loop until done:
    - Reload issues from disk; if every issue is `done` or `canceled`, GC the per-slug integration worktree along with any remaining issue worktrees and exit 0. HITL-only or error exits preserve the integration worktree for resumption.
    - Compute the AFK batch (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
    - If no batch and only HITL issues remain, print a summary and exit 2; resolve with `/bender-implement-hitl <slug>`.
    - For each batch issue, create the worktree → atomically claim the issue (`status: in-progress` + `branch: <name>` written through the canonical struct round-trip) → run `before_issue` hook → spawn `claude --print` in the worktree → run `after_issue` hook. The pre-spawn claim is what keeps the issue JSON parseable: without it, sub-agents follow the implement-issue skill's "set branch / set status" instructions and a naive Edit produces duplicate keys that the strict decoder then rejects. Per-issue stdout is serialized through a locked writer and streams as `[issue-N] …`; the full transcript lands at `.plan-bender/logs/{slug}/{id}.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`); timeouts mark the issue `blocked` with reason `timed out`.
-   - Merge successful branches into the integration branch in dependency order, flipping each merged issue to `done`. Conflicts mark the issue `blocked` and `git merge --abort`. Merge-back is skipped entirely when no issue succeeded in the batch.
-   - Run `after_batch` hook in the repo root.
+   - Merge successful branches into the integration branch **inside the per-slug integration worktree** (see below) in dependency order, flipping each merged issue to `done`. Conflicts mark the issue `blocked` and `git merge --abort`. Merge-back is skipped entirely when no issue succeeded in the batch.
+   - Run `after_batch` hook with cwd set to the integration worktree (BREAKING — was the parent repo root in prior versions).
 
-Before merging, dispatch captures the parent repo's HEAD and refuses to run if `git diff-index` reports tracked-file changes. HEAD is restored on exit so successful dispatch never silently leaves the user on the integration branch.
+### Integration worktree
 
-Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure, e.g. stuck-on-blocked, dirty repo).
+Merge-back never touches the parent repo's HEAD. On first MergeBack of a run, dispatch lazy-creates a long-lived per-slug worktree at `{worktree_base}/{repoName}-wt/{slug}/_integration` checked out to `<git-user>/<slug>`. Every subsequent MergeBack resets it on entry (`git merge --abort` → `git reset --hard <integration-branch>` → `git clean -fdx`) so a prior run that crashed mid-merge doesn't poison the next one. All merges, status flips, and the `after_batch` hook run with cwd = the integration worktree path. The parent repo can stay on any branch with uncommitted changes; `pb dispatch` no longer captures or restores HEAD and no longer refuses on a dirty parent.
+
+The integration worktree persists across runs of the same slug for fast resumption and is GC'd only on `AllDone` (or unconditionally via `pba worktree gc <slug>`). See [ADR-0003](./adr/0003-merge-in-dedicated-integration-worktree.md) for the rationale.
+
+Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure, e.g. stuck-on-blocked, dispatch lock contention).
 
 ### Completion sentinel
 
