@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,59 @@ func TestRunHook_RunsInProvidedDir(t *testing.T) {
 	_, err := RunHook(context.Background(), `cat marker`, dir, &out)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "[hook] ok")
+}
+
+// The truncation race: a hook line emitted immediately before exit must still
+// reach the prefixed stream. The legacy StdoutPipe + late wg.Wait() pattern
+// could lose the tail when cmd.Wait closed the pipe before the reader drained.
+// printf (no trailing \n) leaves the tail in linePrefixWriter's partial-line
+// buffer so only the post-Wait Flush() can rescue it — exactly the path the
+// regression touched.
+func TestRunHook_FinalLineBeforeExitNotLost(t *testing.T) {
+	var out bytes.Buffer
+	_, err := RunHook(context.Background(), `printf FINAL_HOOK_TAIL; exit 0`, t.TempDir(), &out)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "[hook] FINAL_HOOK_TAIL")
+}
+
+// A single hook output line larger than any pipe-read chunk must arrive whole
+// behind a single [hook] prefix — not split across multiple prefixed lines.
+func TestRunHook_LargeSingleLineNotSplitOrTruncated(t *testing.T) {
+	const bigLen = 256 * 1024
+	cmd := fmt.Sprintf(`head -c %d /dev/zero | tr '\0' X`, bigLen)
+	var out bytes.Buffer
+	_, err := RunHook(context.Background(), cmd, t.TempDir(), &out)
+	require.NoError(t, err)
+
+	streamed := out.String()
+	assert.Contains(t, streamed, "[hook] "+strings.Repeat("X", bigLen),
+		"the entire 256KB line must arrive whole behind a single prefix")
+	assert.Equal(t, 1, strings.Count(streamed, "[hook] X"),
+		"the big line must not be split across multiple prefixed output lines")
+}
+
+// A timed-out hook backgrounds a grandchild that inherits the stdout pipe and
+// outlives the hook by a wide margin. RunHook must still return on a bounded
+// delay: the process-group kill reaps the grandchild and cmd.WaitDelay backstops
+// cmd.Wait(). Without either, the stdout-copy goroutine blocks on the surviving
+// pipe write end and Wait() hangs for the full grandchild lifetime.
+func TestRunHook_TimeoutReturnsDespiteSurvivingGrandchild(t *testing.T) {
+	const grandchildLifetime = 60 * time.Second
+	cmd := fmt.Sprintf(`sleep %d & sleep %d`,
+		int(grandchildLifetime.Seconds()), int(grandchildLifetime.Seconds()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	var out bytes.Buffer
+	start := time.Now()
+	_, err := RunHook(ctx, cmd, t.TempDir(), &out)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, elapsed, 30*time.Second,
+		"RunHook must return on a bounded delay, not wait out the grandchild lifetime")
 }
 
 // Wiring: before_issue hook failure marks the issue blocked and skips the

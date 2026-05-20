@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -11,12 +10,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 )
+
+// subprocessWaitDelay bounds how long cmd.Wait blocks after the process exits
+// or after a ctx-cancel kill: once it elapses, os/exec force-kills the process
+// and closes the pipe fds it owns, unblocking the I/O-copy goroutine even if a
+// surviving grandchild still holds the pipe's write end. Shared by RunSubprocess
+// and RunHook.
+const subprocessWaitDelay = 10 * time.Second
+
+// blockTransitionTimeout bounds the failure-path blocked-status write. The
+// transition uses a fresh ctx (detached from any caller-supplied deadline) so
+// a subprocess_timeout SIGKILL — or a Ctrl-C canceling the dispatch loop —
+// cannot drop the write and leave the issue in-progress for the next loop to
+// re-pick.
+const blockTransitionTimeout = 30 * time.Second
 
 // SubResult is the outcome of a single sub-agent subprocess.
 type SubResult struct {
@@ -32,14 +45,15 @@ type SubResult struct {
 // any other Outcome it transitions the issue to blocked with Outcome.Reason()
 // and returns Success=false with Err carrying the reason.
 //
-// plansDir is the absolute path to the parent repo's plans dir. logDir receives
-// the full output transcript at logDir/{id}.log.
+// plans is the shared planrepo handle; the post-run loadIssue read flows
+// through it. logDir receives the full output transcript at logDir/{id}.log.
 func RunSubprocess(
 	ctx context.Context,
 	owner *status.Owner,
+	plans *planrepo.Plans,
 	slug string,
 	issue schema.Issue,
-	prompt, worktreePath, plansDir, logDir string,
+	prompt, worktreePath, logDir string,
 	outWriter io.Writer,
 ) SubResult {
 	res := SubResult{IssueID: issue.ID}
@@ -51,11 +65,10 @@ func RunSubprocess(
 	block := func(reason string) SubResult {
 		res.Success = false
 		res.Err = errors.New(reason)
-		// Backlog is included so an early subprocess failure (e.g. claude not in
-		// PATH) on a backlog issue picked by ReadyAFK still flips to blocked
-		// instead of CAS-failing and re-dispatching forever.
-		err := owner.Transition(ctx, slug, issue.ID,
-			[]status.Status{status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+		txCtx, cancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+		defer cancel()
+		err := owner.Transition(txCtx, slug, issue.ID,
+			blockFromStatuses,
 			status.StatusBlocked, reason)
 		if err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 			fmt.Fprintf(outWriter, "[issue-%d] warning: failed to persist blocked status: %v\n", issue.ID, err)
@@ -72,10 +85,18 @@ func RunSubprocess(
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return block(fmt.Sprintf("attaching stdout pipe: %v", err))
-	}
+
+	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
+	var logBuf bytes.Buffer
+	// Setting cmd.Stdout (rather than calling StdoutPipe) lets os/exec own the
+	// copy goroutine. cmd.Wait then waits for that goroutine before closing the
+	// pipe — so the tail can't be lost to a Wait/reader ordering race, and
+	// WaitDelay still bounds the whole sequence.
+	lw := &linePrefixWriter{prefix: prefix, out: outWriter, log: &logBuf}
+	cmd.Stdout = lw
+
+	configureProcessGroup(cmd)
+	cmd.WaitDelay = subprocessWaitDelay
 
 	if err := cmd.Start(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -84,31 +105,8 @@ func RunSubprocess(
 		return block(fmt.Sprintf("starting claude: %v", err))
 	}
 
-	prefix := fmt.Sprintf("[issue-%d] ", issue.ID)
-	var logBuf bytes.Buffer
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// bufio.Reader (not Scanner) so a single stream-json event embedding a
-		// large tool result can exceed any fixed buffer cap.
-		reader := bufio.NewReader(stdout)
-		for {
-			line, err := reader.ReadString('\n')
-			if line != "" {
-				stripped := strings.TrimRight(line, "\n")
-				fmt.Fprintln(outWriter, prefix+stripped)
-				logBuf.WriteString(stripped)
-				logBuf.WriteByte('\n')
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
 	waitErr := cmd.Wait()
-	wg.Wait()
+	lw.Flush()
 
 	stderrText := stderrBuf.String()
 
@@ -118,7 +116,14 @@ func RunSubprocess(
 		}
 	}
 
-	post, loadErr := loadIssue(plansDir, slug, issue.ID)
+	// The post-Wait read uses a fresh ctx because the subprocess ctx may be
+	// deadline-exceeded from a subprocess_timeout SIGKILL — the read of the
+	// post-run issue state would otherwise fail on lock contention and force
+	// Verdict down its exit-code fallback even when the sub-agent actually
+	// flipped status before timing out.
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+	defer loadCancel()
+	post, loadErr := loadIssue(loadCtx, plans, slug, issue.ID)
 
 	// Wrap waitErr with stderr so the persisted blocked-state note retains
 	// observability. %w preserves the unwrap chain so Verdict's errors.As
@@ -159,8 +164,8 @@ func truncateForNotes(s string) string {
 	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
-func loadIssue(plansDir, slug string, id int) (*schema.Issue, error) {
-	sess, err := planrepo.NewProd(plansDir).Open(slug)
+func loadIssue(ctx context.Context, plans *planrepo.Plans, slug string, id int) (*schema.Issue, error) {
+	sess, err := plans.OpenContext(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -174,17 +179,26 @@ func loadIssue(plansDir, slug string, id int) (*schema.Issue, error) {
 	return nil, fmt.Errorf("issue #%d not found in %q", id, slug)
 }
 
+// separatorPrefix marks the start of one dispatch run inside a per-issue log.
+// writeLog appends rather than truncates, so a re-dispatched issue keeps its
+// prior runs; each run is delimited by a separator carrying a UTC timestamp.
+const separatorPrefix = "=== dispatch run "
+
 func writeLog(logDir string, id int, stdout, stderr []byte) error {
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return err
 	}
 	path := filepath.Join(logDir, fmt.Sprintf("%d.log", id))
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
+	header := separatorPrefix + time.Now().UTC().Format(time.RFC3339) + " ===\n"
+	if _, err := f.WriteString(header); err != nil {
+		return err
+	}
 	if _, err := f.Write(stdout); err != nil {
 		return err
 	}

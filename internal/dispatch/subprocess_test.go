@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -118,8 +119,8 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.True(t, res.Success, "expected success, got err: %v, out: %s", res.Err, out.String())
 	assert.Contains(t, out.String(), "[issue-5] ")
@@ -147,8 +148,8 @@ exit 1
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -176,8 +177,8 @@ func TestRunSubprocess_TimeoutReportedAsSubprocessTimeout(t *testing.T) {
 	defer cancel()
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(ctx, newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(ctx, newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -206,8 +207,8 @@ exit 0
 	var out bytes.Buffer
 
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"some prompt", worktree, plansDir, logDir, &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
 
 	require.False(t, res.Success)
 	post := loadIssueFromDisk(t, plansDir, "ship", 5)
@@ -234,8 +235,8 @@ exit 0
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -252,8 +253,8 @@ func TestRunSubprocess_MissingClaudeBinaryIsActionable(t *testing.T) {
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 
 	require.False(t, res.Success)
 	require.Error(t, res.Err)
@@ -282,8 +283,8 @@ exit 0
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
 	prompt := "---\nname: bender-implement-issue\n---\n\n# Implement\n\nDo the thing."
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		prompt, worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		prompt, worktree, "", &out)
 	require.True(t, res.Success, "expected success, got err: %v", res.Err)
 
 	args, err := os.ReadFile(argsFile)
@@ -310,14 +311,105 @@ exit 1
 	worktree := t.TempDir()
 	var out bytes.Buffer
 	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
-	res := RunSubprocess(context.Background(), newTestOwner(plansDir), "ship", issue,
-		"prompt", worktree, plansDir, "", &out)
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, "", &out)
 	require.False(t, res.Success)
 
 	post := loadIssueFromDisk(t, plansDir, "ship", 5)
 	require.NotNil(t, post.Notes)
 	assert.Less(t, len(*post.Notes), 4096, "notes must not embed the full 10KB stderr")
 	assert.Contains(t, *post.Notes, "truncated")
+}
+
+// The truncation race: a line emitted immediately before exit must reach both
+// the streamed output and the on-disk log. The legacy StdoutPipe + late
+// wg.Wait() pattern could lose the tail when cmd.Wait closed the pipe before
+// the reader drained it. printf (no trailing \n) leaves the tail in
+// linePrefixWriter's partial-line buffer so only the post-Wait Flush() can
+// rescue it — exactly the path the regression touched.
+func TestRunSubprocess_FinalLineBeforeExitInStreamAndLog(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
+	body := `sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
+printf FINAL_TAIL_LINE
+exit 0
+`
+	installFakeClaude(t, body)
+
+	worktree := t.TempDir()
+	logDir := filepath.Join(t.TempDir(), "logs")
+	var out bytes.Buffer
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, logDir, &out)
+	require.True(t, res.Success, "expected success, got err: %v", res.Err)
+
+	assert.Contains(t, out.String(), "[issue-5] FINAL_TAIL_LINE",
+		"the line emitted right before exit must appear in the prefixed stream")
+
+	logBytes, err := os.ReadFile(filepath.Join(logDir, "5.log"))
+	require.NoError(t, err)
+	assert.Contains(t, string(logBytes), "FINAL_TAIL_LINE",
+		"the line emitted right before exit must appear in the log file")
+}
+
+// A single stream-json line embedding a big tool result must arrive whole — not
+// truncated by a fixed buffer cap, not split across two prefixed output lines.
+func TestRunSubprocess_LargeSingleLineNotSplitOrTruncated(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
+	const bigLen = 256 * 1024
+	body := `head -c ` + strconv.Itoa(bigLen) + ` /dev/zero | tr '\0' X
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
+exit 0
+`
+	installFakeClaude(t, body)
+
+	worktree := t.TempDir()
+	logDir := filepath.Join(t.TempDir(), "logs")
+	var out bytes.Buffer
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"prompt", worktree, logDir, &out)
+	require.True(t, res.Success, "expected success, got err: %v", res.Err)
+
+	streamed := out.String()
+	bigRun := strings.Repeat("X", bigLen)
+	assert.Contains(t, streamed, "[issue-5] "+bigRun,
+		"the entire 256KB line must arrive whole behind a single prefix")
+	// Only one prefixed-stream line should carry the X-run; a split would
+	// produce two prefixed lines each carrying part of it.
+	assert.Equal(t, 1, strings.Count(streamed, "[issue-5] X"),
+		"the big line must not be split across multiple prefixed output lines")
+
+	logBytes, err := os.ReadFile(filepath.Join(logDir, "5.log"))
+	require.NoError(t, err)
+	assert.Contains(t, string(logBytes), bigRun, "log must contain the full big line")
+}
+
+func TestWriteLog_AppendsRunsWithSeparatorHeader(t *testing.T) {
+	logDir := filepath.Join(t.TempDir(), "logs")
+
+	require.NoError(t, writeLog(logDir, 5, []byte("first run output\n"), nil))
+	require.NoError(t, writeLog(logDir, 5, []byte("second run output\n"), []byte("second run stderr\n")))
+
+	logBytes, err := os.ReadFile(filepath.Join(logDir, "5.log"))
+	require.NoError(t, err)
+	log := string(logBytes)
+
+	assert.Contains(t, log, "first run output")
+	assert.Contains(t, log, "second run output")
+	assert.Contains(t, log, "second run stderr")
+	assert.Less(t, strings.Index(log, "first run output"), strings.Index(log, "second run output"),
+		"first run must precede second run")
+
+	assert.Equal(t, 2, strings.Count(log, separatorPrefix))
+	assert.True(t, strings.HasPrefix(log, separatorPrefix),
+		"a first run still produces a clean log starting with a header")
 }
 
 func TestBuildPrompt_ConcatenatesSkillAndIssue(t *testing.T) {

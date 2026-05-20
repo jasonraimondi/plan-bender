@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -469,6 +470,67 @@ func TestDispatcher_StuckOnAllBlockedReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "#1")
 }
 
+// TestDispatcher_RunBatchRespectsMaxParallelCap dispatches more ready issues
+// than the configured max_parallel and asserts no more than that many claude
+// subprocesses ever run at once. Each stub drops a marker file while running;
+// every invocation samples the live marker count, and the peak sample must
+// stay at or below the cap.
+func TestDispatcher_RunBatchRespectsMaxParallelCap(t *testing.T) {
+	fix := setupDispatch(t)
+	installSkillFile(t, fix.root)
+
+	const numIssues = 5
+	const maxPar = 2
+	for i := 1; i <= numIssues; i++ {
+		writeIssue(t, fix.plansDir, mkAFKIssue(i, fmt.Sprintf("iss%d", i), "todo"))
+	}
+
+	countDir := t.TempDir()
+	samplesFile := filepath.Join(t.TempDir(), "samples")
+	t.Setenv("PB_COUNTDIR", countDir)
+	t.Setenv("PB_SAMPLES", samplesFile)
+
+	var cases strings.Builder
+	for i := 1; i <= numIssues; i++ {
+		fmt.Fprintf(&cases, "  *'\"slug\": \"iss%d\"'*) target=\"%s/demo/issues/%d-iss%d.json\" ;;\n",
+			i, fix.plansDir, i, i)
+	}
+
+	// Marker-file dance: create a uniquely-named marker, sample how many markers
+	// are live (= concurrent subprocesses), sleep to force overlap, then clear
+	// the marker and flip the issue to in-review.
+	body := fmt.Sprintf(`prompt=$(cat)
+mine=$(mktemp "$PB_COUNTDIR/run.XXXXXX")
+ls "$PB_COUNTDIR" | wc -l | tr -d ' ' >> "$PB_SAMPLES"
+sleep 0.4
+rm -f "$mine"
+target=""
+case "$prompt" in
+%sesac
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "$target"
+exit 0
+`, cases.String())
+	installClaudeStub(t, body)
+
+	d := newDispatcher(fix)
+	limit := maxPar
+	d.Config.Pipeline.MaxParallel = &limit
+	require.NoError(t, timeBoxRun(t, d, "demo", 60*time.Second))
+
+	data, err := os.ReadFile(samplesFile)
+	require.NoError(t, err)
+	peak := 0
+	for _, field := range strings.Fields(string(data)) {
+		n, convErr := strconv.Atoi(field)
+		require.NoError(t, convErr)
+		if n > peak {
+			peak = n
+		}
+	}
+	assert.LessOrEqual(t, peak, maxPar, "peak concurrent subprocesses must not exceed max_parallel")
+	assert.GreaterOrEqual(t, peak, 2, "expected the batch to run subprocesses in parallel")
+}
+
 // timeBoxRun cancels the context if Run hangs longer than the deadline.
 // Keeps test failure messages useful instead of a CI timeout kill.
 func timeBoxRun(t *testing.T, d *Dispatcher, slug string, deadline time.Duration) error {
@@ -573,6 +635,127 @@ func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	assert.Equal(t, "blocked", alpha.Status, "early-failure issue must be marked blocked")
 	require.NotNil(t, alpha.Notes)
 	assert.Contains(t, *alpha.Notes, "building prompt", "block reason should reference the failure")
+}
+
+// TestDispatcher_ClaimFailureRemovesLeakedWorktree asserts that when runOne
+// fails after worktree.Create but before the subprocess starts, the orphaned
+// worktree is removed instead of left on disk. The Claim is forced to fail by
+// seeding the issue in `done` — a status outside Claim's CAS from-set — so
+// Create succeeds but Claim returns a mismatch.
+func TestDispatcher_ClaimFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "done")
+	writeIssue(t, fix.plansDir, iss)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "claiming issue")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+
+	out, err := exec.Command("git", "-C", fix.root, "worktree", "list", "--porcelain").Output()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), wtPath, "git must no longer track the removed worktree")
+}
+
+// TestDispatcher_BuildPromptFailureRemovesLeakedWorktree asserts the worktree
+// is removed when BuildPrompt fails (no SKILL.md installed) — earlier than
+// the Claim path but still post-worktree.Create. Without cleanup the next
+// loop iteration would hit "worktree already exists" on every retry.
+func TestDispatcher_BuildPromptFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	// Intentionally no installSkillFile — BuildPrompt will fail on missing SKILL.md.
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "building prompt")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+}
+
+// TestDispatcher_BeforeIssueHookFailureRemovesLeakedWorktree asserts the
+// worktree is removed when a configured before_issue hook fails. Same leak
+// pattern as the Claim/BuildPrompt paths, different trigger.
+func TestDispatcher_BeforeIssueHookFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	d := newDispatcher(fix)
+	d.Config.Hooks.BeforeIssue = "exit 1"
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "before_issue hook")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
+}
+
+// TestDispatcher_LinkPlansDirFailureRemovesLeakedWorktree asserts the worktree
+// is removed when linkPlansDir rejects a real .plan-bender dir already
+// present in the checkout. Committing .plan-bender to the integration branch
+// reproduces the rejection path inside runOne.
+func TestDispatcher_LinkPlansDirFailureRemovesLeakedWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	// Commit a .plan-bender dir to main so the integration branch's checkout
+	// contains it as a real path. linkPlansDir then errors instead of
+	// symlinking, which is the failure path under test.
+	keep := filepath.Join(fix.root, ".plan-bender", ".keep")
+	require.NoError(t, os.WriteFile(keep, []byte(""), 0o644))
+	for _, args := range [][]string{
+		{"add", ".plan-bender/.keep"},
+		{"commit", "-m", "commit .plan-bender"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", fix.root}, args...)...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	iss := mkAFKIssue(1, "alpha", "todo")
+	writeIssue(t, fix.plansDir, iss)
+	installSkillFile(t, fix.root)
+
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	logDir := filepath.Join(fix.root, ".plan-bender", "logs", "demo")
+	res := d.runOne(context.Background(), "demo", iss, logDir, integrationBranch)
+	require.Error(t, res.Err)
+	assert.Contains(t, res.Err.Error(), "linking plans dir")
+
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	wtPath := filepath.Join(parent, "repo-wt", "demo", "1-alpha")
+	_, statErr := os.Stat(wtPath)
+	assert.True(t, os.IsNotExist(statErr), "leaked worktree must be removed, still present at %s", wtPath)
 }
 
 // TestDispatcher_MergeBackRestoresParentHEAD asserts the parent repo's HEAD
@@ -706,4 +889,77 @@ exit 1
 	second := loadIssueJSON(t, fix.plansDir, 2, "second")
 	assert.Equal(t, "done", first.Status)
 	assert.Equal(t, "done", second.Status)
+}
+
+func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".claude", "skills"), 0o755))
+
+	// The worktree already has a real, committed .claude/skills directory.
+	wtSkills := filepath.Join(wt, ".claude", "skills")
+	require.NoError(t, os.MkdirAll(wtSkills, 0o755))
+	marker := filepath.Join(wtSkills, "committed.txt")
+	require.NoError(t, os.WriteFile(marker, []byte("x"), 0o644))
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	info, err := os.Lstat(wtSkills)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.Zero(t, info.Mode()&os.ModeSymlink)
+	_, err = os.Stat(marker)
+	assert.NoError(t, err, "committed file should survive")
+
+	pbInfo, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
+	require.NoError(t, err)
+	assert.NotZero(t, pbInfo.Mode()&os.ModeSymlink)
+}
+
+func TestLinkPlansDir_RejectsRealPlanBenderDir(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	// A real .plan-bender in the worktree would route sub-agent status writes
+	// away from the parent's on-disk state — the dispatch loop wouldn't see
+	// them. linkPlansDir must reject rather than tolerate.
+	require.NoError(t, os.MkdirAll(filepath.Join(wt, ".plan-bender"), 0o755))
+
+	var logBuf bytes.Buffer
+	err := linkPlansDir(parent, wt, &logBuf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ".plan-bender")
+	assert.Contains(t, err.Error(), "real path")
+}
+
+func TestLinkPlansDir_RefreshesExistingSymlink(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+
+	// A stale symlink pointing at the wrong place.
+	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(wt, ".plan-bender")))
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	target, err := os.Readlink(filepath.Join(wt, ".plan-bender"))
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(parent, ".plan-bender"), target)
+}
+
+func TestLinkPlansDir_MissingSourceSkippedSilently(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+
+	var logBuf bytes.Buffer
+	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+
+	_, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
+	assert.True(t, os.IsNotExist(err))
+	assert.Empty(t, logBuf.String())
 }

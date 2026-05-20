@@ -52,13 +52,17 @@ type Dispatcher struct {
 	outWriter io.Writer
 
 	// ownerOnce + owner memoize the status.Owner so every status write in a
-	// Run goes through the same lock-aware adapter without re-allocating.
+	// Run goes through one lock-aware adapter without re-allocating. The Owner
+	// wraps its own planrepo.Plans handle (NewProdStatusOwner), distinct from
+	// `plans` below but rooted at the same plansDir.
 	ownerOnce sync.Once
 	owner     *status.Owner
 
-	// plansOnce + plans memoize the planrepo.Plans handle used for resolver
-	// and merge-order snapshots. Sharing one handle across a Run keeps every
-	// read path on the same persistence boundary as status writes.
+	// plansOnce + plans memoize the planrepo.Plans handle for every read in a
+	// Run: the resolver and merge-order snapshots, plus the post-subprocess
+	// loadIssue read passed into RunSubprocess. It does not back status writes
+	// — those go through the Owner's own handle (see ownerOnce) — but all
+	// handles target the same plansDir, the single on-disk persistence boundary.
 	plansOnce sync.Once
 	plans     *planrepo.Plans
 }
@@ -75,13 +79,15 @@ func (d *Dispatcher) plansRepo() *planrepo.Plans {
 // snapshotIssues opens a short-lived planrepo session, reads the issue list,
 // and closes the session before returning. The lock is released before the
 // caller proceeds so subsequent status writes (or batch goroutines) can take
-// the same lock without deadlocking.
-func (d *Dispatcher) snapshotIssues(slug string) ([]schema.Issue, error) {
-	return snapshotPlanIssues(d.plansRepo(), slug)
+// the same lock without deadlocking. ctx governs lock acquisition only — a
+// canceled ctx unblocks a wait for a contended plan lock instead of holding
+// the dispatch loop hostage.
+func (d *Dispatcher) snapshotIssues(ctx context.Context, slug string) ([]schema.Issue, error) {
+	return snapshotPlanIssues(ctx, d.plansRepo(), slug)
 }
 
-func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.Issue, error) {
-	sess, err := plans.Open(slug)
+func snapshotPlanIssues(ctx context.Context, plans *planrepo.Plans, slug string) ([]schema.Issue, error) {
+	sess, err := plans.OpenContext(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +161,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 
 	for {
-		issues, err := d.snapshotIssues(slug)
+		issues, err := d.snapshotIssues(ctx, slug)
 		if err != nil {
 			return fmt.Errorf("loading issues: %w", err)
 		}
@@ -186,10 +192,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %s", blockedSummary(issues))
 		}
 
-		results, err := d.RunBatch(ctx, slug, batch, integrationBranch)
-		if err != nil {
-			return fmt.Errorf("running batch: %w", err)
-		}
+		results := d.RunBatch(ctx, slug, batch, integrationBranch)
 
 		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
 			return fmt.Errorf("merging batch: %w", err)
@@ -197,25 +200,29 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 }
 
-// RunBatch fans out one goroutine per issue, each creating a worktree off
-// integrationBranch, rendering a prompt, and running a claude subprocess.
-// Results come back via a buffered channel and are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) ([]SubResult, error) {
+// RunBatch dispatches issues through a worker pool capped at
+// ResolvedMaxParallel(): at most that many claude subprocesses run
+// concurrently. Each worker creates a worktree off integrationBranch, renders
+// a prompt, and runs a claude subprocess. Results are returned in input order.
+func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) []SubResult {
 	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
 
 	results := make([]SubResult, len(issues))
+	sem := make(chan struct{}, d.Config.Pipeline.ResolvedMaxParallel())
 	var wg sync.WaitGroup
 
 	for i := range issues {
 		wg.Add(1)
 		go func(idx int, issue schema.Issue) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
 		}(i, issues[i])
 	}
 
 	wg.Wait()
-	return results, nil
+	return results
 }
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {
@@ -224,7 +231,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
 		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
 	}
 
@@ -236,7 +243,8 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	// strict JSON decoder then rejects on every subsequent Load.
 	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
 		reason := fmt.Sprintf("claiming issue: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
@@ -246,16 +254,18 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	branchCopy := wt.Branch
 	issue.Branch = &branchCopy
 
-	if err := linkPlansDir(d.Root, wt.Path); err != nil {
+	if err := linkPlansDir(d.Root, wt.Path, d.out()); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
 		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+			d.markBlockedAndWarn(slug, issue.ID, reason)
+			d.cleanupWorktree(wt.Path)
 			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 		}
 	}
@@ -263,13 +273,14 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	prompt, err := BuildPrompt(wt.Path, issue)
 	if err != nil {
 		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markBlockedAndWarn(ctx, slug, issue.ID, reason)
+		d.markBlockedAndWarn(slug, issue.ID, reason)
+		d.cleanupWorktree(wt.Path)
 		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
 	}
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
 	defer cancel()
-	res := RunSubprocess(subCtx, d.statusOwner(), slug, issue, prompt, wt.Path, d.plansDir(), logDir, d.out())
+	res := RunSubprocess(subCtx, d.statusOwner(), d.plansRepo(), slug, issue, prompt, wt.Path, logDir, d.out())
 	res.Branch = wt.Branch
 
 	if hook := d.Config.Hooks.AfterIssue; hook != "" {
@@ -289,7 +300,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // It refuses to run if the parent has uncommitted changes (the checkout would
 // either fail or leak changes onto the integration branch).
 func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
-	successful := successfulInDepOrder(results, d.plansRepo(), slug)
+	successful := successfulInDepOrder(ctx, results, d.plansRepo(), slug)
 	if len(successful) == 0 {
 		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
 		// doesn't surface an error that masks the real (all-failed) cause. GC
@@ -332,7 +343,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, d.Root, "merge", "--abort")
-			d.markBlockedAndWarn(ctx, slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
+			d.markBlockedAndWarn(slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
 		merged[r.Branch] = true
@@ -395,20 +406,30 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 	return false, nil
 }
 
+// blockFromStatuses is the set of statuses from which a dispatch failure may
+// transition an issue to blocked. Backlog is included because ReadyAFK accepts
+// backlog issues: a failure before the sub-agent flips backlog→todo→in-progress
+// would otherwise leave the issue stuck at backlog while CAS rejects every
+// block attempt — the dispatch loop would then re-pick the same issue forever.
+var blockFromStatuses = []status.Status{
+	status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview,
+}
+
 // markBlockedAndWarn flips the issue to blocked via the status owner and warns
 // to stderr if the transition fails. Callers are already on a failure path; a
 // warn-and-continue is preferable to bubbling the error and masking the
 // original cause. ErrAlreadyInState (issue already blocked) is silently
 // ignored — that's a no-op the operator doesn't need to see.
 //
-// Backlog is included in the from-set because ReadyAFK accepts backlog issues
-// and a runOne failure before the sub-agent has a chance to flip
-// backlog→todo→in-progress would otherwise leave the issue stuck at backlog
-// while CAS rejects every block attempt — the dispatch loop would then re-pick
-// the same issue forever (the popar-py CAS-loop bug).
-func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int, reason string) {
+// The transition uses a fresh ctx detached from the parent: a canceled parent
+// (Ctrl-C, or the subprocess_timeout when the merge-conflict path runs after
+// a SIGKILL'd run) would otherwise drop the blocked-state write and leave the
+// issue in-progress for the next loop to re-pick.
+func (d *Dispatcher) markBlockedAndWarn(slug string, id int, reason string) {
+	ctx, cancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+	defer cancel()
 	err := d.statusOwner().Transition(ctx, slug, id,
-		[]status.Status{status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview},
+		blockFromStatuses,
 		status.StatusBlocked, reason)
 	if err == nil || errors.Is(err, status.ErrAlreadyInState) {
 		return
@@ -416,7 +437,22 @@ func (d *Dispatcher) markBlockedAndWarn(ctx context.Context, slug string, id int
 	fmt.Fprintf(d.out(), "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
 }
 
-func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
+// cleanupWorktree removes a worktree leaked by a runOne failure between
+// worktree.Create and RunSubprocess, so a failed claim/link/hook/prompt does
+// not leave an orphaned worktree on disk. A fresh context is used so a
+// canceled parent ctx (Ctrl-C) still tears the worktree down. A removal
+// failure is warned but not returned — the caller is already surfacing the
+// original failure and must not have it masked.
+func (d *Dispatcher) cleanupWorktree(path string) {
+	d.gitMu.Lock()
+	err := worktree.Remove(context.Background(), d.Root, path)
+	d.gitMu.Unlock()
+	if err != nil {
+		fmt.Fprintf(d.out(), "warning: failed to remove leaked worktree %q: %v\n", path, err)
+	}
+}
+
+func successfulInDepOrder(ctx context.Context, results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
 	successByID := make(map[int]SubResult, len(results))
 	for _, r := range results {
 		if r.Success {
@@ -424,7 +460,7 @@ func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug strin
 		}
 	}
 
-	issues, err := snapshotPlanIssues(plans, slug)
+	issues, err := snapshotPlanIssues(ctx, plans, slug)
 	if err != nil {
 		// fall back to result order if snapshot fails
 		out := make([]SubResult, 0, len(successByID))
@@ -519,23 +555,14 @@ func hitlOnlyRemaining(issues []schema.Issue) bool {
 		case "done", "canceled", "in-review":
 			continue
 		}
-		if hasLabel(iss.Labels, "AFK") && !hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("AFK") && !iss.HasLabel("HITL") {
 			return false
 		}
-		if hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("HITL") {
 			hasHITL = true
 		}
 	}
 	return hasHITL
-}
-
-func hasLabel(labels []string, want string) bool {
-	for _, l := range labels {
-		if l == want {
-			return true
-		}
-	}
-	return false
 }
 
 // blockedSummary describes the blocked issues in a snapshot for the "stuck"
@@ -565,7 +592,7 @@ func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
 		case "done", "canceled", "in-review":
 			continue
 		}
-		if hasLabel(iss.Labels, "HITL") {
+		if iss.HasLabel("HITL") {
 			fmt.Fprintf(d.out(), "  - #%d %s (%s)\n", iss.ID, iss.Name, iss.Status)
 		}
 	}
@@ -696,10 +723,23 @@ func runGitOutput(ctx context.Context, dir string, args ...string) (string, erro
 // into the worktree. Both are typically gitignored, so a fresh worktree
 // checkout doesn't have them — sub-agent calls to `pba complete` and
 // BuildPrompt's skill lookup both depend on these.
-func linkPlansDir(parent, worktreePath string) error {
-	for _, rel := range []string{".plan-bender", filepath.Join(".claude", "skills")} {
-		src := filepath.Join(parent, rel)
-		dst := filepath.Join(worktreePath, rel)
+//
+// Skills are sometimes legitimately committed (project-bundled skill files),
+// so a real .claude/skills dir in the worktree is tolerated and used as-is.
+// .plan-bender is the dispatch loop's single on-disk persistence boundary;
+// a real .plan-bender in the worktree would diverge the sub-agent's status
+// writes from the parent and silently break the loop — that's an error.
+func linkPlansDir(parent, worktreePath string, log io.Writer) error {
+	targets := []struct {
+		rel             string
+		tolerateRealDir bool
+	}{
+		{".plan-bender", false},
+		{filepath.Join(".claude", "skills"), true},
+	}
+	for _, t := range targets {
+		src := filepath.Join(parent, t.rel)
+		dst := filepath.Join(worktreePath, t.rel)
 		if _, err := os.Stat(src); err != nil {
 			continue
 		}
@@ -707,11 +747,14 @@ func linkPlansDir(parent, worktreePath string) error {
 			return err
 		}
 		if info, err := os.Lstat(dst); err == nil {
-			// Only nuke a pre-existing symlink. A real directory at dst is the
-			// user's data — refuse to clobber it; let Symlink fail with EEXIST.
-			if info.Mode()&os.ModeSymlink != 0 {
-				_ = os.Remove(dst)
+			if info.Mode()&os.ModeSymlink == 0 {
+				if !t.tolerateRealDir {
+					return fmt.Errorf("%s exists as a real path in worktree; sub-agent writes would diverge from the parent", t.rel)
+				}
+				fmt.Fprintf(log, "warning: %s already exists in worktree as a real path; using it instead of linking\n", t.rel)
+				continue
 			}
+			_ = os.Remove(dst)
 		}
 		if err := os.Symlink(src, dst); err != nil {
 			return fmt.Errorf("symlinking %s -> %s: %w", dst, src, err)

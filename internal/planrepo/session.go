@@ -1,6 +1,7 @@
 package planrepo
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -42,8 +43,15 @@ type PlanSession struct {
 // Open acquires the plan lock and loads a snapshot for slug. If lock
 // acquisition or snapshot loading fails, no lock is held on return.
 func (p *Plans) Open(slug string) (*PlanSession, error) {
+	return p.OpenContext(context.Background(), slug)
+}
+
+// OpenContext is Open with a caller-supplied context. ctx governs only plan
+// lock acquisition: a canceled or timed-out ctx interrupts a wait for a
+// contended lock. Once the session is open ctx is no longer consulted.
+func (p *Plans) OpenContext(ctx context.Context, slug string) (*PlanSession, error) {
 	slug = normalizeSlug(p.plansDir, slug)
-	release, err := p.adapters.Lock(p.plansDir)
+	release, err := p.adapters.Lock(ctx, p.plansDir)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +78,7 @@ func (p *Plans) Open(slug string) (*PlanSession, error) {
 // being treated as fresh.
 func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
 	slug = normalizeSlug(p.plansDir, slug)
-	release, err := p.adapters.Lock(p.plansDir)
+	release, err := p.adapters.Lock(context.Background(), p.plansDir)
 	if err != nil {
 		return nil, err
 	}
