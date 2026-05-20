@@ -79,13 +79,15 @@ func (d *Dispatcher) plansRepo() *planrepo.Plans {
 // snapshotIssues opens a short-lived planrepo session, reads the issue list,
 // and closes the session before returning. The lock is released before the
 // caller proceeds so subsequent status writes (or batch goroutines) can take
-// the same lock without deadlocking.
-func (d *Dispatcher) snapshotIssues(slug string) ([]schema.Issue, error) {
-	return snapshotPlanIssues(d.plansRepo(), slug)
+// the same lock without deadlocking. ctx governs lock acquisition only — a
+// canceled ctx unblocks a wait for a contended plan lock instead of holding
+// the dispatch loop hostage.
+func (d *Dispatcher) snapshotIssues(ctx context.Context, slug string) ([]schema.Issue, error) {
+	return snapshotPlanIssues(ctx, d.plansRepo(), slug)
 }
 
-func snapshotPlanIssues(plans *planrepo.Plans, slug string) ([]schema.Issue, error) {
-	sess, err := plans.Open(slug)
+func snapshotPlanIssues(ctx context.Context, plans *planrepo.Plans, slug string) ([]schema.Issue, error) {
+	sess, err := plans.OpenContext(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +161,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 	}
 
 	for {
-		issues, err := d.snapshotIssues(slug)
+		issues, err := d.snapshotIssues(ctx, slug)
 		if err != nil {
 			return fmt.Errorf("loading issues: %w", err)
 		}
@@ -298,7 +300,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // It refuses to run if the parent has uncommitted changes (the checkout would
 // either fail or leak changes onto the integration branch).
 func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
-	successful := successfulInDepOrder(results, d.plansRepo(), slug)
+	successful := successfulInDepOrder(ctx, results, d.plansRepo(), slug)
 	if len(successful) == 0 {
 		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
 		// doesn't surface an error that masks the real (all-failed) cause. GC
@@ -450,7 +452,7 @@ func (d *Dispatcher) cleanupWorktree(path string) {
 	}
 }
 
-func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
+func successfulInDepOrder(ctx context.Context, results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
 	successByID := make(map[int]SubResult, len(results))
 	for _, r := range results {
 		if r.Success {
@@ -458,7 +460,7 @@ func successfulInDepOrder(results []SubResult, plans *planrepo.Plans, slug strin
 		}
 	}
 
-	issues, err := snapshotPlanIssues(plans, slug)
+	issues, err := snapshotPlanIssues(ctx, plans, slug)
 	if err != nil {
 		// fall back to result order if snapshot fails
 		out := make([]SubResult, 0, len(successByID))
@@ -721,10 +723,23 @@ func runGitOutput(ctx context.Context, dir string, args ...string) (string, erro
 // into the worktree. Both are typically gitignored, so a fresh worktree
 // checkout doesn't have them — sub-agent calls to `pba complete` and
 // BuildPrompt's skill lookup both depend on these.
+//
+// Skills are sometimes legitimately committed (project-bundled skill files),
+// so a real .claude/skills dir in the worktree is tolerated and used as-is.
+// .plan-bender is the dispatch loop's single on-disk persistence boundary;
+// a real .plan-bender in the worktree would diverge the sub-agent's status
+// writes from the parent and silently break the loop — that's an error.
 func linkPlansDir(parent, worktreePath string, log io.Writer) error {
-	for _, rel := range []string{".plan-bender", filepath.Join(".claude", "skills")} {
-		src := filepath.Join(parent, rel)
-		dst := filepath.Join(worktreePath, rel)
+	targets := []struct {
+		rel             string
+		tolerateRealDir bool
+	}{
+		{".plan-bender", false},
+		{filepath.Join(".claude", "skills"), true},
+	}
+	for _, t := range targets {
+		src := filepath.Join(parent, t.rel)
+		dst := filepath.Join(worktreePath, t.rel)
 		if _, err := os.Stat(src); err != nil {
 			continue
 		}
@@ -733,14 +748,12 @@ func linkPlansDir(parent, worktreePath string, log io.Writer) error {
 		}
 		if info, err := os.Lstat(dst); err == nil {
 			if info.Mode()&os.ModeSymlink == 0 {
-				// A real directory at dst is the worktree's own committed data
-				// (e.g. a checked-in .claude/skills). Don't clobber it, and
-				// don't fail the issue by letting Symlink hit EEXIST — just
-				// skip and use what's already there.
-				fmt.Fprintf(log, "warning: %s already exists in worktree as a real path; using it instead of linking\n", rel)
+				if !t.tolerateRealDir {
+					return fmt.Errorf("%s exists as a real path in worktree; sub-agent writes would diverge from the parent", t.rel)
+				}
+				fmt.Fprintf(log, "warning: %s already exists in worktree as a real path; using it instead of linking\n", t.rel)
 				continue
 			}
-			// A stale symlink — refresh it.
 			_ = os.Remove(dst)
 		}
 		if err := os.Symlink(src, dst); err != nil {

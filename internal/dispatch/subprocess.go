@@ -116,7 +116,14 @@ func RunSubprocess(
 		}
 	}
 
-	post, loadErr := loadIssue(plans, slug, issue.ID)
+	// The post-Wait read uses a fresh ctx because the subprocess ctx may be
+	// deadline-exceeded from a subprocess_timeout SIGKILL — the read of the
+	// post-run issue state would otherwise fail on lock contention and force
+	// Verdict down its exit-code fallback even when the sub-agent actually
+	// flipped status before timing out.
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), blockTransitionTimeout)
+	defer loadCancel()
+	post, loadErr := loadIssue(loadCtx, plans, slug, issue.ID)
 
 	// Wrap waitErr with stderr so the persisted blocked-state note retains
 	// observability. %w preserves the unwrap chain so Verdict's errors.As
@@ -157,8 +164,8 @@ func truncateForNotes(s string) string {
 	return s[:stderrNotesLimit] + "\n... (truncated; see dispatch log for full output)"
 }
 
-func loadIssue(plans *planrepo.Plans, slug string, id int) (*schema.Issue, error) {
-	sess, err := plans.Open(slug)
+func loadIssue(ctx context.Context, plans *planrepo.Plans, slug string, id int) (*schema.Issue, error) {
+	sess, err := plans.OpenContext(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
