@@ -203,6 +203,7 @@ type Config struct {
 	Tracks            []string        `json:"tracks"`
 	WorkflowStates    []string        `json:"workflow_states"`
 	PlansDir          string          `json:"plans_dir"`
+	WorktreeBase      string          `json:"worktree_base,omitempty"`
 	MaxPoints         int             `json:"max_points"`
 	Agents            []ResolvedAgent `json:"agents"`
 	rawAgents         map[string]*AgentEntry
@@ -221,6 +222,7 @@ type PartialConfig struct {
 	Tracks            []string               `json:"tracks,omitempty"`
 	WorkflowStates    []string               `json:"workflow_states,omitempty"`
 	PlansDir          *string                `json:"plans_dir,omitempty"`
+	WorktreeBase      *string                `json:"worktree_base,omitempty"`
 	MaxPoints         *int                   `json:"max_points,omitempty"`
 	Agents            map[string]*AgentEntry `json:"agents,omitempty"`
 	Pipeline          *PipelineConfig        `json:"pipeline,omitempty"`

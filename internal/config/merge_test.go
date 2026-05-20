@@ -18,11 +18,13 @@ func TestMerge_EmptyOverride(t *testing.T) {
 func TestMerge_ScalarOverwrite(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{
-		MaxPoints: ptr(5),
-		PlansDir:  ptr("./custom/"),
+		MaxPoints:    ptr(5),
+		PlansDir:     ptr("./custom/"),
+		WorktreeBase: ptr("~/wt"),
 	})
 	assert.Equal(t, 5, result.MaxPoints)
 	assert.Equal(t, "./custom/", result.PlansDir)
+	assert.Equal(t, "~/wt", result.WorktreeBase)
 }
 
 func TestMerge_ArrayReplacement(t *testing.T) {

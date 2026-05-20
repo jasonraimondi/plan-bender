@@ -50,7 +50,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := worktree.Create(cmd.Context(), root, slug, id, issueSlug, "")
+			res, err := worktree.Create(cmd.Context(), cfg, root, slug, id, issueSlug, "")
 			if err != nil {
 				return NewAgentError("creating worktree: "+err.Error(), ErrInternal)
 			}

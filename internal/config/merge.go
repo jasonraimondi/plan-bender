@@ -14,6 +14,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.PlansDir != nil {
 		out.PlansDir = *layer.PlansDir
 	}
+	if layer.WorktreeBase != nil {
+		out.WorktreeBase = *layer.WorktreeBase
+	}
 	if layer.MaxPoints != nil {
 		out.MaxPoints = *layer.MaxPoints
 	}

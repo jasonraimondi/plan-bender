@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jasonraimondi/plan-bender/internal/config"
 )
 
 // WorktreeResult is the output of Create.
@@ -33,7 +36,7 @@ type WorktreeResult struct {
 //
 // ctx cancels in-flight git plumbing so Ctrl-C during dispatch tears down
 // pending child processes instead of leaking them.
-func Create(ctx context.Context, root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
+func Create(ctx context.Context, cfg config.Config, root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
 	user, err := gitUser(ctx, root)
 	if err != nil {
 		return WorktreeResult{}, err
@@ -47,11 +50,11 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 	// ref-hierarchy clash with the integration branch named {user}/{slug}.
 	branch := fmt.Sprintf("%s/%s--%d-%s", user, slug, issueID, issueSlug)
 	repoName := filepath.Base(root)
-	parent := filepath.Dir(root)
-	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
-		parent = resolved
+	base, err := resolveBase(cfg, root)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("resolving worktree base: %w", err)
 	}
-	path := filepath.Join(parent, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
+	path := filepath.Join(base, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
 
 	branchExists, err := branchExists(ctx, root, branch)
 	if err != nil {
@@ -83,6 +86,39 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 		return WorktreeResult{}, fmt.Errorf("creating worktree at %q: %w", path, err)
 	}
 	return WorktreeResult{Path: path, Branch: branch}, nil
+}
+
+// resolveBase returns the directory under which {repoName}-wt/{slug}/{leaf}
+// is anchored. Inputs:
+//
+//   - "" → repo's parent directory (legacy layout). EvalSymlinks'd so
+//     downstream string-equality checks against `git worktree list` match.
+//   - absolute path → returned as-is.
+//   - "~/..." → expanded against the user's home directory.
+//   - "./..." or any other relative path → joined with repoRoot.
+func resolveBase(cfg config.Config, repoRoot string) (string, error) {
+	b := strings.TrimSpace(cfg.WorktreeBase)
+	if b == "" {
+		parent := filepath.Dir(repoRoot)
+		if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+			parent = resolved
+		}
+		return parent, nil
+	}
+	if strings.HasPrefix(b, "~/") || b == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("expanding ~ in worktree_base: %w", err)
+		}
+		if b == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, b[2:]), nil
+	}
+	if filepath.IsAbs(b) {
+		return b, nil
+	}
+	return filepath.Join(repoRoot, b), nil
 }
 
 // branchExists reports whether refs/heads/<name> resolves in root.
