@@ -816,7 +816,6 @@ func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
 	var logBuf bytes.Buffer
 	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
 
-	// The real committed dir survives untouched — not clobbered, not a symlink.
 	info, err := os.Lstat(wtSkills)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
@@ -824,7 +823,6 @@ func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
 	_, err = os.Stat(marker)
 	assert.NoError(t, err, "committed file should survive")
 
-	// .plan-bender still got linked despite skills being skipped.
 	pbInfo, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
 	require.NoError(t, err)
 	assert.NotZero(t, pbInfo.Mode()&os.ModeSymlink)

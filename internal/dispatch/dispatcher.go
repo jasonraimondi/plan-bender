@@ -408,8 +408,7 @@ func worktreeDirty(ctx context.Context, root string) (bool, error) {
 // transition an issue to blocked. Backlog is included because ReadyAFK accepts
 // backlog issues: a failure before the sub-agent flips backlog→todo→in-progress
 // would otherwise leave the issue stuck at backlog while CAS rejects every
-// block attempt — the dispatch loop would then re-pick the same issue forever
-// (the popar-py CAS-loop bug).
+// block attempt — the dispatch loop would then re-pick the same issue forever.
 var blockFromStatuses = []status.Status{
 	status.StatusBacklog, status.StatusTodo, status.StatusInProgress, status.StatusInReview,
 }

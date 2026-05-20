@@ -399,14 +399,12 @@ func TestWriteLog_AppendsRunsWithSeparatorHeader(t *testing.T) {
 	require.NoError(t, err)
 	log := string(logBytes)
 
-	// Both runs survive — re-dispatch appends instead of truncating.
 	assert.Contains(t, log, "first run output")
 	assert.Contains(t, log, "second run output")
 	assert.Contains(t, log, "second run stderr")
 	assert.Less(t, strings.Index(log, "first run output"), strings.Index(log, "second run output"),
 		"first run must precede second run")
 
-	// Each run is preceded by a timestamped separator header.
 	assert.Equal(t, 2, strings.Count(log, separatorPrefix))
 	assert.True(t, strings.HasPrefix(log, separatorPrefix),
 		"a first run still produces a clean log starting with a header")
