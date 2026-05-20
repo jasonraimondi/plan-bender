@@ -88,6 +88,63 @@ func Create(ctx context.Context, cfg config.Config, root, slug string, issueID i
 	return WorktreeResult{Path: path, Branch: branch}, nil
 }
 
+// CreateIntegration lazy-creates a per-slug integration worktree at
+// {worktree_base}/{repoName}-wt/{slug}/_integration on branch {user}/{slug}.
+// The integration branch must already exist (caller responsibility — typically
+// dispatch's ensureIntegrationBranch). CreateIntegration only attaches a worktree
+// to it. Idempotent: if a worktree at the expected path already holds the branch,
+// the existing pair is returned. If the branch is checked out elsewhere, an
+// error surfaces so a misconfigured layout doesn't silently produce two iwts.
+func CreateIntegration(ctx context.Context, root string, cfg config.Config, slug string) (WorktreeResult, error) {
+	user, err := gitUser(ctx, root)
+	if err != nil {
+		return WorktreeResult{}, err
+	}
+	branch := fmt.Sprintf("%s/%s", user, slug)
+	repoName := filepath.Base(root)
+	base, err := resolveBase(cfg, root)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("resolving worktree base: %w", err)
+	}
+	path := filepath.Join(base, repoName+"-wt", slug, "_integration")
+
+	existingPath, err := worktreePathForBranch(ctx, root, branch)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("inspecting worktrees: %w", err)
+	}
+	if existingPath != "" {
+		if existingPath != path {
+			return WorktreeResult{}, fmt.Errorf("integration branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
+		}
+		return WorktreeResult{Path: existingPath, Branch: branch}, nil
+	}
+
+	if err := runGit(ctx, root, "worktree", "add", path, branch); err != nil {
+		return WorktreeResult{}, fmt.Errorf("creating integration worktree at %q: %w", path, err)
+	}
+	return WorktreeResult{Path: path, Branch: branch}, nil
+}
+
+// ResetIntegration brings the integration worktree to a known-clean state on
+// branch's tip: aborts any in-flight merge (silently ignored when no merge is
+// in progress), hard-resets to branch, removes untracked files (including
+// gitignored ones via -x).
+//
+// Called on every MergeBack entry. The integration worktree is owned by
+// dispatch — no user state ever lives there — so the broad clean is safe.
+// Recovers from a prior run that crashed mid-merge (stale MERGE_HEAD + dirty
+// index) without operator intervention.
+func ResetIntegration(ctx context.Context, path, branch string) error {
+	_ = runGit(ctx, path, "merge", "--abort")
+	if err := runGit(ctx, path, "reset", "--hard", branch); err != nil {
+		return fmt.Errorf("resetting integration worktree at %q: %w", path, err)
+	}
+	if err := runGit(ctx, path, "clean", "-fdx"); err != nil {
+		return fmt.Errorf("cleaning integration worktree at %q: %w", path, err)
+	}
+	return nil
+}
+
 // resolveBase returns the directory under which {repoName}-wt/{slug}/{leaf}
 // is anchored. Inputs:
 //

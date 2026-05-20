@@ -14,8 +14,9 @@ import (
 )
 
 // makeMergeableBranch creates a branch off integration with one new committed
-// file so MergeBack's `git merge --no-ff` succeeds without conflict. It leaves
-// the parent worktree checked out on integrationBranch with a clean state.
+// file so MergeBack's `git merge --no-ff` succeeds without conflict. The parent
+// worktree is left on `main` so MergeBack's integration worktree can claim
+// integrationBranch without contending with the parent.
 func makeMergeableBranch(t *testing.T, root, integrationBranch, branch, file string) {
 	t.Helper()
 	for _, args := range [][]string{
@@ -30,7 +31,7 @@ func makeMergeableBranch(t *testing.T, root, integrationBranch, branch, file str
 	for _, args := range [][]string{
 		{"add", file},
 		{"commit", "-m", "feature"},
-		{"checkout", integrationBranch},
+		{"checkout", "main"},
 	} {
 		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
@@ -48,9 +49,6 @@ func TestDispatcher_MergeBack_CASMismatchSurfaces(t *testing.T) {
 	d := newDispatcher(fix)
 	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
-
-	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
-	require.NoError(t, err, "checkout: %s", string(out))
 
 	makeMergeableBranch(t, fix.root, integrationBranch, "feat/1-alpha", "alpha.txt")
 
@@ -74,9 +72,6 @@ func TestDispatcher_MergeBack_AlreadyInStateSwallowed(t *testing.T) {
 	d := newDispatcher(fix)
 	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
 	require.NoError(t, err)
-
-	out, err := exec.Command("git", "-C", fix.root, "checkout", integrationBranch).CombinedOutput()
-	require.NoError(t, err, "checkout: %s", string(out))
 
 	makeMergeableBranch(t, fix.root, integrationBranch, "feat/1-alpha", "alpha.txt")
 

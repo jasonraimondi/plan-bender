@@ -339,6 +339,130 @@ func TestResolveBase(t *testing.T) {
 	}
 }
 
+// TestCreateIntegration_AttachesAtExpectedPath asserts the integration worktree
+// lands at {parent}/{repo}-wt/{slug}/_integration on branch {user}/{slug}.
+func TestCreateIntegration_AttachesAtExpectedPath(t *testing.T) {
+	root := initRepo(t)
+
+	// Pre-create the integration branch (caller responsibility).
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	res, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	require.Equal(t, "tester/auth", res.Branch)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(root))
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(parent, "repo-wt", "auth", "_integration"), res.Path)
+
+	info, err := os.Stat(res.Path)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
+
+	listOut, err := exec.Command("git", "-C", root, "worktree", "list", "--porcelain").Output()
+	require.NoError(t, err)
+	require.Contains(t, string(listOut), res.Path)
+	require.Contains(t, string(listOut), "branch refs/heads/tester/auth")
+}
+
+func TestCreateIntegration_IdempotentOnRepeatCall(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	first, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+	second, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+	require.Equal(t, first.Path, second.Path)
+	require.Equal(t, first.Branch, second.Branch)
+}
+
+func TestCreateIntegration_HonorsWorktreeBase(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	custom := t.TempDir()
+	res, err := CreateIntegration(context.Background(), root, config.Config{WorktreeBase: custom}, "auth")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(custom, "repo-wt", "auth", "_integration"), res.Path)
+}
+
+// TestCreateIntegration_ConflictsWhenBranchCheckedOutElsewhere ensures we don't
+// silently produce a second worktree on the same branch in a non-canonical
+// location. The user (or a buggy run) might have moved/created one manually;
+// surfacing the conflict is preferable to forking history.
+func TestCreateIntegration_ConflictsWhenBranchCheckedOutElsewhere(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	elsewhere := filepath.Join(t.TempDir(), "wt-elsewhere")
+	out, err = exec.Command("git", "-C", root, "worktree", "add", elsewhere, "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git worktree add: %s", string(out))
+
+	_, err = CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already checked out")
+}
+
+// TestResetIntegration_AbortsInFlightMergeAndCleansDirtyTree asserts ResetIntegration
+// recovers a worktree pre-seeded with MERGE_HEAD + an untracked file. The merge
+// state goes away and the worktree is hard-reset to branch's tip.
+func TestResetIntegration_AbortsInFlightMergeAndCleansDirtyTree(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	// Resolve the worktree's git dir to write MERGE_HEAD.
+	gitDirOut, err := exec.Command("git", "-C", iwt.Path, "rev-parse", "--git-dir").Output()
+	require.NoError(t, err)
+	gitDir := strings.TrimSpace(string(gitDirOut))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(iwt.Path, gitDir)
+	}
+
+	// A real-ish merge head: point it at HEAD itself.
+	headSHA, err := exec.Command("git", "-C", iwt.Path, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "MERGE_HEAD"), headSHA, 0o644))
+
+	// Untracked dirty file in the worktree.
+	require.NoError(t, os.WriteFile(filepath.Join(iwt.Path, "dirty.txt"), []byte("garbage\n"), 0o644))
+
+	require.NoError(t, ResetIntegration(context.Background(), iwt.Path, iwt.Branch))
+
+	_, statErr := os.Stat(filepath.Join(gitDir, "MERGE_HEAD"))
+	require.True(t, os.IsNotExist(statErr), "MERGE_HEAD must be cleared")
+
+	_, statErr = os.Stat(filepath.Join(iwt.Path, "dirty.txt"))
+	require.True(t, os.IsNotExist(statErr), "untracked file must be cleaned")
+
+	// Worktree must still be on the integration branch.
+	sym, err := exec.Command("git", "-C", iwt.Path, "symbolic-ref", "--short", "HEAD").Output()
+	require.NoError(t, err)
+	require.Equal(t, iwt.Branch, strings.TrimSpace(string(sym)))
+}
+
+// TestResetIntegration_NoOpOnFreshWorktree ensures ResetIntegration on a clean
+// worktree (no MERGE_HEAD, nothing dirty) returns nil without error. The
+// `git merge --abort` path is silently ignored.
+func TestResetIntegration_NoOpOnFreshWorktree(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	require.NoError(t, ResetIntegration(context.Background(), iwt.Path, iwt.Branch))
+}
+
 func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {
 	if !filepath.IsAbs(t.TempDir()) {
 		t.Skip("expects absolute tempdir")
