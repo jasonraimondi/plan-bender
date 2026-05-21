@@ -573,6 +573,41 @@ func TestResetIntegration_NoOpOnFreshWorktree(t *testing.T) {
 	require.NoError(t, ResetIntegration(context.Background(), iwt.Path, iwt.Branch))
 }
 
+// TestResetIntegration_DiscardsTrackedFileModifications pins the `reset --hard`
+// step: a crashed run can leave staged/unstaged edits to TRACKED files, which
+// neither `merge --abort` (no merge in flight) nor `clean -fdx` (untracked only)
+// would undo. Only the hard reset restores them. Deleting the reset line leaves
+// the corrupted content in place and fails this test.
+func TestResetIntegration_DiscardsTrackedFileModifications(t *testing.T) {
+	root := initRepo(t)
+
+	// Commit a tracked file, then fork the integration branch off it.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("original\n"), 0o644))
+	for _, args := range [][]string{
+		{"-C", root, "add", "tracked.txt"},
+		{"-C", root, "commit", "-m", "add tracked"},
+		{"-C", root, "branch", "tester/auth"},
+	} {
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+
+	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	// Corrupt the tracked file in the worktree: one unstaged edit, one staged.
+	require.NoError(t, os.WriteFile(filepath.Join(iwt.Path, "tracked.txt"), []byte("CORRUPTED\n"), 0o644))
+	out, err := exec.Command("git", "-C", iwt.Path, "add", "tracked.txt").CombinedOutput()
+	require.NoError(t, err, "git add: %s", string(out))
+	require.NoError(t, os.WriteFile(filepath.Join(iwt.Path, "tracked.txt"), []byte("CORRUPTED AGAIN\n"), 0o644))
+
+	require.NoError(t, ResetIntegration(context.Background(), iwt.Path, iwt.Branch))
+
+	got, err := os.ReadFile(filepath.Join(iwt.Path, "tracked.txt"))
+	require.NoError(t, err)
+	require.Equal(t, "original\n", string(got), "reset --hard must restore the tracked file to branch tip")
+}
+
 func TestCreate_ReturnsErrorWhenGitMissing(t *testing.T) {
 	if !filepath.IsAbs(t.TempDir()) {
 		t.Skip("expects absolute tempdir")
