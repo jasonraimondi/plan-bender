@@ -33,7 +33,7 @@ pb setup --linear       # also configure Linear backend
 pb setup --yes          # non-interactive
 ```
 
-Re-run after config changes; it regenerates skills and re-symlinks. If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set `manage_gitignore: false` to keep `pb setup` from touching `.gitignore`.
+Re-run after config changes; it regenerates skills and re-symlinks. It also backfills a `$schema` reference into existing config files that lack one. If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set `manage_gitignore: false` to keep `pb setup` from touching `.gitignore`.
 
 ## Human CLI (`pb`)
 

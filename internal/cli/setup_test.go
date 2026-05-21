@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,6 +102,37 @@ func TestSetup_ExistingConfigSkipsWrite(t *testing.T) {
 	output := h.output()
 	assert.Contains(t, output, "Config:  .plan-bender.json (exists)")
 	assert.NotContains(t, output, "(created)")
+}
+
+func TestSetup_BackfillsSchemaIntoExistingConfig(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfgPath := filepath.Join(dir, ".plan-bender.json")
+	require.NoError(t, os.WriteFile(
+		cfgPath,
+		[]byte("{\n  \"agents\": {\n    \"claude-code\": true\n  },\n  \"plans_dir\": \"./.plan-bender/plans/\"\n}\n"),
+		0o644,
+	))
+
+	h := testSetupCmd(setupDeps{})
+	require.NoError(t, h.execute())
+
+	data, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "\"$schema\": \""+config.SchemaURL+"\"", "missing $schema should be backfilled")
+	assert.Contains(t, content, `"plans_dir"`, "existing keys must be preserved")
+	assert.Less(t, strings.Index(content, "$schema"), strings.Index(content, "agents"), "$schema should be inserted first")
+	assert.Contains(t, h.output(), "Schema:  added $schema to .plan-bender.json")
+
+	// Re-running must not duplicate the key.
+	h2 := testSetupCmd(setupDeps{})
+	require.NoError(t, h2.execute())
+	again, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(again), "$schema"), "re-run must not duplicate $schema")
+	assert.NotContains(t, h2.output(), "Schema:  added", "no-op run should not report a schema change")
 }
 
 func TestSetup_LocalConfigOnlySkipsProjectCreation(t *testing.T) {

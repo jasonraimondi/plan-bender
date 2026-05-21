@@ -83,6 +83,24 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		}
 	}
 
+	// Backfill the $schema reference into pre-existing config files so editors
+	// pick up validation/autocomplete. A freshly-created file already has it.
+	var schemaAdded []string
+	if !created {
+		for _, p := range []string{cfgPath, localPath} {
+			if _, err := os.Stat(p); err != nil {
+				continue
+			}
+			added, err := ensureSchemaField(p)
+			if err != nil {
+				return err
+			}
+			if added {
+				schemaAdded = append(schemaAdded, filepath.Base(p))
+			}
+		}
+	}
+
 	if useLinear {
 		if err := setupLinear(root, deps, yes); err != nil {
 			return err
@@ -123,6 +141,10 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		fmt.Fprintf(out, "         local overrides stay in .plan-bender.local.json.\n")
 	default:
 		fmt.Fprintf(out, "Config:  .plan-bender.json (exists)\n")
+	}
+
+	if len(schemaAdded) > 0 {
+		fmt.Fprintf(out, "Schema:  added $schema to %s\n", strings.Join(schemaAdded, ", "))
 	}
 
 	if cfg.Linear.Enabled {
@@ -226,6 +248,44 @@ func configFileMode(path string) os.FileMode {
 		return 0o600
 	}
 	return 0o644
+}
+
+// ensureSchemaField backfills the "$schema" key into an existing config file
+// when missing, inserting it as the first key while preserving the rest of the
+// file's formatting and any unknown keys. Returns true when it wrote a change.
+func ensureSchemaField(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		// Not an object we can edit safely — leave it for the user to fix.
+		return false, nil
+	}
+	if _, ok := obj["$schema"]; ok {
+		return false, nil
+	}
+
+	field := fmt.Sprintf("%q: %q", "$schema", config.SchemaURL)
+	var out []byte
+	if len(obj) == 0 {
+		out = []byte("{\n  " + field + "\n}\n")
+	} else {
+		brace := bytes.IndexByte(data, '{')
+		if brace < 0 {
+			return false, nil
+		}
+		out = append(out, data[:brace+1]...)
+		out = append(out, "\n  "+field+","...)
+		out = append(out, data[brace+1:]...)
+	}
+
+	if err := backend.AtomicWrite(path, out, configFileMode(path)); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // mergeJSONFile reads an existing JSON file (or starts empty), deep-merges the updates, and writes back.

@@ -25,6 +25,7 @@
 | `pb docs --full` | Print full config reference |
 
 `pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
+It also backfills a `$schema` reference into existing config files that lack one (for editor validation/autocomplete).
 If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set
 `manage_gitignore: false` in config to prevent `pb setup` from modifying `.gitignore`.
 
