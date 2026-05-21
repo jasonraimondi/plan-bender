@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/schema/plan-bender.schema.json",
+  "title": "plan-bender config",
+  "description": "Configuration for plan-bender (.plan-bender.json / .plan-bender.local.json). Three layers are deep-merged, later wins: ~/.config/plan-bender/defaults.json, then .plan-bender.json, then .plan-bender.local.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URL of this JSON Schema, used by editors for validation and autocomplete."
+    },
+    "tracks": {
+      "type": "array",
+      "description": "Planning tracks issues are organized into.",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "default": ["intent", "experience", "data", "rules", "resilience"]
+    },
+    "workflow_states": {
+      "type": "array",
+      "description": "Ordered workflow states an issue moves through.",
+      "items": { "type": "string" },
+      "default": ["backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"]
+    },
+    "plans_dir": {
+      "type": "string",
+      "description": "Directory holding plan folders.",
+      "default": "./.plan-bender/plans/"
+    },
+    "worktree_base": {
+      "type": "string",
+      "description": "Base directory for git worktrees created during dispatch. Defaults to a sibling of the repo when unset."
+    },
+    "max_points": {
+      "type": "integer",
+      "description": "Maximum points allowed on a single issue.",
+      "minimum": 1,
+      "default": 3
+    },
+    "agents": {
+      "type": "object",
+      "description": "Coding agents to install skills for. Each value is `true`/`false` to enable/disable with registry defaults, or an object for per-agent overrides.",
+      "properties": {
+        "claude-code": { "$ref": "#/$defs/agentEntry" },
+        "opencode": { "$ref": "#/$defs/agentEntry" },
+        "openclaw": { "$ref": "#/$defs/agentEntry" },
+        "pi": { "$ref": "#/$defs/agentEntry" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/agentEntry" },
+      "default": { "claude-code": true }
+    },
+    "pipeline": {
+      "type": "object",
+      "description": "Dispatch/batch execution settings.",
+      "additionalProperties": false,
+      "properties": {
+        "skip": {
+          "type": "array",
+          "description": "Pipeline steps to skip.",
+          "items": { "type": "string" }
+        },
+        "branch_strategy": {
+          "type": "string",
+          "description": "How implementation branches are managed. 'integration' merges issue branches into one feature branch; 'direct' commits to a single branch.",
+          "enum": ["integration", "direct"],
+          "default": "integration"
+        },
+        "subprocess_timeout": {
+          "type": "string",
+          "description": "Go duration string capping each agent subprocess (e.g. \"30m\", \"1h30m\"). Empty defaults to 30m.",
+          "default": "30m"
+        },
+        "max_parallel": {
+          "type": "integer",
+          "description": "Max agent subprocesses run concurrently in a batch.",
+          "minimum": 1,
+          "default": 3
+        }
+      }
+    },
+    "issue_schema": {
+      "type": "object",
+      "description": "Extra fields available on issues.",
+      "additionalProperties": false,
+      "properties": {
+        "custom_fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/customField" }
+        }
+      }
+    },
+    "linear": {
+      "type": "object",
+      "description": "Linear integration. Put credentials in .plan-bender.local.json (gitignored). String values support $ENV_VAR expansion.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable syncing plans to Linear. Requires api_key and team."
+        },
+        "api_key": {
+          "type": "string",
+          "description": "Linear API key. Supports $ENV_VAR, e.g. \"$LINEAR_API_KEY\"."
+        },
+        "team": {
+          "type": "string",
+          "description": "Linear team id or key. Supports $ENV_VAR."
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Linear project id to sync into."
+        },
+        "status_map": {
+          "type": "object",
+          "description": "Maps plan-bender workflow states to Linear status names.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Shell commands run at dispatch lifecycle points.",
+      "additionalProperties": false,
+      "properties": {
+        "before_issue": { "type": "string", "description": "Command run before each issue." },
+        "after_issue": { "type": "string", "description": "Command run after each issue." },
+        "after_batch": { "type": "string", "description": "Command run after a batch completes." }
+      }
+    },
+    "update_check": {
+      "type": "boolean",
+      "description": "Check for new pb versions on run.",
+      "default": true
+    },
+    "manage_gitignore": {
+      "type": "boolean",
+      "description": "Let pb manage generated-skill entries in .gitignore.",
+      "default": false
+    },
+    "review_with_user": {
+      "type": "boolean",
+      "description": "Pause for human review during workflows.",
+      "default": false
+    },
+    "report_bugs": {
+      "type": "boolean",
+      "description": "Allow plan-bender to write bug/error report logs.",
+      "default": false
+    },
+    "interview_with_docs": {
+      "type": "boolean",
+      "description": "Include project docs when interviewing during planning.",
+      "default": false
+    }
+  },
+  "$defs": {
+    "agentEntry": {
+      "description": "true/false to enable/disable with registry defaults, or an object of per-agent overrides.",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether this agent is enabled. Defaults to true when the object form is used.",
+              "default": true
+            },
+            "project_dir": {
+              "type": "string",
+              "description": "Override the project-level skills directory."
+            },
+            "user_dir": {
+              "type": "string",
+              "description": "Override the user-level skills directory."
+            },
+            "scope": {
+              "type": "string",
+              "description": "Where skills may be installed.",
+              "enum": ["project-only", "user-only", "project-or-user"]
+            },
+            "gitignore_pattern": {
+              "type": "string",
+              "description": "Glob for generated skills added to .gitignore when manage_gitignore is on."
+            }
+          }
+        }
+      ]
+    },
+    "customField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name.",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "description": "Field value type.",
+          "enum": ["string", "number", "boolean", "enum"]
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the field is required on every issue.",
+          "default": false
+        },
+        "enum_values": {
+          "type": "array",
+          "description": "Allowed values when type is 'enum'. Required for enum fields.",
+          "items": { "type": "string" }
+        }
+      },
+      "if": {
+        "properties": { "type": { "const": "enum" } }
+      },
+      "then": {
+        "required": ["enum_values"],
+        "properties": {
+          "enum_values": { "minItems": 1 }
+        }
+      }
+    }
+  }
+}

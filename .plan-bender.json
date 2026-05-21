@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/schema/plan-bender.schema.json",
   "agents": {
     "claude-code": true,
     "pi": true
