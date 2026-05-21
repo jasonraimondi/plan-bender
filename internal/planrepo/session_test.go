@@ -71,16 +71,20 @@ func TestOpen_MalformedIssueErrors(t *testing.T) {
 	require.Contains(t, parseErr.File, "1-broken.json")
 }
 
+// A plan with a PRD but no issues/ dir yet (a freshly written PRD, before
+// decomposition) is valid: a missing issues dir means zero issues, not a
+// contract violation. Open must load it with an empty issue set.
 func TestOpen_NoIssuesDir(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
-	// Plan directory with PRD but no issues dir at all.
 	planDir := filepath.Join(plansDir, "no-issues")
 	require.NoError(t, mkdirAll(t, planDir))
 	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.json"), validPrd))
 
 	repo := NewProd(plansDir)
-	_, err := repo.Open("no-issues")
-	require.Error(t, err, "missing issues dir is a contract violation")
+	sess, err := repo.Open("no-issues")
+	require.NoError(t, err)
+	defer sess.Close()
+	assert.Empty(t, sess.Snapshot().Issues)
 }
 
 func TestClose_Idempotent(t *testing.T) {

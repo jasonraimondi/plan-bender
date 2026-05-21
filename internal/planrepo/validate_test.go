@@ -23,6 +23,24 @@ func TestPlansValidate_ValidPlan(t *testing.T) {
 	assert.Empty(t, res.Issues[0].Errors)
 }
 
+// A freshly written PRD has no issues/ dir until decomposition. A missing
+// issues/ dir means zero issues, not a load failure: validate must report the
+// plan as valid with no issues rather than erroring with "listing issues ...
+// no such file or directory".
+func TestPlansValidate_PrdWithoutIssuesDirIsValid(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	planDir := filepath.Join(plansDir, "fresh")
+	require.NoError(t, mkdirAll(t, planDir))
+	require.NoError(t, writeFile(t, filepath.Join(planDir, "prd.json"), validPrd))
+
+	repo := NewProd(plansDir)
+	res := repo.Validate("fresh", testCfg())
+
+	assert.True(t, res.Valid)
+	assert.Empty(t, res.PRD.Errors)
+	assert.Empty(t, res.Issues)
+}
+
 func TestPlansValidate_MissingPlan_SurfacesAsPrdError(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 

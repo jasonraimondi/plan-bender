@@ -2,6 +2,14 @@
 
 All notable changes to plan-bender are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); plan-bender is pre-1.0 so breaking changes ship in patch releases until v1.
 
+## Unreleased
+
+### Fixed
+
+- `write-prd` now creates the PRD even when the slug directory already exists without a `prd.json` (e.g. an empty/leftover dir from a prior partial run). Previously `OpenOrCreate` treated any existing slug dir as loadable and failed with `reading prd {slug}/prd.json: no such file or directory`. A directory that holds an `issues/` tree but no `prd.json` is still surfaced as a loud half-built error.
+- A plan with a `prd.json` but no `issues/` directory (a freshly written PRD, before decomposition) now loads and validates as a plan with zero issues, instead of failing with `listing issues in {slug}/issues: no such file or directory`.
+- `write-prd` / `write-issue` now accept `-` as the file argument to mean "read from stdin", matching the common Unix convention. Previously `-` was treated as a literal filename.
+
 ## v0.0.52
 
 ### Added

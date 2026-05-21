@@ -40,6 +40,31 @@ func TestOpenOrCreate_ExistingPlanLoadsSnapshot(t *testing.T) {
 	require.Len(t, sess.Snapshot().Issues, 1)
 }
 
+// An empty or leftover slug directory — no prd.json and no issues/ dir — is
+// effectively fresh. OpenOrCreate must let the caller stage a brand-new PRD
+// instead of trying (and failing) to load a prd.json that was never written.
+// Regression for write-prd refusing to create when the slug dir already
+// existed.
+func TestOpenOrCreate_EmptyLeftoverDirTreatedAsFresh(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "leftover"), 0o755))
+
+	repo := NewProd(plansDir)
+	sess, err := repo.OpenOrCreate("leftover")
+	require.NoError(t, err)
+	defer sess.Close()
+
+	assert.Empty(t, sess.Snapshot().PRD.Name)
+	assert.Empty(t, sess.Snapshot().Issues)
+
+	require.NoError(t, sess.UpdatePrd(mustValidPRD("leftover")))
+	require.NoError(t, sess.Commit(testCfg()))
+
+	body, err := os.ReadFile(filepath.Join(plansDir, "leftover", "prd.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"name": "Fresh Plan"`)
+}
+
 func TestOpenOrCreate_HalfBuiltPlanDirReturnsLoadError(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	require.NoError(t, os.MkdirAll(filepath.Join(plansDir, "broken", "issues"), 0o755))

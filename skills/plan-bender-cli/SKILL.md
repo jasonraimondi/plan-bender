@@ -79,7 +79,7 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 | `pba status <slug>` | `{plan, issues}` per-issue id, status, labels, branch, notes |
 | `pba retry <slug> <id>` | `{status, id, slug, new_status}`; refuses non-`blocked` status |
 
-`write-prd` / `write-issue` read from stdin when no file is given.
+`write-prd` / `write-issue` read from stdin when no file is given (or when the file arg is `-`).
 
 ## Dispatch lifecycle
 

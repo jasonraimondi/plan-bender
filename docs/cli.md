@@ -51,7 +51,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 | `plan-bender-agent status <slug>` | JSON `{plan, issues}` — per-issue id, status, labels, branch, full notes |
 | `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] blocked→todo: retry` note. Refuses non-blocked status. |
 
-`write-prd` and `write-issue` read from stdin when no file is given.
+`write-prd` and `write-issue` read from stdin when no file is given (or when the file arg is `-`).
 
 ## Dispatch lifecycle
 

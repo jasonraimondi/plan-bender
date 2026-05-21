@@ -131,6 +131,12 @@ func loadIssues(fsys fs.FS, slug string) ([]schema.Issue, []string, error) {
 	issuesDir := filepath.Join(slug, "issues")
 	entries, err := fs.ReadDir(fsys, issuesDir)
 	if err != nil {
+		// A plan with a prd.json but no issues/ dir yet (a freshly written
+		// PRD before decomposition) simply has no issues — not an error. Any
+		// other read failure is real and propagates.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil, nil
+		}
 		return nil, nil, fmt.Errorf("listing issues in %s: %w", issuesDir, err)
 	}
 

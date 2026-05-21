@@ -109,6 +109,47 @@ func TestWritePrd_HeredocPipe(t *testing.T) {
 	assert.Contains(t, string(written), `"outcome": "Success"`)
 }
 
+// Regression for the reported bug: write-prd refused to create a PRD when the
+// slug directory already existed without a prd.json (an empty/leftover dir
+// left by a prior partial run). It must create the PRD whether or not the dir
+// already exists.
+func TestWritePrd_CreatesIntoExistingEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans", "test"), 0o755))
+
+	cmd := NewWritePrdCmd()
+	cmd.SetArgs([]string{"test"})
+	cmd.SetIn(strings.NewReader(writePrdSample))
+	var out, errBuf strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	require.NoError(t, cmd.Execute(), "stderr: %s", errBuf.String())
+
+	assert.Contains(t, out.String(), "wrote")
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test", "prd.json"))
+	assert.NoError(t, err)
+}
+
+// A "-" file argument means read stdin, not open a file literally named "-".
+// Regression for `write-prd <slug> -` failing with "open -: no such file".
+func TestWritePrd_DashFileArgReadsStdin(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".plan-bender", "plans"), 0o755))
+
+	cmd := NewWritePrdCmd()
+	cmd.SetArgs([]string{"test", "-"})
+	cmd.SetIn(strings.NewReader(writePrdSample))
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+
+	assert.Contains(t, out.String(), "wrote")
+	_, err := os.Stat(filepath.Join(dir, ".plan-bender", "plans", "test", "prd.json"))
+	assert.NoError(t, err)
+}
+
 func TestWritePrd_StdinPipe(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

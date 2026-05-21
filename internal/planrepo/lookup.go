@@ -67,11 +67,18 @@ func normalizeSlug(plansDir, slug string) string {
 	return cleanedSlug
 }
 
-// planDirExists reports whether slug has any subtree at all under plansDir.
-func planDirExists(fsys fs.FS, slug string) bool {
-	info, err := fs.Stat(fsys, slug)
-	if err != nil {
+// planIsFresh reports whether slug holds no plan content yet: neither a
+// prd.json file nor an issues/ directory. A slug that is missing entirely, or
+// an empty/leftover directory, is fresh and safe to stage a brand-new PRD
+// into. A directory that has an issues/ tree but no prd.json is half-built —
+// not fresh — so the caller loads it and surfaces the load error rather than
+// silently treating orphaned issues as a new plan.
+func planIsFresh(fsys fs.FS, slug string) bool {
+	if _, err := fs.Stat(fsys, filepath.Join(slug, "prd.json")); err == nil {
 		return false
 	}
-	return info.IsDir()
+	if info, err := fs.Stat(fsys, filepath.Join(slug, "issues")); err == nil && info.IsDir() {
+		return false
+	}
+	return true
 }

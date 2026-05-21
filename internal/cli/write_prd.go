@@ -99,9 +99,12 @@ func reportCommitError(cmd *cobra.Command, err error) error {
 }
 
 func readInput(cmd *cobra.Command, args []string) ([]byte, error) {
-	if len(args) > 0 {
+	if len(args) > 0 && args[0] != "-" {
 		return os.ReadFile(args[0])
 	}
+	// No file path, or an explicit "-", means read JSON from stdin. Reject an
+	// interactive terminal so the command fails fast instead of blocking on a
+	// read that never arrives.
 	if f, ok := cmd.InOrStdin().(*os.File); ok {
 		if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
 			return nil, fmt.Errorf("no input — pipe JSON or pass a file path")

@@ -70,19 +70,20 @@ func (p *Plans) OpenContext(ctx context.Context, slug string) (*PlanSession, err
 	}, nil
 }
 
-// OpenOrCreate behaves like Open when the plan exists. When the plan
-// directory is missing entirely, it returns a session with an empty in-session
-// snapshot so callers can stage a fresh PRD and Commit. A plan dir that exists
-// but is incomplete (missing prd.json or issues dir) still returns the load
-// error from Open so half-written state surfaces loudly rather than silently
-// being treated as fresh.
+// OpenOrCreate behaves like Open when the plan exists. When the slug holds no
+// plan content yet — missing entirely, or an empty/leftover directory with no
+// prd.json and no issues/ dir — it returns a session with an empty in-session
+// snapshot so callers can stage a fresh PRD and Commit. A directory that has an
+// issues/ tree but no prd.json is half-built and still returns the load error
+// from Open so orphaned state surfaces loudly rather than being treated as
+// fresh.
 func (p *Plans) OpenOrCreate(slug string) (*PlanSession, error) {
 	slug = normalizeSlug(p.plansDir, slug)
 	release, err := p.adapters.Lock(context.Background(), p.plansDir)
 	if err != nil {
 		return nil, err
 	}
-	if !planDirExists(p.adapters.FS, slug) {
+	if planIsFresh(p.adapters.FS, slug) {
 		return &PlanSession{
 			plans:             p,
 			slug:              slug,
