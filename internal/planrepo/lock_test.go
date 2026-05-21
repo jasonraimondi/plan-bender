@@ -57,8 +57,6 @@ func TestLockPlanDir_CanceledContextInterruptsHeldLock(t *testing.T) {
 	}
 }
 
-// TestTryFlock_UncontendedAcquiresImmediately asserts an uncontended lock is
-// taken on the first attempt and a release closure is returned.
 func TestTryFlock_UncontendedAcquiresImmediately(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "x.lock")
 
@@ -85,8 +83,6 @@ func TestTryFlock_ContendedReturnsErrLockedFast(t *testing.T) {
 	require.Less(t, time.Since(start), 500*time.Millisecond, "contended TryFlock must not poll")
 }
 
-// TestTryFlock_ReleaseAllowsReacquisition proves the release closure unwinds
-// the lock so a subsequent caller can take it.
 func TestTryFlock_ReleaseAllowsReacquisition(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.lock")
 

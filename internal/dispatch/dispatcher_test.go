@@ -799,7 +799,6 @@ func TestDispatcher_MergeBackRecoversFromStaleMergeState(t *testing.T) {
 
 	require.NoError(t, timeBoxRun(t, d, "demo", 15*time.Second))
 
-	// MERGE_HEAD cleared, garbage file removed.
 	_, statErr := os.Stat(filepath.Join(gitDir, "MERGE_HEAD"))
 	assert.True(t, os.IsNotExist(statErr), "MERGE_HEAD must be cleared by ResetIntegration")
 	_, statErr = os.Stat(filepath.Join(iwt.Path, "garbage.txt"))
