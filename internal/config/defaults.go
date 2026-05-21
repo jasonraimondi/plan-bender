@@ -13,7 +13,6 @@ func StarterConfig() PartialConfig {
 		PlansDir: &plansDir,
 		Agents: map[string]*AgentEntry{
 			"claude-code": {Enabled: true},
-			"pi":          {Enabled: true},
 		},
 	}
 }
