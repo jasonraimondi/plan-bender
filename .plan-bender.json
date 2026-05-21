@@ -5,5 +5,6 @@
     "pi": true
   },
   "plans_dir": "./.plan-bender/plans/",
-  "report_bugs": true
+  "report_bugs": true,
+  "interview_with_docs": true
 }
