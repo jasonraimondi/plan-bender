@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jasonraimondi/plan-bender/internal/config"
 )
 
 // WorktreeResult is the output of Create.
@@ -33,7 +36,7 @@ type WorktreeResult struct {
 //
 // ctx cancels in-flight git plumbing so Ctrl-C during dispatch tears down
 // pending child processes instead of leaking them.
-func Create(ctx context.Context, root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
+func Create(ctx context.Context, cfg config.Config, root, slug string, issueID int, issueSlug, baseRef string) (WorktreeResult, error) {
 	user, err := gitUser(ctx, root)
 	if err != nil {
 		return WorktreeResult{}, err
@@ -47,11 +50,11 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 	// ref-hierarchy clash with the integration branch named {user}/{slug}.
 	branch := fmt.Sprintf("%s/%s--%d-%s", user, slug, issueID, issueSlug)
 	repoName := filepath.Base(root)
-	parent := filepath.Dir(root)
-	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
-		parent = resolved
+	base, err := resolveBase(cfg, root)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("resolving worktree base: %w", err)
 	}
-	path := filepath.Join(parent, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
+	path := filepath.Join(base, repoName+"-wt", slug, fmt.Sprintf("%d-%s", issueID, issueSlug))
 
 	branchExists, err := branchExists(ctx, root, branch)
 	if err != nil {
@@ -85,6 +88,108 @@ func Create(ctx context.Context, root, slug string, issueID int, issueSlug, base
 	return WorktreeResult{Path: path, Branch: branch}, nil
 }
 
+// CreateIntegration lazy-creates a per-slug integration worktree at
+// {worktree_base}/{repoName}-wt/{slug}/_integration on branch {user}/{slug}.
+// The integration branch must already exist (caller responsibility — typically
+// dispatch's ensureIntegrationBranch). CreateIntegration only attaches a worktree
+// to it. Idempotent: if a worktree at the expected path already holds the branch,
+// the existing pair is returned. If the branch is checked out elsewhere, an
+// error surfaces so a misconfigured layout doesn't silently produce two iwts.
+func CreateIntegration(ctx context.Context, root string, cfg config.Config, slug string) (WorktreeResult, error) {
+	user, err := gitUser(ctx, root)
+	if err != nil {
+		return WorktreeResult{}, err
+	}
+	branch := fmt.Sprintf("%s/%s", user, slug)
+	repoName := filepath.Base(root)
+	base, err := resolveBase(cfg, root)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("resolving worktree base: %w", err)
+	}
+	path := filepath.Join(base, repoName+"-wt", slug, "_integration")
+
+	existingPath, err := worktreePathForBranch(ctx, root, branch)
+	if err != nil {
+		return WorktreeResult{}, fmt.Errorf("inspecting worktrees: %w", err)
+	}
+	if existingPath != "" {
+		// A worktree whose directory vanished out-of-band (manual rm, evicted
+		// tmpdir) keeps appearing in `git worktree list`, branch line and all,
+		// flagged prunable. Returning that path would hand ResetIntegration a
+		// `git -C <missing>` that aborts the whole dispatch, so stat it: if the
+		// directory is gone, prune the stale entry and fall through to recreate.
+		if _, statErr := os.Stat(existingPath); statErr == nil {
+			if existingPath != path {
+				return WorktreeResult{}, fmt.Errorf("integration branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
+			}
+			return WorktreeResult{Path: existingPath, Branch: branch}, nil
+		} else if !os.IsNotExist(statErr) {
+			return WorktreeResult{}, fmt.Errorf("stat integration worktree %q: %w", existingPath, statErr)
+		}
+		if err := runGit(ctx, root, "worktree", "prune"); err != nil {
+			return WorktreeResult{}, fmt.Errorf("pruning stale integration worktree: %w", err)
+		}
+	}
+
+	if err := runGit(ctx, root, "worktree", "add", path, branch); err != nil {
+		return WorktreeResult{}, fmt.Errorf("creating integration worktree at %q: %w", path, err)
+	}
+	return WorktreeResult{Path: path, Branch: branch}, nil
+}
+
+// ResetIntegration brings the integration worktree to a known-clean state on
+// branch's tip: aborts any in-flight merge (silently ignored when no merge is
+// in progress), hard-resets to branch, removes untracked files (including
+// gitignored ones via -x).
+//
+// Called on every MergeBack entry. The integration worktree is owned by
+// dispatch — no user state ever lives there — so the broad clean is safe.
+// Recovers from a prior run that crashed mid-merge (stale MERGE_HEAD + dirty
+// index) without operator intervention.
+func ResetIntegration(ctx context.Context, path, branch string) error {
+	_ = runGit(ctx, path, "merge", "--abort")
+	if err := runGit(ctx, path, "reset", "--hard", branch); err != nil {
+		return fmt.Errorf("resetting integration worktree at %q: %w", path, err)
+	}
+	if err := runGit(ctx, path, "clean", "-fdx"); err != nil {
+		return fmt.Errorf("cleaning integration worktree at %q: %w", path, err)
+	}
+	return nil
+}
+
+// resolveBase returns the directory under which {repoName}-wt/{slug}/{leaf}
+// is anchored. Inputs:
+//
+//   - "" → repo's parent directory (legacy layout). EvalSymlinks'd so
+//     downstream string-equality checks against `git worktree list` match.
+//   - absolute path → returned as-is.
+//   - "~/..." → expanded against the user's home directory.
+//   - "./..." or any other relative path → joined with repoRoot.
+func resolveBase(cfg config.Config, repoRoot string) (string, error) {
+	b := strings.TrimSpace(cfg.WorktreeBase)
+	if b == "" {
+		parent := filepath.Dir(repoRoot)
+		if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+			parent = resolved
+		}
+		return parent, nil
+	}
+	if strings.HasPrefix(b, "~/") || b == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("expanding ~ in worktree_base: %w", err)
+		}
+		if b == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, b[2:]), nil
+	}
+	if filepath.IsAbs(b) {
+		return b, nil
+	}
+	return filepath.Join(repoRoot, b), nil
+}
+
 // branchExists reports whether refs/heads/<name> resolves in root.
 func branchExists(ctx context.Context, root, name string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
@@ -114,18 +219,34 @@ func worktreePathForBranch(ctx context.Context, root, branch string) (string, er
 }
 
 // GC removes plan-bender worktrees whose branch matches {user}/{slug}--.
+// When includeIntegration is true, the per-slug integration worktree on
+// branch {user}/{slug} (no `--` suffix) is also a candidate; dispatch passes
+// true only on the AllDone exit path so an in-flight or HITL-only run
+// preserves the iwt for resumption. The CLI `pba worktree gc` always passes
+// true — operators invoke it to clean up everything.
 //
 // `safe` filters which branches GC may delete: pass an explicit set to allow
 // only those branches (e.g. branches confirmed merged into integration); pass
 // nil to consider every matching branch a candidate. Either way, GC uses the
-// non-forcing forms of `worktree remove` and `branch -d`, so a worktree with
-// uncommitted changes or a branch whose commits aren't reachable from current
-// HEAD is preserved with a warning. Caller is expected to invoke GC while HEAD
-// is on the integration branch so `branch -d`'s reachability check matches.
+// non-forcing form of `branch -d`, so a branch whose commits aren't reachable
+// from current HEAD is preserved with a warning. Caller is expected to invoke
+// GC while HEAD is on the integration branch so `branch -d`'s reachability
+// check matches.
+//
+// The integration worktree is removed when includeIntegration is true, but its
+// branch is the plan's deliverable: at AllDone it hasn't been merged to the
+// default branch, so `branch -d` correctly refuses and the branch is preserved
+// (an informational line, not a warning). It is deleted only once the operator
+// has merged it and re-runs GC from a HEAD that reaches it.
+//
+// `worktree remove` is non-forcing for issue worktrees (uncommitted changes
+// are preserved) but forcing for the integration worktree, which is
+// dispatch-owned: linkPlansDir leaves untracked symlinks the non-forcing form
+// would refuse to remove, and no user state ever lives there to lose.
 //
 // Returns the list of paths actually removed. `out` receives one line per
 // preserved entry; pass io.Discard to silence.
-func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Writer) ([]string, error) {
+func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Writer, includeIntegration bool) ([]string, error) {
 	if out == nil {
 		out = io.Discard
 	}
@@ -134,6 +255,7 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 		return nil, err
 	}
 	prefix := fmt.Sprintf("%s/%s--", user, slug)
+	integrationBranch := fmt.Sprintf("%s/%s", user, slug)
 
 	entries, err := listWorktrees(ctx, root)
 	if err != nil {
@@ -142,19 +264,35 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 
 	var removed []string
 	for _, e := range entries {
-		if !strings.HasPrefix(e.branch, prefix) {
+		isIntegration := includeIntegration && e.branch == integrationBranch
+		isIssue := strings.HasPrefix(e.branch, prefix)
+		if !isIssue && !isIntegration {
 			continue
 		}
-		if safe != nil && !safe[e.branch] {
+		// safe-set filtering applies only to issue branches: the set represents
+		// "branches confirmed merged into integration", a concept that has no
+		// meaning for the integration branch itself.
+		if isIssue && safe != nil && !safe[e.branch] {
 			fmt.Fprintf(out, "preserving worktree %q (branch %q not in safe set; recover manually)\n", e.path, e.branch)
 			continue
 		}
-		if err := runGit(ctx, root, "worktree", "remove", e.path); err != nil {
+		removeArgs := []string{"worktree", "remove", e.path}
+		if isIntegration {
+			removeArgs = []string{"worktree", "remove", "--force", e.path}
+		}
+		if err := runGit(ctx, root, removeArgs...); err != nil {
 			fmt.Fprintf(out, "preserving worktree %q (uncommitted changes or removal failed): %v\n", e.path, err)
 			continue
 		}
 		if err := runGit(ctx, root, "branch", "-d", e.branch); err != nil {
-			fmt.Fprintf(out, "preserving branch %q (not merged from HEAD): %v\n", e.branch, err)
+			// For the integration branch, `branch -d` refusing is expected, not an
+			// anomaly (see GC doc): preserve it as the deliverable without the
+			// git-error noise.
+			if isIntegration {
+				fmt.Fprintf(out, "integration branch %q preserved (holds the plan's merged work; review and merge it, then `pba worktree gc %s`)\n", e.branch, slug)
+			} else {
+				fmt.Fprintf(out, "preserving branch %q (not merged from HEAD): %v\n", e.branch, err)
+			}
 			continue
 		}
 		removed = append(removed, e.path)

@@ -46,7 +46,7 @@ Re-run after config changes; it regenerates skills and re-symlinks. If `.plan-be
 | `pb complete <slug> <id>` | Flip issue to `in-review` + emit dispatch sentinel |
 | `pb retry <slug> <id>` | Reset a `blocked` issue back to `todo` |
 | `pb worktree create <slug> <id>` | Branch + worktree for one issue |
-| `pb worktree gc <slug>` | Remove plan-bender worktrees + merged branches (keeps unmerged) |
+| `pb worktree gc <slug>` | Remove plan-bender worktrees + merged branches incl. the per-slug integration worktree (keeps unmerged) |
 | `pb sync linear push <slug>` | Local JSON → Linear |
 | `pb sync linear pull <slug>` | Linear → local JSON |
 | `pb migrate` | One-shot legacy `.yaml` → `.json` (supports `--dry-run`) |
@@ -75,7 +75,7 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 | `pba dispatch <slug>` | Autonomous loop (see below) |
 | `pba complete <slug> <id>` | Flip to `in-review` + emit `<pba:complete issue-id="N"/>` |
 | `pba worktree create <slug> <id>` | `{path, branch, status}` — status is post-claim (`in-progress`) |
-| `pba worktree gc <slug>` | `{removed: [...]}`; unmerged branches preserved, logged to stderr |
+| `pba worktree gc <slug>` | `{removed: [...]}`; cleans issue worktrees + per-slug integration worktree, unmerged branches preserved, logged to stderr |
 | `pba status <slug>` | `{plan, issues}` per-issue id, status, labels, branch, notes |
 | `pba retry <slug> <id>` | `{status, id, slug, new_status}`; refuses non-`blocked` status |
 
@@ -89,7 +89,7 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
    - `integration` (default) — `<git-user>/<slug>` off the repo default branch
    - `direct` — issue branches merge straight onto the default branch
    - `--base <ref>` overrides the auto-detected default. Any `git rev-parse` ref (local branch, `origin/x`, tag, SHA). Invalid refs error before any worktree is created. On a re-run, `--base` is **ignored with a warning** to avoid clobbering merged work.
-2. **Loop until done.** Reload issues from disk each iteration; if every issue is `done`/`canceled`, exit 0.
+2. **Loop until done.** Reload issues from disk each iteration; if every issue is `done`/`canceled`, GC the per-slug integration worktree along with any remaining issue worktrees and exit 0. HITL-only or error exits preserve the integration worktree for resumption.
 3. **Compute AFK batch** (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
 4. **HITL fallback**: if no batch and only HITL issues remain, print a summary and exit 2. Resolve with `/bender-implement-hitl <slug>`.
 5. **Per issue in the batch**: create worktree → atomically claim (`status: in-progress` + `branch:` written through a canonical struct round-trip) → `before_issue` hook → spawn `claude --print` in the worktree → `after_issue` hook.

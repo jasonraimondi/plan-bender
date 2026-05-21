@@ -32,6 +32,7 @@ All available keys with their default values:
 ```json
 {
   "plans_dir": "./.plan-bender/plans/",
+  "worktree_base": "",
   "max_points": 3,
   "agents": {
     "claude-code": true,
@@ -76,6 +77,11 @@ All available keys with their default values:
 
 Field notes:
 
+- `worktree_base` — directory under which dispatch creates per-issue and per-slug integration worktrees. Layout is `{worktree_base}/{repoName}-wt/{slug}/{leaf}`; the `-wt` segment namespaces by repo so a single base shared across clones doesn't collide. Accepted shapes:
+  - `""` (default) — repo's parent directory, preserving the legacy `{repoParent}/{repoName}-wt/...` layout. Zero migration for existing users.
+  - absolute path, e.g. `"/Users/me/code/wt"` — used as-is.
+  - `~`-prefixed, e.g. `"~/code/wt"` — expanded against `$HOME` at load time.
+  - relative, e.g. `"./.worktrees"` — resolved against the repo root.
 - `max_points` — cap per issue; forces thin slices.
 - `agents` — bool toggles registry defaults; or use object form for per-agent overrides (`project_dir`, `scope`, ...). Supported: `claude-code`, `opencode`, `openclaw`, `pi`.
 - `pipeline.skip` — skill names to exclude, e.g. `["bender-interview-me"]`.
@@ -84,7 +90,7 @@ Field notes:
 - `pipeline.max_parallel` — cap on concurrent `claude` subprocesses inside one `dispatch` batch. Default `3`. Each subprocess is heavy (model API + MCP servers + a git worktree). Must be at least `1`.
 - `hooks.before_issue` — runs in the worktree dir before each subprocess; non-zero exit blocks the issue and skips the subprocess.
 - `hooks.after_issue` — runs in the worktree dir after each subprocess; failures are logged but do not change issue status.
-- `hooks.after_batch` — runs in the repo root after merge-back; non-fatal.
+- `hooks.after_batch` — runs after merge-back with cwd set to the per-slug integration worktree (the merged commits are checked out there); non-fatal. **Breaking change** from earlier versions, which ran it in the parent repo root.
 - `issue_schema.custom_fields` — add required fields to every issue. Example: `{"name": "team", "type": "enum", "required": true, "enum_values": ["frontend", "backend", "platform"]}`.
 - `manage_gitignore` — when `true`, `pb setup` manages `.plan-bender/`, `.plan-bender.local.json`, and agent skill patterns in `.gitignore`. When `false`, `pb doctor` still warns if `.plan-bender.local.json` is not gitignored.
 - `linear` — put credentials in `.plan-bender.local.json` and load from an env file (e.g. direnv). `$VAR` and `${VAR}` are expanded at load time. `status_map` maps local `workflow_states` to Linear state names.

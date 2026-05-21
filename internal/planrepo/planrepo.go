@@ -13,6 +13,7 @@ package planrepo
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"time"
 )
@@ -22,6 +23,10 @@ import (
 // attempt succeeds — so this only caps acquisition latency once another
 // holder actually owns the lock.
 const lockPollInterval = 20 * time.Millisecond
+
+// ErrLocked is returned by TryFlock when the lock is held by another caller.
+// Callers use errors.Is to distinguish contention from other I/O failures.
+var ErrLocked = errors.New("lock held")
 
 // WriteFunc writes data to an absolute path on disk.
 type WriteFunc func(path string, data []byte, perm fs.FileMode) error

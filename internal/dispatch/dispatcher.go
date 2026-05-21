@@ -155,6 +155,16 @@ func (d *Dispatcher) strategy() string {
 // Run executes the full dispatch loop until all_done or HITL-only.
 // Returns ErrHITLOnly when only human-input issues remain.
 func (d *Dispatcher) Run(ctx context.Context, slug string) error {
+	lockPath := filepath.Join(d.plansDir(), slug, ".dispatch.lock")
+	release, err := planrepo.TryFlock(lockPath)
+	if err != nil {
+		if errors.Is(err, planrepo.ErrLocked) {
+			return fmt.Errorf("dispatch already running for slug %q (lock: %s)", slug, lockPath)
+		}
+		return fmt.Errorf("acquiring dispatch lock for slug %q: %w", slug, err)
+	}
+	defer release()
+
 	integrationBranch, err := d.ensureIntegrationBranch(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("setting up integration branch: %w", err)
@@ -180,6 +190,14 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 
 		res := plan.Resolve(issues)
 		if res.AllDone {
+			// Final cleanup: remove the per-slug integration worktree along with
+			// any remaining issue worktrees. Runs from d.Root (not the iwt) so
+			// `git worktree remove` can target the iwt itself, and `branch -d`
+			// resolves reachability against the parent's HEAD — an unmerged
+			// integration branch is preserved with a warning rather than dropped.
+			if _, err := worktree.GC(ctx, d.Root, slug, nil, d.out(), true); err != nil {
+				return fmt.Errorf("final worktree gc: %w", err)
+			}
 			return nil
 		}
 
@@ -227,7 +245,7 @@ func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.
 
 func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {
 	d.gitMu.Lock()
-	wt, err := worktree.Create(ctx, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
+	wt, err := worktree.Create(ctx, d.Config, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
 	d.gitMu.Unlock()
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
@@ -295,44 +313,33 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 // order, flips merged issues to status=done, marks merge conflicts as blocked,
 // and finally cleans up the worktrees.
 //
-// To avoid silently leaving the user's working tree on the integration branch,
-// MergeBack captures the parent's HEAD before checkout and restores it on exit.
-// It refuses to run if the parent has uncommitted changes (the checkout would
-// either fail or leak changes onto the integration branch).
-func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) (err error) {
+// All git operations target a dedicated per-slug integration worktree at
+// {worktree_base}/{repoName}-wt/{slug}/_integration. The parent repo's HEAD is
+// never modified, so concurrent dispatchers against different slugs in the
+// same clone don't race on HEAD and the user can keep working in the parent
+// while dispatch runs. The integration worktree is reset on every entry
+// (merge --abort, hard reset, clean -fdx) so a prior run that crashed
+// mid-merge doesn't poison the next one.
+func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubResult, integrationBranch string) error {
 	successful := successfulInDepOrder(ctx, results, d.plansRepo(), slug)
 	if len(successful) == 0 {
-		// Nothing to merge — skip the dirty-check / HEAD swap so a dirty parent
-		// doesn't surface an error that masks the real (all-failed) cause. GC
-		// also short-circuits because no branch is in `merged`.
+		// Nothing to merge — skip the iwt setup so an all-failed batch doesn't
+		// pay the worktree-create cost. GC also short-circuits because no
+		// branch is in `merged`.
 		return nil
 	}
 
-	dirty, dirtyErr := worktreeDirty(ctx, d.Root)
-	if dirtyErr != nil {
-		return fmt.Errorf("checking parent worktree state: %w", dirtyErr)
-	}
-	if dirty {
-		return fmt.Errorf("refusing to merge: parent repo at %s has uncommitted changes; commit or stash before dispatch", d.Root)
-	}
-
-	origHEAD, err := captureHEAD(ctx, d.Root)
+	iwt, err := worktree.CreateIntegration(ctx, d.Root, d.Config, slug)
 	if err != nil {
-		return fmt.Errorf("capturing parent HEAD: %w", err)
+		return fmt.Errorf("creating integration worktree: %w", err)
 	}
-	defer func() {
-		// Use a fresh context so a canceled parent ctx (Ctrl-C) still gets the
-		// user's branch restored rather than leaving them on integration.
-		if restoreErr := restoreHEAD(context.Background(), d.Root, origHEAD); restoreErr != nil {
-			fmt.Fprintf(d.out(), "warning: failed to restore parent HEAD to %q: %v\n", origHEAD, restoreErr)
-			if err == nil {
-				err = fmt.Errorf("restoring parent HEAD to %q: %w", origHEAD, restoreErr)
-			}
-		}
-	}()
-
-	if err := runGit(ctx, d.Root, "checkout", integrationBranch); err != nil {
-		return fmt.Errorf("checking out %s: %w", integrationBranch, err)
+	if err := worktree.ResetIntegration(ctx, iwt.Path, integrationBranch); err != nil {
+		return fmt.Errorf("resetting integration worktree: %w", err)
+	}
+	// linkPlansDir runs AFTER ResetIntegration because `clean -fdx` would
+	// otherwise delete the symlinks just created.
+	if err := linkPlansDir(d.Root, iwt.Path, d.out()); err != nil {
+		return fmt.Errorf("linking plans dir into integration worktree: %w", err)
 	}
 
 	// Track which branches were successfully merged into integration; only those
@@ -340,9 +347,9 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 	// hold the only copy of committed work and must be preserved.
 	merged := make(map[string]bool, len(successful))
 	for _, r := range successful {
-		mergeOut, mergeErr := runGitOutput(ctx, d.Root, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
+		mergeOut, mergeErr := runGitOutput(ctx, iwt.Path, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
 		if mergeErr != nil {
-			_ = runGit(ctx, d.Root, "merge", "--abort")
+			_ = runGit(ctx, iwt.Path, "merge", "--abort")
 			d.markBlockedAndWarn(slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))
 			continue
 		}
@@ -355,55 +362,21 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 		}
 	}
 
-	if _, err := worktree.GC(ctx, d.Root, slug, merged, d.out()); err != nil {
+	// GC runs from the iwt so `branch -d`'s reachability check resolves against
+	// integration's HEAD (which now contains the merge commits), not the
+	// parent's HEAD (which is some unrelated user-facing branch). includeIntegration
+	// is false here — the iwt is the cwd we're operating from, and an in-flight
+	// run still needs it for the next batch.
+	if _, err := worktree.GC(ctx, iwt.Path, slug, merged, d.out(), false); err != nil {
 		return fmt.Errorf("worktree gc: %w", err)
 	}
 
 	if hook := d.Config.Hooks.AfterBatch; hook != "" {
-		if _, err := RunHook(ctx, hook, d.Root, d.out()); err != nil {
+		if _, err := RunHook(ctx, hook, iwt.Path, d.out()); err != nil {
 			fmt.Fprintf(d.out(), "warning: after_batch hook failed: %v\n", err)
 		}
 	}
 	return nil
-}
-
-// captureHEAD returns the current branch name (e.g. "main") if HEAD is on a
-// branch, or the commit SHA if detached.
-func captureHEAD(ctx context.Context, root string) (string, error) {
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "symbolic-ref", "--short", "-q", "HEAD").Output(); err == nil {
-		ref := strings.TrimSpace(string(out))
-		if ref != "" {
-			return ref, nil
-		}
-	}
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "HEAD").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-func restoreHEAD(ctx context.Context, root, ref string) error {
-	if ref == "" {
-		return nil
-	}
-	return runGit(ctx, root, "checkout", ref)
-}
-
-// worktreeDirty returns true if the parent repo has tracked-file modifications
-// that `git checkout` would refuse to carry or carry silently. Untracked files
-// (e.g. gitignored .plan-bender/ caches) are ignored — `git checkout` doesn't
-// move them.
-func worktreeDirty(ctx context.Context, root string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff-index", "--quiet", "HEAD", "--")
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return true, nil
-		}
-		return false, err
-	}
-	return false, nil
 }
 
 // blockFromStatuses is the set of statuses from which a dispatch failure may

@@ -153,6 +153,45 @@ exit 0
 	assert.Contains(t, out.String(), "after_issue hook failed")
 }
 
+// TestDispatcher_AfterBatchHookCwdIsIntegrationWorktree asserts the after_batch
+// hook runs with cwd set to the per-slug integration worktree, NOT the parent
+// repo. Hooks that run tests (`pnpm test`) need to see the post-merge state,
+// which only exists in the integration worktree under the new MergeBack flow.
+func TestDispatcher_AfterBatchHookCwdIsIntegrationWorktree(t *testing.T) {
+	fix := setupDispatch(t)
+	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	installSkillFile(t, fix.root)
+	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
+exit 0
+`, fix.plansDir))
+
+	markerPath := filepath.Join(t.TempDir(), "after_batch_cwd")
+	cfg := config.Defaults()
+	cfg.Hooks.AfterBatch = fmt.Sprintf(`pwd > %q`, markerPath)
+	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Out: &bytes.Buffer{}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	require.NoError(t, d.Run(ctx, "demo"))
+
+	data, err := os.ReadFile(markerPath)
+	require.NoError(t, err)
+
+	// pwd in the hook may resolve symlinks; EvalSymlinks the expected path to
+	// match. The iwt itself is GC'd at AllDone, so we resolve symlinks on the
+	// parent dir (which survives) and append the iwt basename rather than
+	// EvalSymlinks'ing the leaf path directly.
+	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
+	require.NoError(t, err)
+	expected := filepath.Join(parent, "repo-wt", "demo", "_integration")
+	gotCwdRaw := strings.TrimSpace(string(data))
+	gotParent, err := filepath.EvalSymlinks(filepath.Dir(gotCwdRaw))
+	require.NoError(t, err)
+	gotCwd := filepath.Join(gotParent, filepath.Base(gotCwdRaw))
+	assert.Equal(t, expected, gotCwd,
+		"after_batch hook cwd must be the integration worktree path")
+}
+
 // Wiring: after_batch hook runs after merge-back; failure logs but does not abort.
 func TestDispatcher_AfterBatchHookRuns(t *testing.T) {
 	fix := setupDispatch(t)

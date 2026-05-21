@@ -50,7 +50,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := worktree.Create(cmd.Context(), root, slug, id, issueSlug, "")
+			res, err := worktree.Create(cmd.Context(), cfg, root, slug, id, issueSlug, "")
 			if err != nil {
 				return NewAgentError("creating worktree: "+err.Error(), ErrInternal)
 			}
@@ -123,7 +123,7 @@ func newWorktreeGCCmd() *cobra.Command {
 				return NewAgentError("config load failed: "+err.Error(), ErrConfigError)
 			}
 
-			removed, err := worktree.GC(cmd.Context(), root, slug, nil, cmd.ErrOrStderr())
+			removed, err := worktree.GC(cmd.Context(), root, slug, nil, cmd.ErrOrStderr(), true)
 			if err != nil {
 				return NewAgentError("gc failed: "+err.Error(), ErrInternal)
 			}

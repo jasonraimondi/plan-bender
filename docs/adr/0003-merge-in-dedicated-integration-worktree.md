@@ -1,0 +1,19 @@
+# MergeBack runs in a dedicated per-slug integration worktree; the parent repo's HEAD is never moved
+
+`pba dispatch` previously did `git checkout <user>/<slug>` on the parent repo, captured the prior HEAD, merged each successful issue branch in, and restored HEAD on exit. That worked for a single dispatcher per clone, but two `pba dispatch` runs against different slugs in the same parent repo race on HEAD: one captures the other's mid-merge state and restores the wrong branch, the dirty-tree guard fires spuriously, and `git status` in a third terminal sees the branch bounce. We move MergeBack — the merge loop, the status flips, and the `after_batch` hook — into a long-lived per-slug git worktree at `{worktree_base}/{repoName}-wt/{slug}/_integration` checked out to `{user}/{slug}`. The parent repo's HEAD is never touched by dispatch.
+
+## Considered options
+
+- **Cross-process flock on `.git/pb-dispatch.lock` around `git checkout` + merge.** Cheapest fix in lines of code, and it solves the race. Rejected because it serializes two-slug runs that have no real reason to wait on each other, and it leaves the parent-HEAD UX wart (`git status` in another terminal still sees dispatch's branch). Per-slug parallelism is the headline use case; an exclusive lock contradicts it.
+- **Detached HEAD in the parent repo for the merge.** Removes the "wrong branch restored" failure mode but not the dirty-tree race (the index is still shared) and not the UX wart (the user's working tree still flips). Half-fix.
+- **Ephemeral worktree per MergeBack call.** Created at the start of MergeBack, destroyed at the end. Clean lifecycle, but pays the `git worktree add` + initial checkout cost on every batch — wasteful for plans with many small batches, and discards a useful debugging artifact (the merged commits sitting on disk). Rejected in favor of a long-lived worktree GC'd only on `AllDone`.
+- **Reset-on-entry vs. trust-the-prior-state.** Trusting the prior state is simpler when nothing crashed, but the first MergeBack after a SIGKILL'd run sees stale `MERGE_HEAD` and a dirty index, and the merge loop refuses. Reset-on-entry (`git merge --abort` → `git reset --hard <branch>` → `git clean -fdx`) costs ~50ms and removes a whole class of operator interventions. The integration worktree is owned by dispatch — no user state lives there — so the broad clean is unambiguously safe.
+
+## Consequences
+
+- **Concurrency boundary is the parent repo, not the terminal.** Two slugs against one repo run to completion without interference. Same-slug parallel dispatch is rejected up front with a per-slug `flock` at `{plans_dir}/{slug}/.dispatch.lock`.
+- **Parent HEAD is now an invariant.** Tests assert byte-identical HEAD before and after MergeBack. The `captureHEAD`/`restoreHEAD` helpers and the parent `worktreeDirty` guard are deleted; the user can keep working in the parent while dispatch runs.
+- **`after_batch` hook cwd changes from parent repo root to the integration worktree path.** Documented as a breaking change with a release-note entry. Hooks that ran `pnpm test` or similar now see the post-merge tree directly, which is usually what the operator wanted anyway.
+- **The integration worktree is long-lived.** Lazy-created on first MergeBack, persisted across runs of the same slug for fast resumption, and GC'd on `AllDone` (dispatch path) or unconditionally via `pba worktree gc <slug>`. HITL-only exit preserves it.
+- **`linkPlansDir` runs on the integration worktree after the reset.** The order matters — `git clean -fdx` would otherwise delete the symlinks the hook needs to resolve config and skills.
+- **Trust git's ref-transaction locks** for concurrent `git worktree add` from two dispatchers on the same `.git/`. If that proves insufficient in practice, a follow-up adds a cross-process flock on `.git/pb-dispatch.lock` covering only the worktree-create step.

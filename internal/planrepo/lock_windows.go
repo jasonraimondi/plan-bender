@@ -13,6 +13,33 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// TryFlock takes a non-blocking exclusive lock on path using Win32 LockFileEx.
+// On contention it returns ErrLocked immediately, without polling. The
+// returned release closure unlocks and closes the file handle; Windows also
+// drops the lock on handle close if the holding process crashes.
+func TryFlock(path string) (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("creating lock parent dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("opening lock file: %w", err)
+	}
+	ol := new(windows.Overlapped)
+	const flags = windows.LOCKFILE_EXCLUSIVE_LOCK | windows.LOCKFILE_FAIL_IMMEDIATELY
+	if err := windows.LockFileEx(windows.Handle(f.Fd()), flags, 0, 1, 0, ol); err != nil {
+		_ = f.Close()
+		if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+			return nil, ErrLocked
+		}
+		return nil, fmt.Errorf("acquiring lock: %w", err)
+	}
+	return func() {
+		_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, ol)
+		_ = f.Close()
+	}, nil
+}
+
 // LockPlanDir takes an exclusive lock on a sentinel file inside plansDir
 // using the Win32 LockFileEx API. The returned release unlocks and closes
 // the file. Mirrors the unix flock implementation, including the non-blocking
