@@ -113,10 +113,22 @@ func CreateIntegration(ctx context.Context, root string, cfg config.Config, slug
 		return WorktreeResult{}, fmt.Errorf("inspecting worktrees: %w", err)
 	}
 	if existingPath != "" {
-		if existingPath != path {
-			return WorktreeResult{}, fmt.Errorf("integration branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
+		// A worktree whose directory vanished out-of-band (manual rm, evicted
+		// tmpdir) keeps appearing in `git worktree list`, branch line and all,
+		// flagged prunable. Returning that path would hand ResetIntegration a
+		// `git -C <missing>` that aborts the whole dispatch, so stat it: if the
+		// directory is gone, prune the stale entry and fall through to recreate.
+		if _, statErr := os.Stat(existingPath); statErr == nil {
+			if existingPath != path {
+				return WorktreeResult{}, fmt.Errorf("integration branch %q already checked out at %q (expected %q); resolve manually", branch, existingPath, path)
+			}
+			return WorktreeResult{Path: existingPath, Branch: branch}, nil
+		} else if !os.IsNotExist(statErr) {
+			return WorktreeResult{}, fmt.Errorf("stat integration worktree %q: %w", existingPath, statErr)
 		}
-		return WorktreeResult{Path: existingPath, Branch: branch}, nil
+		if err := runGit(ctx, root, "worktree", "prune"); err != nil {
+			return WorktreeResult{}, fmt.Errorf("pruning stale integration worktree: %w", err)
+		}
 	}
 
 	if err := runGit(ctx, root, "worktree", "add", path, branch); err != nil {

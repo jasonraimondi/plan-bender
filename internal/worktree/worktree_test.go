@@ -467,6 +467,37 @@ func TestCreateIntegration_ConflictsWhenBranchCheckedOutElsewhere(t *testing.T) 
 	require.Contains(t, err.Error(), "already checked out")
 }
 
+// TestCreateIntegration_RecreatesWhenWorktreeDirRemovedOutOfBand asserts recovery
+// from a worktree directory that vanished out-of-band (manual rm, evicted tmpdir).
+// Git keeps listing the path — branch line and all — flagged `prunable`, so the
+// idempotency check would otherwise hand back a stale path that ResetIntegration's
+// `git -C <missing>` aborts on. CreateIntegration must prune the stale entry and
+// recreate the directory.
+func TestCreateIntegration_RecreatesWhenWorktreeDirRemovedOutOfBand(t *testing.T) {
+	root := initRepo(t)
+	out, err := exec.Command("git", "-C", root, "branch", "tester/auth").CombinedOutput()
+	require.NoError(t, err, "git branch: %s", string(out))
+
+	first, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err)
+
+	// Remove the directory WITHOUT `git worktree remove`, leaving git's metadata
+	// pointing at a now-missing path (the prunable state).
+	require.NoError(t, os.RemoveAll(first.Path))
+
+	res, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
+	require.NoError(t, err, "must recover from a pruned worktree dir, not hand back a stale path")
+	require.Equal(t, first.Path, res.Path)
+	require.Equal(t, first.Branch, res.Branch)
+
+	info, err := os.Stat(res.Path)
+	require.NoError(t, err)
+	require.True(t, info.IsDir(), "directory must be recreated on disk")
+
+	// The recovered worktree must be usable by the very call that would have crashed.
+	require.NoError(t, ResetIntegration(context.Background(), res.Path, res.Branch))
+}
+
 // TestResetIntegration_AbortsInFlightMergeAndCleansDirtyTree asserts ResetIntegration
 // recovers a worktree pre-seeded with MERGE_HEAD + an untracked file. The merge
 // state goes away and the worktree is hard-reset to branch's tip.
