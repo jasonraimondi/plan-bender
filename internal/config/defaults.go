@@ -2,9 +2,14 @@ package config
 
 import "github.com/jasonraimondi/plan-bender/internal/agents"
 
+// SchemaURL is the published JSON Schema for .plan-bender.json. Scaffolded
+// configs reference it via "$schema" so editors offer validation/autocomplete.
+const SchemaURL = "https://raw.githubusercontent.com/jasonraimondi/plan-bender/main/schema/plan-bender.schema.json"
+
 func StarterConfig() PartialConfig {
 	plansDir := "./.plan-bender/plans/"
 	return PartialConfig{
+		Schema:   SchemaURL,
 		PlansDir: &plansDir,
 		Agents: map[string]*AgentEntry{
 			"claude-code": {Enabled: true},

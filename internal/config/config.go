@@ -219,6 +219,7 @@ type Config struct {
 }
 
 type PartialConfig struct {
+	Schema            string                 `json:"$schema,omitempty"`
 	Tracks            []string               `json:"tracks,omitempty"`
 	WorkflowStates    []string               `json:"workflow_states,omitempty"`
 	PlansDir          *string                `json:"plans_dir,omitempty"`
