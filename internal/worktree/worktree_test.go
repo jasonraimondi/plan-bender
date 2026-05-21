@@ -289,10 +289,15 @@ func TestGC_PreservesUnmergedCommits(t *testing.T) {
 	require.Contains(t, string(branchOut), a.Branch, "branch must survive")
 }
 
-// TestGC_IncludeIntegrationRemovesIntegrationWorktree asserts that when
-// includeIntegration=true GC removes both the issue worktrees and the
-// per-slug integration worktree at {user}/{slug} (no `--` suffix).
-func TestGC_IncludeIntegrationRemovesIntegrationWorktree(t *testing.T) {
+// TestGC_IncludeIntegrationRemovesWorktreeButPreservesDeliverableBranch asserts
+// the AllDone contract: with includeIntegration=true GC removes the integration
+// *worktree* but PRESERVES the integration *branch*, which holds the plan's
+// merged work and is the deliverable the operator reviews and merges. GC runs
+// from a HEAD (the parent's default branch) that does not reach the merge
+// commits — exactly as dispatch's AllDone path does — so `branch -d` refuses and
+// the branch survives. (A zero-commit integration branch would let `branch -d`
+// succeed and hide this; the extra commit reproduces production.)
+func TestGC_IncludeIntegrationRemovesWorktreeButPreservesDeliverableBranch(t *testing.T) {
 	root := initRepo(t)
 
 	// Pre-create the integration branch (caller responsibility — dispatch
@@ -303,20 +308,35 @@ func TestGC_IncludeIntegrationRemovesIntegrationWorktree(t *testing.T) {
 	iwt, err := CreateIntegration(context.Background(), root, config.Config{}, "auth")
 	require.NoError(t, err)
 
+	// Advance the integration branch with a commit that is NOT reachable from
+	// root's HEAD (main) — mirroring the merge commits a real plan accumulates.
+	require.NoError(t, os.WriteFile(filepath.Join(iwt.Path, "merged.txt"), []byte("work\n"), 0o644))
+	for _, args := range [][]string{
+		{"-C", iwt.Path, "add", "merged.txt"},
+		{"-C", iwt.Path, "commit", "-m", "merged work"},
+	} {
+		cout, cerr := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, cerr, "git %v: %s", args, string(cout))
+	}
+
 	a, err := Create(context.Background(), config.Config{}, root, "auth", 1, "alpha", "")
 	require.NoError(t, err)
 
 	safe := map[string]bool{a.Branch: true}
 	removed, err := GC(context.Background(), root, "auth", safe, io.Discard, true)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{a.Path, iwt.Path}, removed)
+
+	// The issue worktree+branch are fully cleaned; the integration worktree is
+	// removed too, but because its branch is preserved it is not reported in the
+	// removed list (which signals worktree+branch teardown).
+	require.ElementsMatch(t, []string{a.Path}, removed)
 
 	_, err = os.Stat(iwt.Path)
 	require.True(t, os.IsNotExist(err), "integration worktree must be removed")
 
 	branchOut, err := exec.Command("git", "-C", root, "branch", "--list", iwt.Branch).Output()
 	require.NoError(t, err)
-	require.NotContains(t, string(branchOut), iwt.Branch, "integration branch must be deleted")
+	require.Contains(t, string(branchOut), iwt.Branch, "integration branch must be preserved as the deliverable")
 }
 
 // TestGC_WithoutIncludeIntegrationPreservesIntegrationWorktree asserts the
