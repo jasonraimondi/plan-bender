@@ -58,7 +58,7 @@ func TestSetup_FirstRunWritesDefaults(t *testing.T) {
 	assert.Contains(t, string(data), `"plans_dir"`)
 	assert.Contains(t, string(data), `"agents"`)
 	assert.Contains(t, string(data), `"claude-code": true`)
-	assert.Contains(t, string(data), `"pi": true`)
+	assert.NotContains(t, string(data), `"pi"`)
 	assert.NotContains(t, string(data), `"max_points"`)
 	assert.NotContains(t, string(data), `"options"`)
 	assert.NotContains(t, string(data), `"tracks"`)
