@@ -2,7 +2,18 @@
 
 All notable changes to plan-bender are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); plan-bender is pre-1.0 so breaking changes ship in patch releases until v1.
 
-## Unreleased
+## v0.0.52
+
+### Added
+
+- Published JSON Schema for `.plan-bender.json` at `schema/plan-bender.schema.json`. Editors that honor `$schema` now offer validation and autocomplete for the config.
+- `pb setup` writes a `$schema` key into scaffolded `.plan-bender.json` files, pointing at the published schema so new configs get editor validation out of the box.
+
+### Changed
+
+- Starter config no longer enables the `pi` agent by default; freshly scaffolded configs ship with only `claude-code` enabled.
+
+## v0.0.51
 
 ### BREAKING
 
