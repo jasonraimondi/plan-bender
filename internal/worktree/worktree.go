@@ -285,12 +285,9 @@ func GC(ctx context.Context, root, slug string, safe map[string]bool, out io.Wri
 			continue
 		}
 		if err := runGit(ctx, root, "branch", "-d", e.branch); err != nil {
-			// The integration branch holds the plan's merged work and is never
-			// reachable from the parent's HEAD at AllDone (it isn't merged to the
-			// default branch yet), so `branch -d` refusing is the expected,
-			// correct outcome — not a warning-worthy anomaly. The non-forcing
-			// `branch -d` still deletes it once the operator has merged it and
-			// re-runs `pba worktree gc`.
+			// For the integration branch, `branch -d` refusing is expected, not an
+			// anomaly (see GC doc): preserve it as the deliverable without the
+			// git-error noise.
 			if isIntegration {
 				fmt.Fprintf(out, "integration branch %q preserved (holds the plan's merged work; review and merge it, then `pba worktree gc %s`)\n", e.branch, slug)
 			} else {

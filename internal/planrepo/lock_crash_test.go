@@ -79,5 +79,5 @@ func TestFlockHelperProcess(t *testing.T) {
 	// Block on a timer rather than `select {}`: a bare select with no other
 	// runnable goroutines trips Go's all-goroutines-asleep deadlock detector,
 	// which would crash (and so release the lock) before the parent's check.
-	time.Sleep(time.Hour) // the parent kills us long before this elapses
+	time.Sleep(time.Hour)
 }

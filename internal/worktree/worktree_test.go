@@ -581,7 +581,6 @@ func TestResetIntegration_NoOpOnFreshWorktree(t *testing.T) {
 func TestResetIntegration_DiscardsTrackedFileModifications(t *testing.T) {
 	root := initRepo(t)
 
-	// Commit a tracked file, then fork the integration branch off it.
 	require.NoError(t, os.WriteFile(filepath.Join(root, "tracked.txt"), []byte("original\n"), 0o644))
 	for _, args := range [][]string{
 		{"-C", root, "add", "tracked.txt"},
