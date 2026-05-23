@@ -212,6 +212,13 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 
 		results := d.RunBatch(ctx, slug, batch, integrationBranch)
 
+		// When every ready issue failed during setup (no sub-agent ran), the
+		// next loop would find them all blocked and report "stuck: N blocked",
+		// which reads like a dependency deadlock. Surface the real cause once.
+		if cause, ok := allSetupFailed(results); ok {
+			return fmt.Errorf("dispatch setup failed for every ready issue (%s); this is an environment problem, not a dependency deadlock — see the bender-implement-prd troubleshooting note on worktree skill-linking", cause)
+		}
+
 		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
 			return fmt.Errorf("merging batch: %w", err)
 		}
@@ -250,7 +257,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
-		return SubResult{IssueID: issue.ID, Err: errors.New(reason)}
+		return SubResult{IssueID: issue.ID, Err: &setupError{reason}}
 	}
 
 	// Atomic claim: stamp branch + flip to in-progress through the canonical
@@ -263,7 +270,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		reason := fmt.Sprintf("claiming issue: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
 	}
 	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
 	// the post-claim state. Otherwise the sub-agent's prompt shows backlog/null
@@ -272,11 +279,11 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	branchCopy := wt.Branch
 	issue.Branch = &branchCopy
 
-	if err := linkPlansDir(d.Root, wt.Path, d.out()); err != nil {
+	if err := linkPlansDir(d.Root, wt.Path); err != nil {
 		reason := fmt.Sprintf("linking plans dir: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
@@ -284,7 +291,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
 			d.markBlockedAndWarn(slug, issue.ID, reason)
 			d.cleanupWorktree(wt.Path)
-			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
 		}
 	}
 
@@ -293,7 +300,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		reason := fmt.Sprintf("building prompt: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: errors.New(reason)}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
 	}
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
@@ -338,7 +345,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 	}
 	// linkPlansDir runs AFTER ResetIntegration because `clean -fdx` would
 	// otherwise delete the symlinks just created.
-	if err := linkPlansDir(d.Root, iwt.Path, d.out()); err != nil {
+	if err := linkPlansDir(d.Root, iwt.Path); err != nil {
 		return fmt.Errorf("linking plans dir into integration worktree: %w", err)
 	}
 
@@ -558,6 +565,45 @@ func blockedSummary(issues []schema.Issue) string {
 	return fmt.Sprintf("%d blocked (issues %s)", len(ids), strings.Join(ids, ", "))
 }
 
+// setupError marks a runOne failure that happened during environment setup
+// (worktree create, claim, skill linking, before_issue hook, prompt build)
+// rather than inside the sub-agent. When every issue in a batch fails setup,
+// the dispatch loop surfaces it as one environment error instead of looping
+// into the misleading "stuck: N blocked" path, where the shared root cause is
+// buried in per-issue blocked notes.
+type setupError struct{ reason string }
+
+func (e *setupError) Error() string { return e.reason }
+
+// allSetupFailed reports whether every result is a setup-phase failure — i.e.
+// no sub-agent ever ran. The returned string is the shared cause when all
+// reasons match, else a per-cause tally. Returns ("", false) for an empty
+// batch or any result that is a success or a non-setup (sub-agent) failure.
+func allSetupFailed(results []SubResult) (string, bool) {
+	if len(results) == 0 {
+		return "", false
+	}
+	reasons := make(map[string]int)
+	for _, r := range results {
+		var se *setupError
+		if !errors.As(r.Err, &se) {
+			return "", false
+		}
+		reasons[se.reason]++
+	}
+	if len(reasons) == 1 {
+		for reason := range reasons {
+			return reason, true
+		}
+	}
+	parts := make([]string, 0, len(reasons))
+	for reason, n := range reasons {
+		parts = append(parts, fmt.Sprintf("%d× %s", n, reason))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "; "), true
+}
+
 func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
 	fmt.Fprintln(d.out(), "HITL: the following issues require human input:")
 	for _, iss := range issues {
@@ -692,46 +738,80 @@ func runGitOutput(ctx context.Context, dir string, args ...string) (string, erro
 	return string(out), err
 }
 
-// linkPlansDir symlinks the parent's .plan-bender/ and .claude/skills/ dirs
-// into the worktree. Both are typically gitignored, so a fresh worktree
-// checkout doesn't have them — sub-agent calls to `pba complete` and
-// BuildPrompt's skill lookup both depend on these.
-//
-// Skills are sometimes legitimately committed (project-bundled skill files),
-// so a real .claude/skills dir in the worktree is tolerated and used as-is.
-// .plan-bender is the dispatch loop's single on-disk persistence boundary;
-// a real .plan-bender in the worktree would diverge the sub-agent's status
-// writes from the parent and silently break the loop — that's an error.
-func linkPlansDir(parent, worktreePath string, log io.Writer) error {
-	targets := []struct {
-		rel             string
-		tolerateRealDir bool
-	}{
-		{".plan-bender", false},
-		{filepath.Join(".claude", "skills"), true},
+// linkPlansDir provisions the parent's .plan-bender/ and .claude/skills/ into
+// the worktree. Both are typically gitignored, so a fresh checkout lacks them —
+// the sub-agent's `pba complete` and BuildPrompt's skill lookup both depend on
+// them.
+func linkPlansDir(parent, worktreePath string) error {
+	if err := linkDir(parent, worktreePath, ".plan-bender"); err != nil {
+		return err
 	}
-	for _, t := range targets {
-		src := filepath.Join(parent, t.rel)
-		dst := filepath.Join(worktreePath, t.rel)
-		if _, err := os.Stat(src); err != nil {
+	return linkSkills(parent, worktreePath)
+}
+
+// linkDir symlinks parent/rel into the worktree as a whole directory. A real
+// (non-symlink) path already at the destination is an error: .plan-bender is
+// the dispatch loop's single on-disk persistence boundary, and a real one in
+// the worktree would route the sub-agent's status writes away from the parent
+// and silently break the loop. A missing source is skipped.
+func linkDir(parent, worktreePath, rel string) error {
+	src := filepath.Join(parent, rel)
+	if _, err := os.Stat(src); err != nil {
+		return nil
+	}
+	dst := filepath.Join(worktreePath, rel)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(dst); err == nil {
+		if info.Mode()&os.ModeSymlink == 0 {
+			return fmt.Errorf("%s exists as a real path in worktree; sub-agent writes would diverge from the parent", rel)
+		}
+		_ = os.Remove(dst)
+	}
+	if err := os.Symlink(src, dst); err != nil {
+		return fmt.Errorf("symlinking %s -> %s: %w", dst, src, err)
+	}
+	return nil
+}
+
+// linkSkills provisions the parent's .claude/skills children into the worktree
+// one symlink at a time, rather than symlinking the directory whole. A repo
+// that git-tracks even one skill (e.g. a project-bundled skill) makes git
+// recreate a real .claude/skills in every fresh worktree, which makes a
+// whole-dir symlink impossible — so the gitignored bender-* skills the prompt
+// builder needs would never arrive. Linking per child adds the missing skills
+// while leaving committed ones in place. Children already present (committed or
+// previously linked) are left untouched, so re-entry is idempotent.
+//
+// After provisioning, the skill BuildPrompt renders must be present, or this
+// fails here with a clear setup error instead of deep in prompt-build.
+func linkSkills(parent, worktreePath string) error {
+	srcDir := filepath.Join(parent, ".claude", "skills")
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("reading skills dir %s: %w", srcDir, err)
+	}
+	dstDir := filepath.Join(worktreePath, ".claude", "skills")
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		dst := filepath.Join(dstDir, e.Name())
+		if _, err := os.Lstat(dst); err == nil {
 			continue
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("inspecting %s: %w", dst, err)
 		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
+		if err := os.Symlink(filepath.Join(srcDir, e.Name()), dst); err != nil {
+			return fmt.Errorf("symlinking %s: %w", dst, err)
 		}
-		if info, err := os.Lstat(dst); err == nil {
-			if info.Mode()&os.ModeSymlink == 0 {
-				if !t.tolerateRealDir {
-					return fmt.Errorf("%s exists as a real path in worktree; sub-agent writes would diverge from the parent", t.rel)
-				}
-				fmt.Fprintf(log, "warning: %s already exists in worktree as a real path; using it instead of linking\n", t.rel)
-				continue
-			}
-			_ = os.Remove(dst)
-		}
-		if err := os.Symlink(src, dst); err != nil {
-			return fmt.Errorf("symlinking %s -> %s: %w", dst, src, err)
-		}
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, requiredSkill, "SKILL.md")); err != nil {
+		return fmt.Errorf("required skill %q missing from worktree after provisioning %s; is it present in the parent's .claude/skills?", requiredSkill, dstDir)
 	}
 	return nil
 }

@@ -9,11 +9,16 @@ import (
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 )
 
+// requiredSkill is the skill BuildPrompt renders into every sub-agent prompt.
+// linkSkills provisions it into each worktree and verifies it lands so a
+// missing skill fails at link time, not here.
+const requiredSkill = "bender-implement-issue"
+
 // BuildPrompt assembles the prompt sent to a sub-agent: the rendered
 // bender-implement-issue SKILL.md from the worktree's .claude/skills/ dir,
 // followed by the issue serialized as JSON.
 func BuildPrompt(worktreePath string, issue schema.Issue) (string, error) {
-	skillPath := filepath.Join(worktreePath, ".claude", "skills", "bender-implement-issue", "SKILL.md")
+	skillPath := filepath.Join(worktreePath, ".claude", "skills", requiredSkill, "SKILL.md")
 	skill, err := os.ReadFile(skillPath)
 	if err != nil {
 		return "", fmt.Errorf("reading skill at %s: %w", skillPath, err)

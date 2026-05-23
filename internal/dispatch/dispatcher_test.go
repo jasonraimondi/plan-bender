@@ -631,7 +631,10 @@ func TestDispatcher_BuildPromptFailureMarksBlocked(t *testing.T) {
 	d := newDispatcher(fix)
 	err := timeBoxRun(t, d, "demo", 10*time.Second)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "stuck", "loop must terminate, not retry forever")
+	// Every ready issue failed setup, so dispatch surfaces one environment
+	// error naming the shared cause instead of looping into "stuck: N blocked".
+	assert.Contains(t, err.Error(), "setup failed", "all-setup failures must terminate, not retry forever")
+	assert.Contains(t, err.Error(), "building prompt", "the shared root cause must be named")
 
 	alpha := loadIssueJSON(t, fix.plansDir, 1, "alpha")
 	assert.Equal(t, "blocked", alpha.Status, "early-failure issue must be marked blocked")
@@ -1153,32 +1156,83 @@ func TestDispatcher_DifferentSlugLockDoesNotBlock(t *testing.T) {
 		"a held lock on slug %q must not block dispatch on slug %q", "other", "demo")
 }
 
-func TestLinkPlansDir_TolaratesRealSkillsDir(t *testing.T) {
+// TestLinkPlansDir_ProvisionsSkillsPerChildIntoRealDir is the regression test
+// for the root-cause bug: when the worktree already has a real .claude/skills
+// dir (because git tracks at least one skill), the whole dir can't be
+// symlinked, so the parent's gitignored bender-* skills must be linked in
+// per child — committed skills left untouched.
+func TestLinkPlansDir_ProvisionsSkillsPerChildIntoRealDir(t *testing.T) {
 	parent := t.TempDir()
 	wt := t.TempDir()
 
 	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".claude", "skills"), 0o755))
+	// Parent has the required skill plus another, both typically gitignored.
+	installSkillFile(t, parent)
+	prdSkill := filepath.Join(parent, ".claude", "skills", "bender-implement-prd")
+	require.NoError(t, os.MkdirAll(prdSkill, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(prdSkill, "SKILL.md"), []byte("x"), 0o644))
 
-	// The worktree already has a real, committed .claude/skills directory.
+	// The worktree has a real, committed .claude/skills dir with one tracked skill.
 	wtSkills := filepath.Join(wt, ".claude", "skills")
-	require.NoError(t, os.MkdirAll(wtSkills, 0o755))
-	marker := filepath.Join(wtSkills, "committed.txt")
-	require.NoError(t, os.WriteFile(marker, []byte("x"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(wtSkills, "update-release"), 0o755))
+	committed := filepath.Join(wtSkills, "update-release", "SKILL.md")
+	require.NoError(t, os.WriteFile(committed, []byte("committed"), 0o644))
 
-	var logBuf bytes.Buffer
-	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+	require.NoError(t, linkPlansDir(parent, wt))
 
+	// The committed skills dir stays a real dir and its file survives.
 	info, err := os.Lstat(wtSkills)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 	assert.Zero(t, info.Mode()&os.ModeSymlink)
-	_, err = os.Stat(marker)
-	assert.NoError(t, err, "committed file should survive")
+	_, err = os.Stat(committed)
+	assert.NoError(t, err, "committed skill must survive")
+
+	// The parent's gitignored skills are now symlinked in as children.
+	for _, name := range []string{"bender-implement-issue", "bender-implement-prd"} {
+		li, err := os.Lstat(filepath.Join(wtSkills, name))
+		require.NoError(t, err, "%s should be provisioned", name)
+		assert.NotZero(t, li.Mode()&os.ModeSymlink, "%s should be a symlink", name)
+	}
+	_, err = os.Stat(filepath.Join(wtSkills, "bender-implement-issue", "SKILL.md"))
+	assert.NoError(t, err, "required skill must resolve through the symlink")
 
 	pbInfo, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
 	require.NoError(t, err)
 	assert.NotZero(t, pbInfo.Mode()&os.ModeSymlink)
+}
+
+// TestLinkPlansDir_LinksSkillsWhenWorktreeHasNone covers the gitignored-skills
+// case: the worktree lacks .claude/skills entirely, so it is created and every
+// parent skill is symlinked in.
+func TestLinkPlansDir_LinksSkillsWhenWorktreeHasNone(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	installSkillFile(t, parent)
+
+	require.NoError(t, linkPlansDir(parent, wt))
+
+	link := filepath.Join(wt, ".claude", "skills", "bender-implement-issue")
+	li, err := os.Lstat(link)
+	require.NoError(t, err)
+	assert.NotZero(t, li.Mode()&os.ModeSymlink)
+	_, err = os.Stat(filepath.Join(link, "SKILL.md"))
+	assert.NoError(t, err, "required skill must resolve through the symlink")
+}
+
+// TestLinkPlansDir_ErrorsWhenRequiredSkillMissing surfaces the failure at link
+// time (the retro's "hard error at worktree-create") instead of deep in
+// BuildPrompt: the parent has a skills dir but not the one the prompt needs.
+func TestLinkPlansDir_ErrorsWhenRequiredSkillMissing(t *testing.T) {
+	parent := t.TempDir()
+	wt := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".plan-bender"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(parent, ".claude", "skills", "some-other-skill"), 0o755))
+
+	err := linkPlansDir(parent, wt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), requiredSkill)
 }
 
 func TestLinkPlansDir_RejectsRealPlanBenderDir(t *testing.T) {
@@ -1191,8 +1245,7 @@ func TestLinkPlansDir_RejectsRealPlanBenderDir(t *testing.T) {
 	// them. linkPlansDir must reject rather than tolerate.
 	require.NoError(t, os.MkdirAll(filepath.Join(wt, ".plan-bender"), 0o755))
 
-	var logBuf bytes.Buffer
-	err := linkPlansDir(parent, wt, &logBuf)
+	err := linkPlansDir(parent, wt)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), ".plan-bender")
 	assert.Contains(t, err.Error(), "real path")
@@ -1206,22 +1259,55 @@ func TestLinkPlansDir_RefreshesExistingSymlink(t *testing.T) {
 	// A stale symlink pointing at the wrong place.
 	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(wt, ".plan-bender")))
 
-	var logBuf bytes.Buffer
-	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+	require.NoError(t, linkPlansDir(parent, wt))
 
 	target, err := os.Readlink(filepath.Join(wt, ".plan-bender"))
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(parent, ".plan-bender"), target)
 }
 
+func TestAllSetupFailed(t *testing.T) {
+	subErr := errors.New("subprocess exited 1")
+	tests := []struct {
+		name    string
+		results []SubResult
+		wantOK  bool
+		wantSub string
+	}{
+		{"empty batch", nil, false, ""},
+		{"all share one setup cause", []SubResult{
+			{IssueID: 1, Err: &setupError{"building prompt: no skill"}},
+			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
+		}, true, "building prompt: no skill"},
+		{"setup causes differ are tallied", []SubResult{
+			{IssueID: 1, Err: &setupError{"creating worktree: boom"}},
+			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
+		}, true, "building prompt: no skill"},
+		{"one success disqualifies", []SubResult{
+			{IssueID: 1, Success: true},
+			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
+		}, false, ""},
+		{"sub-agent failure is not setup", []SubResult{
+			{IssueID: 1, Err: subErr},
+		}, false, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cause, ok := allSetupFailed(tc.results)
+			assert.Equal(t, tc.wantOK, ok)
+			if tc.wantSub != "" {
+				assert.Contains(t, cause, tc.wantSub)
+			}
+		})
+	}
+}
+
 func TestLinkPlansDir_MissingSourceSkippedSilently(t *testing.T) {
 	parent := t.TempDir()
 	wt := t.TempDir()
 
-	var logBuf bytes.Buffer
-	require.NoError(t, linkPlansDir(parent, wt, &logBuf))
+	require.NoError(t, linkPlansDir(parent, wt))
 
 	_, err := os.Lstat(filepath.Join(wt, ".plan-bender"))
 	assert.True(t, os.IsNotExist(err))
-	assert.Empty(t, logBuf.String())
 }
