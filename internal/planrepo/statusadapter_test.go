@@ -139,6 +139,32 @@ func TestProdStatusOwner_PreflightValidationRejectsCommitWhenIssueInvalid(t *tes
 	require.Error(t, err, "commit must reject writes when on-disk issue would fail validation")
 }
 
+// TestProdStatusOwner_TransitionNotBlockedByUnrelatedInvalidIssue asserts the
+// recovery path stays open: transitioning a valid issue validates only the
+// touched issue, so an unrelated, on-disk rule-invalid issue elsewhere in the
+// plan does not block the commit. Whole-plan commit validation would deadlock
+// here — exactly when the documented status->retry flow needs to recover.
+func TestProdStatusOwner_TransitionNotBlockedByUnrelatedInvalidIssue(t *testing.T) {
+	plansDir := t.TempDir()
+	good := validAdapterIssue(7, "alpha", "todo")
+	bad := validAdapterIssue(8, "beta", "todo")
+	bad.Track = "intent" // not in adapterTestCfg().Tracks: rule-invalid but valid JSON, so it loads
+	writeValidPlan(t, plansDir, "demo", good, bad)
+
+	owner := NewProdStatusOwner(plansDir, adapterTestCfg())
+	err := owner.Transition(context.Background(), "demo", 7,
+		[]status.Status{status.StatusTodo}, status.StatusInProgress, "")
+	require.NoError(t, err, "transition on a valid issue must not be blocked by an unrelated invalid issue")
+
+	post := loadIssueFile(t, plansDir, "demo", 7, "alpha")
+	assert.Equal(t, "in-progress", post.Status)
+
+	// The unrelated invalid issue is left exactly as it was: scoping validation
+	// must not rewrite or "repair" issues the caller never touched.
+	untouched := loadIssueFile(t, plansDir, "demo", 8, "beta")
+	assert.Equal(t, "intent", untouched.Track)
+}
+
 // TestProdStatusOwner_ConcurrentTransitionsSerializeViaSessionLock asserts
 // that concurrent owner.Transition calls funnel through the planrepo session
 // lock: exactly one transition succeeds, the rest see the post-write state

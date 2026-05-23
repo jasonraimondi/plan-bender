@@ -25,7 +25,21 @@ import (
 // when done; sync.Once makes that safe to call regardless of Commit
 // outcome.
 func (s *PlanSession) Commit(cfg config.Config) error {
-	plan, err := s.buildCommitPlan(cfg)
+	return s.commit(cfg, validateWholePlan)
+}
+
+// CommitTouched is Commit for single-entity mutations: it validates only the
+// entities mutated in this session, not the whole-plan snapshot. A status
+// transition touches one issue and cannot introduce cross-ref or cycle errors,
+// so an unrelated, already rule-invalid issue elsewhere in the plan must not
+// block the write — otherwise the documented status->retry recovery flow
+// deadlocks. Whole-plan consistency remains the job of `agent validate`.
+func (s *PlanSession) CommitTouched(cfg config.Config) error {
+	return s.commit(cfg, validateTouchedOnly)
+}
+
+func (s *PlanSession) commit(cfg config.Config, scope commitValidation) error {
+	plan, err := s.buildCommitPlan(cfg, scope)
 	if err != nil {
 		return err
 	}
@@ -35,6 +49,17 @@ func (s *PlanSession) Commit(cfg config.Config) error {
 	s.markClean()
 	return nil
 }
+
+// commitValidation selects how much of the plan a commit validates before
+// staging writes. Authoring/sync commits validate the whole-plan snapshot
+// because commit-time validation is their only consistency gate; single-entity
+// mutations validate only the entities they touched.
+type commitValidation int
+
+const (
+	validateWholePlan commitValidation = iota
+	validateTouchedOnly
+)
 
 // fileWrite is one staged write in a commit plan. prevData holds the bytes
 // that were on disk at write time; existed records whether the file was
@@ -65,18 +90,24 @@ type commitPlan struct {
 
 // buildCommitPlan runs every preflight check and returns the staged plan.
 // On any failure the plan is discarded and no disk I/O has happened.
-func (s *PlanSession) buildCommitPlan(cfg config.Config) (commitPlan, error) {
+func (s *PlanSession) buildCommitPlan(cfg config.Config, scope commitValidation) (commitPlan, error) {
 	plan := commitPlan{}
 
-	// 1. Validate the in-session snapshot against the schema package.
-	//    Cross-refs run in lax mode here so an issue can declare forward
-	//    blocked_by/blocking edges to issues that have not been written
-	//    yet — the bootstrap case for the very first issue in a plan.
-	//    `agent validate` runs the strict variant and remains the gate
-	//    for whole-plan consistency.
-	res := validateSnapshot(s.snapshot, s.baselineFilenames, cfg, schema.CrossRefLax)
-	if !res.Valid {
-		return commitPlan{}, &CommitValidationError{Result: res}
+	// 1. Validate before staging any write. A whole-plan commit validates the
+	//    full snapshot; cross-refs run in lax mode so an issue can declare
+	//    forward blocked_by/blocking edges to issues not yet written — the
+	//    bootstrap case for the very first issue in a plan. A touched-only
+	//    commit validates just the mutated entities (see validateTouched).
+	//    `agent validate` runs the strict variant and remains the gate for
+	//    whole-plan consistency.
+	var result schema.PlanValidationResult
+	if scope == validateWholePlan {
+		result = validateSnapshot(s.snapshot, s.baselineFilenames, cfg, schema.CrossRefLax)
+	} else {
+		result = s.validateTouched(cfg)
+	}
+	if !result.Valid {
+		return commitPlan{}, &CommitValidationError{Result: result}
 	}
 
 	planDir := filepath.Join(s.plans.plansDir, s.slug)

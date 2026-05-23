@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,6 +181,33 @@ func TestCommit_AlwaysValidatesEvenWhenOnDiskWasValid(t *testing.T) {
 
 	err = sess.Commit(testCfg())
 	require.Error(t, err, "validation must catch self-reference even if on-disk file was clean")
+}
+
+// TestCommit_RejectsUnrelatedInvalidIssue is the authoring-side counterpart to
+// the scoped status path (see TestProdStatusOwner_TransitionNotBlockedByUnrelatedInvalidIssue):
+// whole-plan Commit must still reject when an untouched issue on disk is
+// rule-invalid, because commit-time validation is authoring's only consistency
+// gate. This pins the contract that Commit and CommitTouched differ.
+func TestCommit_RejectsUnrelatedInvalidIssue(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	badTrack := strings.Replace(issueJSON(2, "b"), `"track": "data"`, `"track": "intent"`, 1)
+	writePlan(t, plansDir, "p", validPrd, map[string]string{
+		"1-a.json": issueJSON(1, "a"),
+		"2-b.json": badTrack, // valid JSON, rule-invalid track: loads, fails validation
+	})
+
+	repo := NewProd(plansDir)
+	sess, err := repo.Open("p")
+	require.NoError(t, err)
+	defer func() { _ = sess.Close() }()
+
+	// Touch only the valid issue #1.
+	iss := sess.Snapshot().Issues[0]
+	iss.Status = "in-progress"
+	require.NoError(t, sess.UpdateIssue(iss))
+
+	err = sess.Commit(testCfg())
+	require.Error(t, err, "whole-plan Commit must reject an unrelated invalid issue")
 }
 
 func TestValidate_RoutesThroughInMemorySnapshot(t *testing.T) {

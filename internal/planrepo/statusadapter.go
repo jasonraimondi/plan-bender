@@ -39,7 +39,8 @@ func (s *prodStatusStore) OpenSession(ctx context.Context, slug string) (status.
 
 // prodStatusSession adapts one planrepo.PlanSession to status.Session. Owner
 // only mutates a single issue per call, so Save stages the update and commits
-// in one step before returning control.
+// in one step before returning control. The commit validates only the touched
+// issue so a status transition is never blocked by an unrelated invalid issue.
 type prodStatusSession struct {
 	sess *PlanSession
 	cfg  config.Config
@@ -53,7 +54,7 @@ func (p *prodStatusSession) Save(issue schema.Issue) error {
 	if err := p.sess.UpdateIssue(issue); err != nil {
 		return err
 	}
-	return p.sess.Commit(p.cfg)
+	return p.sess.CommitTouched(p.cfg)
 }
 
 func (p *prodStatusSession) Close() error {
