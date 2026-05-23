@@ -1180,7 +1180,6 @@ func TestLinkPlansDir_ProvisionsSkillsPerChildIntoRealDir(t *testing.T) {
 
 	require.NoError(t, linkPlansDir(parent, wt))
 
-	// The committed skills dir stays a real dir and its file survives.
 	info, err := os.Lstat(wtSkills)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
@@ -1188,7 +1187,6 @@ func TestLinkPlansDir_ProvisionsSkillsPerChildIntoRealDir(t *testing.T) {
 	_, err = os.Stat(committed)
 	assert.NoError(t, err, "committed skill must survive")
 
-	// The parent's gitignored skills are now symlinked in as children.
 	for _, name := range []string{"bender-implement-issue", "bender-implement-prd"} {
 		li, err := os.Lstat(filepath.Join(wtSkills, name))
 		require.NoError(t, err, "%s should be provisioned", name)
@@ -1222,8 +1220,8 @@ func TestLinkPlansDir_LinksSkillsWhenWorktreeHasNone(t *testing.T) {
 }
 
 // TestLinkPlansDir_ErrorsWhenRequiredSkillMissing surfaces the failure at link
-// time (the retro's "hard error at worktree-create") instead of deep in
-// BuildPrompt: the parent has a skills dir but not the one the prompt needs.
+// time instead of deep in BuildPrompt: the parent has a skills dir but not the
+// one the prompt needs.
 func TestLinkPlansDir_ErrorsWhenRequiredSkillMissing(t *testing.T) {
 	parent := t.TempDir()
 	wt := t.TempDir()
