@@ -14,7 +14,7 @@ import (
 
 // Exit semantics: ErrHITLOnly is returned unwrapped so main.go can map it to
 // exit code 2; other errors propagate and result in exit 1.
-func NewDispatchCmd() *cobra.Command {
+func NewDispatchCmd(version string) *cobra.Command {
 	var base string
 	cmd := &cobra.Command{
 		Use:   "dispatch <slug>",
@@ -41,7 +41,21 @@ func NewDispatchCmd() *cobra.Command {
 			d := DispatcherFromConfig(cfg, root)
 			d.Out = cmd.OutOrStdout()
 			d.Base = base
-			return d.Run(cmd.Context(), slug)
+			err = d.Run(cmd.Context(), slug)
+
+			// A dispatch-orchestration failure (e.g. an environment-wide setup
+			// error) happens here in Go, so the agent-facing report_bugs prompt
+			// never fires — no sub-agent runs to honor it. Write the artifact
+			// from the failing command itself. HITL-only is a clean exit, not a
+			// failure, so it is excluded.
+			if err != nil && !IsHITLOnly(err) && cfg.ReportBugs {
+				if path, werr := writeBugReport(root, version, "dispatch "+slug, err); werr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to write bug report: %v\n", werr)
+				} else {
+					fmt.Fprintf(cmd.ErrOrStderr(), "wrote bug report to %s — please file at https://github.com/jasonraimondi/plan-bender/issues\n", path)
+				}
+			}
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&base, "base", "", "fork the integration branch off this commit-ish (default: repo default branch)")

@@ -97,7 +97,7 @@ func rootCmd() *cobra.Command {
 		cli.NewNextCmd(),
 		cli.NewCompleteCmd(),
 		cli.NewWorktreeCmd(),
-		cli.NewDispatchCmd(),
+		cli.NewDispatchCmd(version),
 		cli.NewStatusCmd(),
 		cli.NewRetryCmd(),
 		cli.NewMigrateCmd(),
