@@ -107,6 +107,50 @@ func validateSnapshot(snap *Snapshot, baselineFilenames map[int]string, cfg conf
 	}
 }
 
+// validateTouched validates only the entities mutated in this session: the
+// dirty PRD (if any) and each dirty issue's own field rules. It deliberately
+// skips clean issues and the whole-plan cross-ref/cycle checks — a single
+// status transition cannot introduce those errors, and a pre-existing invalid
+// issue elsewhere must not block the write. Whole-plan consistency stays the
+// job of `agent validate` (see PlanSession.Validate).
+func (s *PlanSession) validateTouched(cfg config.Config) schema.PlanValidationResult {
+	prdResult := schema.ValidationResult{File: filepath.Join(s.snapshot.Slug, "prd.json")}
+	if s.dirtyPRD {
+		for _, ve := range s.snapshot.PRD.Validate() {
+			prdResult.Errors = append(prdResult.Errors, ve.String())
+		}
+	}
+
+	var issueResults []schema.ValidationResult
+	for i := range s.snapshot.Issues {
+		iss := &s.snapshot.Issues[i]
+		if !s.dirtyIssues[iss.ID] {
+			continue
+		}
+		var errs []string
+		for _, ve := range iss.Validate(cfg) {
+			errs = append(errs, ve.String())
+		}
+		issueResults = append(issueResults, schema.ValidationResult{
+			File:   issueFilePath(s.snapshot.Slug, iss, s.baselineFilenames),
+			Errors: errs,
+		})
+	}
+
+	hasErrors := len(prdResult.Errors) > 0
+	for _, r := range issueResults {
+		if len(r.Errors) > 0 {
+			hasErrors = true
+			break
+		}
+	}
+	return schema.PlanValidationResult{
+		PRD:    prdResult,
+		Issues: issueResults,
+		Valid:  !hasErrors,
+	}
+}
+
 // issueFilePath returns the on-disk path to use in validation results: the
 // baseline filename if the issue existed at Open time, otherwise the
 // canonical filename a Commit would write.
