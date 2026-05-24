@@ -38,7 +38,9 @@ Exit codes:
 
 - **0** — every issue is `done`. Proceed to §6.
 - **2** — only HITL issues remain. The HITL summary is on stdout — surface it to the user and suggest `/bender-implement-hitl {slug}`.
-- **non-zero (other)** — dispatch is stuck (typically blocked issues with no AFK candidates ready). Inspect the output, mark issues, and re-run.
+- **non-zero (other)** — dispatch could not finish. Two distinct causes:
+  - *Dependency-stuck* (`dispatch stuck: ... N blocked`) — blocked issues with no AFK candidates ready. Inspect the output, mark/unblock issues, and re-run.
+  - *Environment/setup failure* (`dispatch setup failed for every ready issue ...`) — every issue failed before its sub-agent ran. Re-running won't help until the environment is fixed; the message names the shared cause. **Worktree skill-linking:** if the cause is `building prompt: reading skill ... bender-implement-issue/SKILL.md: no such file`, the gitignored `bender-*` skills weren't provisioned into the worktree. Confirm those skills exist under the repo's `.claude/skills/` (run `{{.commands.dispatch}}` from the repo root), then re-run.
 
 Sub-agent stdout is streamed as `[issue-N] ...` so you can watch progress. Full per-issue logs land at `.plan-bender/logs/{slug}/{id}.log`.
 

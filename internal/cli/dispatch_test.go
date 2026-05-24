@@ -81,7 +81,7 @@ func TestDispatchCmd_AllDoneExitsZero(t *testing.T) {
 	root := setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, root, "done", "AFK")
 
-	cmd := NewDispatchCmd()
+	cmd := NewDispatchCmd("test")
 	cmd.SetArgs([]string{"demo"})
 	var out strings.Builder
 	cmd.SetOut(&out)
@@ -93,7 +93,7 @@ func TestDispatchCmd_HITLOnlyReturnsHITLError(t *testing.T) {
 	root := setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, root, "todo", "HITL")
 
-	cmd := NewDispatchCmd()
+	cmd := NewDispatchCmd("test")
 	cmd.SetArgs([]string{"demo"})
 	var out strings.Builder
 	cmd.SetOut(&out)
@@ -116,7 +116,7 @@ func TestIsHITLOnly_RecognizesWrappedError(t *testing.T) {
 func TestDispatchCmd_UnknownPlanReturnsError(t *testing.T) {
 	setupDispatchCLI(t)
 
-	cmd := NewDispatchCmd()
+	cmd := NewDispatchCmd("test")
 	cmd.SetArgs([]string{"ghost"})
 	var out strings.Builder
 	cmd.SetOut(&out)
@@ -131,7 +131,7 @@ func TestDispatchCmd_InvalidBaseErrors(t *testing.T) {
 	setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, ".", "done", "AFK")
 
-	cmd := NewDispatchCmd()
+	cmd := NewDispatchCmd("test")
 	cmd.SetArgs([]string{"demo", "--base", "does-not-exist"})
 	var out strings.Builder
 	cmd.SetOut(&out)
@@ -147,11 +147,60 @@ func TestDispatchCmd_ValidBaseAccepted(t *testing.T) {
 	root := setupDispatchCLI(t)
 	writeDispatchCLIIssue(t, root, "done", "AFK")
 
-	cmd := NewDispatchCmd()
+	cmd := NewDispatchCmd("test")
 	cmd.SetArgs([]string{"demo", "--base", "main"})
 	var out strings.Builder
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
 	require.NoError(t, cmd.Execute())
+}
+
+func bugReports(t *testing.T, root string) []string {
+	t.Helper()
+	reports, err := filepath.Glob(filepath.Join(root, "pb-error-report-*.log"))
+	require.NoError(t, err)
+	return reports
+}
+
+// A todo AFK issue with no bender-implement-issue skill staged fails setup for
+// every ready issue, so dispatch returns an environment error in Go — the path
+// the agent-facing report_bugs prompt can't cover. With report_bugs on, the
+// command must leave the artifact itself.
+func TestDispatchCmd_WritesBugReportOnFailureWhenReportBugs(t *testing.T) {
+	root := setupDispatchCLI(t)
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"),
+		[]byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}, "report_bugs": true}`), 0o644))
+	writeDispatchCLIIssue(t, root, "todo", "AFK")
+
+	cmd := NewDispatchCmd("v1.2.3")
+	cmd.SetArgs([]string{"demo"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	require.Error(t, cmd.Execute())
+
+	reports := bugReports(t, root)
+	require.Len(t, reports, 1, "exactly one bug report should be written")
+	data, err := os.ReadFile(reports[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "dispatch demo")
+	assert.Contains(t, string(data), "v1.2.3")
+}
+
+// The same failure with report_bugs off (the default) must not write a report —
+// proving the flag gates the artifact rather than any failure producing one.
+func TestDispatchCmd_NoBugReportWhenReportBugsOff(t *testing.T) {
+	root := setupDispatchCLI(t)
+	writeDispatchCLIIssue(t, root, "todo", "AFK")
+
+	cmd := NewDispatchCmd("v1.2.3")
+	cmd.SetArgs([]string{"demo"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	require.Error(t, cmd.Execute())
+	assert.Empty(t, bugReports(t, root), "no report when report_bugs is off")
 }

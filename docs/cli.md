@@ -78,7 +78,7 @@ Merge-back never touches the parent repo's HEAD. On first MergeBack of a run, di
 
 The integration worktree persists across runs of the same slug for fast resumption and is GC'd only on `AllDone` (or unconditionally via `pba worktree gc <slug>`). See [ADR-0003](./adr/0003-merge-in-dedicated-integration-worktree.md) for the rationale.
 
-Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure, e.g. stuck-on-blocked, dispatch lock contention).
+Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure). A `1` has two distinct shapes: *stuck-on-blocked* / lock contention (a dependency or operational problem — fix the issues and re-run), and *setup failure* (`dispatch setup failed for every ready issue ...`, an environment problem where no sub-agent ran — re-running won't help until it's fixed; the message names the shared cause). When `report_bugs` is enabled, a `1` exit also writes a `pb-error-report-<UTC>.log` to the repo root capturing the command and error (the orchestration failure happens in Go, before any sub-agent runs, so the agent-facing report_bugs prompt can't cover it).
 
 ### Completion sentinel
 
