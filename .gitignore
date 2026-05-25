@@ -12,6 +12,7 @@ pb-error-report-*.log
 # IDE
 .idea/
 .vscode/
+.serena/
 
 # OS
 .DS_Store
