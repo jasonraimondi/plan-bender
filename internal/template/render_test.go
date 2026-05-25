@@ -69,7 +69,7 @@ func TestLoadTemplates_Embedded(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 	assert.Len(t, tmpls, 11)
-	assert.Contains(t, tmpls, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, tmpls, "bender-orchestrator")
 }
 
 func TestBuildContext_IncludesAgent(t *testing.T) {
@@ -88,15 +88,15 @@ func TestBuildContext_DifferentAgents(t *testing.T) {
 
 func TestLoadTemplates_LocalOverride(t *testing.T) {
 	dir := t.TempDir()
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates", "custom")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
 	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "custom.tmpl"),
+		filepath.Join(overrideDir, "SKILL.md.tmpl"),
 		[]byte("custom content"),
 		0o644,
 	))
 
 	tmpls, err := LoadTemplates(dir)
 	require.NoError(t, err)
-	assert.Equal(t, "custom content", tmpls["custom.tmpl"])
+	assert.Equal(t, "custom content", tmpls["custom"].Main())
 }

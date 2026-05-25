@@ -42,10 +42,10 @@ func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
 	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-interview-me.skill.tmpl"),
+		filepath.Join(overrideDir, "SKILL.md.tmpl"),
 		[]byte("Custom content for {{.plans_dir}}"),
 		0o644,
 	))
