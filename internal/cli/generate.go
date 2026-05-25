@@ -75,16 +75,11 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 				continue
 			}
 			outDir := filepath.Join(root, ".plan-bender", "skills", agent.Name, name)
-			if err := os.MkdirAll(outDir, 0o755); err != nil {
-				return 0, fmt.Errorf("creating dir %s: %w", outDir, err)
+			if err := os.RemoveAll(outDir); err != nil {
+				return 0, fmt.Errorf("clearing %s: %w", outDir, err)
 			}
-			rendered, err := tmpl.Render(name, skill.Main(), ctx)
-			if err != nil {
-				return 0, fmt.Errorf("rendering %s: %w", name, err)
-			}
-			outPath := filepath.Join(outDir, "SKILL.md")
-			if err := os.WriteFile(outPath, []byte(rendered), 0o644); err != nil {
-				return 0, fmt.Errorf("writing %s: %w", outPath, err)
+			if err := writeSkill(name, skill, ctx, outDir); err != nil {
+				return 0, err
 			}
 			count++
 		}
@@ -92,6 +87,32 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 
 	fmt.Fprintf(out, "%d skills generated\n", count)
 	return count, nil
+}
+
+// writeSkill renders or copies every file in a skill template into outDir. Files
+// ending in .tmpl are rendered through the template engine and lose the suffix;
+// every other file is copied verbatim. Subdirectories are preserved.
+func writeSkill(name string, skill tmpl.Skill, ctx any, outDir string) error {
+	for file, content := range skill.Files {
+		data := content
+		outRel := file
+		if strings.HasSuffix(file, ".tmpl") {
+			outRel = strings.TrimSuffix(file, ".tmpl")
+			rendered, err := tmpl.Render(name+"/"+file, content, ctx)
+			if err != nil {
+				return fmt.Errorf("rendering %s/%s: %w", name, file, err)
+			}
+			data = rendered
+		}
+		outPath := filepath.Join(outDir, filepath.FromSlash(outRel))
+		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+			return fmt.Errorf("creating dir for %s: %w", outPath, err)
+		}
+		if err := os.WriteFile(outPath, []byte(data), 0o644); err != nil {
+			return fmt.Errorf("writing %s: %w", outPath, err)
+		}
+	}
+	return nil
 }
 
 // warnStaleTemplateOverrides emits two kinds of stderr warning for stale project
