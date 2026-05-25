@@ -113,13 +113,9 @@ func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-implement-prd.skill.tmpl"),
-		[]byte("---\nname: x\n---\nbody"),
-		0o644,
-	))
+	fork := filepath.Join(dir, ".plan-bender", "templates", "bender-implement-prd")
+	require.NoError(t, os.MkdirAll(fork, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 
 	cmd := NewGenerateCmd()
 	var stdout, stderr bytes.Buffer
@@ -129,23 +125,19 @@ func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.Contains(t, out, "bender-implement-prd")
 	assert.Contains(t, out, "pba next")
 	assert.Contains(t, out, "re-fork")
-	assert.NotContains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.NotContains(t, out, "bender-orchestrator")
 }
 
 func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-orchestrator.skill.tmpl"),
-		[]byte("---\nname: x\n---\nbody"),
-		0o644,
-	))
+	fork := filepath.Join(dir, ".plan-bender", "templates", "bender-orchestrator")
+	require.NoError(t, os.MkdirAll(fork, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 
 	cmd := NewGenerateCmd()
 	var stdout, stderr bytes.Buffer
@@ -155,24 +147,20 @@ func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, out, "bender-orchestrator")
 	assert.Contains(t, out, "pba next")
 	assert.Contains(t, out, "re-fork")
-	assert.NotContains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.NotContains(t, out, "bender-implement-prd")
 }
 
 func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	for _, name := range []string{"bender-implement-prd.skill.tmpl", "bender-orchestrator.skill.tmpl"} {
-		require.NoError(t, os.WriteFile(
-			filepath.Join(overrideDir, name),
-			[]byte("---\nname: x\n---\nbody"),
-			0o644,
-		))
+	for _, name := range []string{"bender-implement-prd", "bender-orchestrator"} {
+		fork := filepath.Join(dir, ".plan-bender", "templates", name)
+		require.NoError(t, os.MkdirAll(fork, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 	}
 
 	cmd := NewGenerateCmd()
@@ -183,7 +171,33 @@ func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
-	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, out, "bender-implement-prd")
+	assert.Contains(t, out, "bender-orchestrator")
 	assert.Equal(t, 2, strings.Count(out, "warning:"), "expected exactly two warning lines")
+}
+
+func TestGenerateCmd_FlatOverride_WarnsMigration(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "bender-interview-me.skill.tmpl"),
+		[]byte("stale flat override"),
+		0o644,
+	))
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "bender-interview-me.skill.tmpl")
+	assert.Contains(t, out, "no longer read")
+	assert.Contains(t, out, "bender-interview-me/SKILL.md.tmpl")
+	assert.NotContains(t, out, "pba next")
 }

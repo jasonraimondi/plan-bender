@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	tmpl "github.com/jasonraimondi/plan-bender/internal/template"
@@ -44,7 +45,7 @@ func NewGenerateCmd() *cobra.Command {
 				return err
 			}
 
-			warnForkedNextTemplates(root, cmd.ErrOrStderr())
+			warnStaleTemplateOverrides(root, cmd.ErrOrStderr())
 
 			count, err := symlinkSkills(root, cfg)
 			if err != nil {
@@ -93,25 +94,34 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 	return count, nil
 }
 
-// warnForkedNextTemplates writes a stderr warning for each forked copy of a
-// template that the upstream now delegates to `pba next`. Users with stale
-// forks should re-fork to pick up the new behavior.
-func warnForkedNextTemplates(root string, stderr io.Writer) {
+// warnStaleTemplateOverrides emits two kinds of stderr warning for stale project
+// overrides in .plan-bender/templates/:
+//   - a flat {name}.skill.tmpl is no longer read; it must move to
+//     {name}/SKILL.md.tmpl, so warn rather than let the fork silently vanish.
+//   - a forked copy of a template that upstream now delegates to `pba next`
+//     (checked at the new {name}/SKILL.md.tmpl location); re-fork to pick it up.
+func warnStaleTemplateOverrides(root string, stderr io.Writer) {
 	overrideDir := filepath.Join(root, ".plan-bender", "templates")
 	entries, err := os.ReadDir(overrideDir)
 	if err != nil {
 		return
 	}
 	watched := map[string]bool{
-		"bender-implement-prd.skill.tmpl": true,
-		"bender-orchestrator.skill.tmpl":  true,
+		"bender-implement-prd": true,
+		"bender-orchestrator":  true,
 	}
 	for _, e := range entries {
-		if e.IsDir() {
+		if !e.IsDir() {
+			if strings.HasSuffix(e.Name(), ".skill.tmpl") {
+				name := strings.TrimSuffix(e.Name(), ".skill.tmpl")
+				fmt.Fprintf(stderr, "warning: flat override %s is no longer read; move it to %s/SKILL.md.tmpl\n", e.Name(), name)
+			}
 			continue
 		}
 		if watched[e.Name()] {
-			fmt.Fprintf(stderr, "warning: forked template %s found in .plan-bender/templates/; upstream now uses `pba next` — re-fork to pick up the new behavior\n", e.Name())
+			if _, err := os.Stat(filepath.Join(overrideDir, e.Name(), "SKILL.md.tmpl")); err == nil {
+				fmt.Fprintf(stderr, "warning: forked template %s/SKILL.md.tmpl found; upstream now uses `pba next` — re-fork to pick up the new behavior\n", e.Name())
+			}
 		}
 	}
 }
