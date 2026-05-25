@@ -1,6 +1,8 @@
 package template
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -484,4 +486,29 @@ func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent complete")
+}
+
+func TestLoadTemplates_ErrorsWhenOverrideSkillHasNoBody(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, ".plan-bender", "templates", "brand-new-skill")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTES.md"), []byte("x"), 0o644))
+
+	_, err := LoadTemplates(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "brand-new-skill")
+	assert.Contains(t, err.Error(), "SKILL.md.tmpl")
+}
+
+func TestLoadTemplates_ErrorsOnOutputCollision(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	// NOTE.md and NOTE.md.tmpl both produce NOTE.md.
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTE.md"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTE.md.tmpl"), []byte("b"), 0o644))
+
+	_, err := LoadTemplates(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "both produce")
 }

@@ -2,9 +2,11 @@ package template
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -50,6 +52,10 @@ func LoadTemplates(projectRoot string) (map[string]Skill, error) {
 	}
 
 	if err := mergeOverrides(skills, filepath.Join(projectRoot, ".plan-bender", "templates")); err != nil {
+		return nil, err
+	}
+
+	if err := validate(skills); err != nil {
 		return nil, err
 	}
 
@@ -101,4 +107,29 @@ func mergeOverrides(skills map[string]Skill, overrideRoot string) error {
 		addSkillFile(skills, name, file, string(data))
 		return nil
 	})
+}
+
+// validate enforces post-merge invariants: every skill template must contain a
+// SKILL.md.tmpl body, and no two source files may produce the same output path
+// (e.g. "X.tmpl" and "X", or "SKILL.md.tmpl" and a verbatim "SKILL.md").
+func validate(skills map[string]Skill) error {
+	var missing []string
+	for name, s := range skills {
+		if _, ok := s.Files["SKILL.md.tmpl"]; !ok {
+			missing = append(missing, name)
+		}
+		seen := make(map[string]string, len(s.Files))
+		for file := range s.Files {
+			out := strings.TrimSuffix(file, ".tmpl")
+			if prev, ok := seen[out]; ok {
+				return fmt.Errorf("skill %q: files %q and %q both produce %q", name, prev, file, out)
+			}
+			seen[out] = file
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("skill templates missing SKILL.md.tmpl body: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
