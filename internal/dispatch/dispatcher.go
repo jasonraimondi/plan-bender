@@ -23,6 +23,13 @@ import (
 // ErrHITLOnly signals only HITL issues remain. The CLI maps this to exit code 2.
 var ErrHITLOnly = errors.New("only HITL issues remain")
 
+// ErrSetupFailed marks the dispatch failure where every ready issue failed
+// environment setup before any sub-agent ran. The CLI keys the report_bugs
+// artifact off this: unlike stuck-on-blocked or lock contention (both
+// user-resolvable, not bugs), a setup failure is the one exit-1 shape the
+// agent-facing report_bugs prompt can't cover, because no sub-agent runs.
+var ErrSetupFailed = errors.New("dispatch setup failed")
+
 // Dispatcher orchestrates the full implementation loop for a plan: resolve →
 // worktrees → spawn claude subprocesses → merge → cleanup, repeating until
 // all_done or HITL-only.
@@ -216,7 +223,7 @@ func (d *Dispatcher) Run(ctx context.Context, slug string) error {
 		// next loop would find them all blocked and report "stuck: N blocked",
 		// which reads like a dependency deadlock. Surface the real cause once.
 		if cause, ok := allSetupFailed(results); ok {
-			return fmt.Errorf("dispatch setup failed for every ready issue (%s); this is an environment problem, not a dependency deadlock — see the bender-implement-prd troubleshooting note on worktree skill-linking", cause)
+			return fmt.Errorf("%w for every ready issue (%s); this is an environment problem, not a dependency deadlock — see the bender-implement-prd troubleshooting note on worktree skill-linking", ErrSetupFailed, cause)
 		}
 
 		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
@@ -257,7 +264,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 	if err != nil {
 		reason := fmt.Sprintf("creating worktree: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
-		return SubResult{IssueID: issue.ID, Err: &setupError{reason}}
+		return SubResult{IssueID: issue.ID, Err: newSetupError(reason, "")}
 	}
 
 	// Atomic claim: stamp branch + flip to in-progress through the canonical
@@ -270,7 +277,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		reason := fmt.Sprintf("claiming issue: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
 	}
 	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
 	// the post-claim state. Otherwise the sub-agent's prompt shows backlog/null
@@ -283,7 +290,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		reason := fmt.Sprintf("linking plans dir: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
 	}
 
 	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
@@ -291,7 +298,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
 			d.markBlockedAndWarn(slug, issue.ID, reason)
 			d.cleanupWorktree(wt.Path)
-			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
+			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
 		}
 	}
 
@@ -300,7 +307,7 @@ func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue
 		reason := fmt.Sprintf("building prompt: %v", err)
 		d.markBlockedAndWarn(slug, issue.ID, reason)
 		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: &setupError{reason}}
+		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
 	}
 
 	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
@@ -571,14 +578,29 @@ func blockedSummary(issues []schema.Issue) string {
 // the dispatch loop surfaces it as one environment error instead of looping
 // into the misleading "stuck: N blocked" path, where the shared root cause is
 // buried in per-issue blocked notes.
-type setupError struct{ reason string }
+type setupError struct {
+	reason   string
+	groupKey string
+}
 
 func (e *setupError) Error() string { return e.reason }
 
+// newSetupError builds a setupError, folding worktreePath (when known) out of
+// the grouping key. Without this the per-issue worktree path embedded in most
+// setup reasons makes identical causes look distinct, defeating the collapse.
+func newSetupError(reason, worktreePath string) *setupError {
+	groupKey := reason
+	if worktreePath != "" {
+		groupKey = strings.ReplaceAll(reason, worktreePath, "<worktree>")
+	}
+	return &setupError{reason: reason, groupKey: groupKey}
+}
+
 // allSetupFailed reports whether every result is a setup-phase failure — i.e.
 // no sub-agent ever ran. The returned string is the shared cause when all
-// reasons match, else a per-cause tally. Returns ("", false) for an empty
-// batch or any result that is a success or a non-setup (sub-agent) failure.
+// results fail the same way (grouped by setupError.groupKey, which folds out the
+// per-issue worktree path), else a per-cause tally. Returns ("", false) for an
+// empty batch or any result that is a success or a non-setup (sub-agent) failure.
 func allSetupFailed(results []SubResult) (string, bool) {
 	if len(results) == 0 {
 		return "", false
@@ -589,7 +611,7 @@ func allSetupFailed(results []SubResult) (string, bool) {
 		if !errors.As(r.Err, &se) {
 			return "", false
 		}
-		reasons[se.reason]++
+		reasons[se.groupKey]++
 	}
 	if len(reasons) == 1 {
 		for reason := range reasons {

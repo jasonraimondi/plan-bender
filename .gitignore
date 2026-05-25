@@ -3,6 +3,9 @@
 /pb
 *.exe
 
+# Dispatch bug reports (written to repo root on a setup-failure dispatch)
+pb-error-report-*.log
+
 # Go
 /vendor/
 

@@ -1267,23 +1267,27 @@ func TestLinkPlansDir_RefreshesExistingSymlink(t *testing.T) {
 func TestAllSetupFailed(t *testing.T) {
 	subErr := errors.New("subprocess exited 1")
 	tests := []struct {
-		name    string
-		results []SubResult
-		wantOK  bool
-		wantSub string
+		name      string
+		results   []SubResult
+		wantOK    bool
+		wantCause string
 	}{
 		{"empty batch", nil, false, ""},
 		{"all share one setup cause", []SubResult{
-			{IssueID: 1, Err: &setupError{"building prompt: no skill"}},
-			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
+			{IssueID: 1, Err: newSetupError("building prompt: no skill", "")},
+			{IssueID: 2, Err: newSetupError("building prompt: no skill", "")},
 		}, true, "building prompt: no skill"},
-		{"setup causes differ are tallied", []SubResult{
-			{IssueID: 1, Err: &setupError{"creating worktree: boom"}},
-			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
-		}, true, "building prompt: no skill"},
+		{"same cause with per-issue worktree paths collapses to one", []SubResult{
+			{IssueID: 1, Err: newSetupError("building prompt: reading skill at /wt/1-a/.claude/skills/x", "/wt/1-a")},
+			{IssueID: 2, Err: newSetupError("building prompt: reading skill at /wt/2-b/.claude/skills/x", "/wt/2-b")},
+		}, true, "building prompt: reading skill at <worktree>/.claude/skills/x"},
+		{"setup causes differ are tallied with counts", []SubResult{
+			{IssueID: 1, Err: newSetupError("creating worktree: boom", "")},
+			{IssueID: 2, Err: newSetupError("building prompt: no skill", "")},
+		}, true, "1× building prompt: no skill; 1× creating worktree: boom"},
 		{"one success disqualifies", []SubResult{
 			{IssueID: 1, Success: true},
-			{IssueID: 2, Err: &setupError{"building prompt: no skill"}},
+			{IssueID: 2, Err: newSetupError("building prompt: no skill", "")},
 		}, false, ""},
 		{"sub-agent failure is not setup", []SubResult{
 			{IssueID: 1, Err: subErr},
@@ -1293,8 +1297,8 @@ func TestAllSetupFailed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cause, ok := allSetupFailed(tc.results)
 			assert.Equal(t, tc.wantOK, ok)
-			if tc.wantSub != "" {
-				assert.Contains(t, cause, tc.wantSub)
+			if tc.wantOK {
+				assert.Equal(t, tc.wantCause, cause)
 			}
 		})
 	}

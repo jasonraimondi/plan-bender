@@ -204,3 +204,21 @@ func TestDispatchCmd_NoBugReportWhenReportBugsOff(t *testing.T) {
 	require.Error(t, cmd.Execute())
 	assert.Empty(t, bugReports(t, root), "no report when report_bugs is off")
 }
+
+func TestDispatchCmd_NoBugReportOnStuckBlocked(t *testing.T) {
+	root := setupDispatchCLI(t)
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".plan-bender.json"),
+		[]byte(`{"plans_dir": "./.plan-bender/plans/", "agents": {"claude-code": true}, "report_bugs": true}`), 0o644))
+	writeDispatchCLIIssue(t, root, "blocked", "AFK")
+
+	cmd := NewDispatchCmd("v1.2.3")
+	cmd.SetArgs([]string{"demo"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.False(t, IsSetupFailure(err), "stuck-on-blocked must not be the setup-failure class")
+	assert.Empty(t, bugReports(t, root), "no report for a user-resolvable stuck state")
+}

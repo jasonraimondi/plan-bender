@@ -43,12 +43,12 @@ func NewDispatchCmd(version string) *cobra.Command {
 			d.Base = base
 			err = d.Run(cmd.Context(), slug)
 
-			// A dispatch-orchestration failure (e.g. an environment-wide setup
-			// error) happens here in Go, so the agent-facing report_bugs prompt
-			// never fires — no sub-agent runs to honor it. Write the artifact
-			// from the failing command itself. HITL-only is a clean exit, not a
-			// failure, so it is excluded.
-			if err != nil && !IsHITLOnly(err) && cfg.ReportBugs {
+			// A setup failure happens here in Go before any sub-agent runs, so
+			// the agent-facing report_bugs prompt never fires — write the artifact
+			// from the failing command itself. Limited to the setup-failure class:
+			// stuck-on-blocked and lock contention are user-resolvable, not bugs,
+			// and HITL-only is a clean exit.
+			if IsSetupFailure(err) && cfg.ReportBugs {
 				if path, werr := writeBugReport(root, version, "dispatch "+slug, err); werr != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to write bug report: %v\n", werr)
 				} else {
@@ -83,4 +83,12 @@ func DispatcherFromConfig(cfg config.Config, root string) *dispatch.Dispatcher {
 // main.go uses this to map exit code to 2.
 func IsHITLOnly(err error) bool {
 	return errors.Is(err, dispatch.ErrHITLOnly)
+}
+
+// IsSetupFailure reports whether err is the dispatch all-setup-failed sentinel:
+// every ready issue failed environment setup before any sub-agent ran. This is
+// the only exit-1 shape the report_bugs artifact covers, since stuck-on-blocked
+// and lock contention are user-resolvable rather than plan-bender bugs.
+func IsSetupFailure(err error) bool {
+	return errors.Is(err, dispatch.ErrSetupFailed)
 }

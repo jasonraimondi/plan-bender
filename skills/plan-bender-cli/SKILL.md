@@ -114,7 +114,7 @@ Dispatch treats a subprocess as successful if **exit 0 AND status == in-review**
 
 - `0` — all done
 - `2` — only HITL issues remain → run `/bender-implement-hitl <slug>`
-- `1` — other failure. Either *stuck-on-blocked* / lock contention (fix the issues and re-run) or a *setup failure* (`dispatch setup failed for every ready issue ...` — an environment problem where no sub-agent ran; the message names the shared cause, e.g. a worktree missing the `bender-implement-issue` skill). With `report_bugs` on, a `1` exit also writes `pb-error-report-<UTC>.log` to the repo root.
+- `1` — other failure. Either *stuck-on-blocked* / lock contention (fix the issues and re-run) or a *setup failure* (`dispatch setup failed for every ready issue ...` — an environment problem where no sub-agent ran; the message names the shared cause, e.g. a worktree missing the `bender-implement-issue` skill). With `report_bugs` on, only the *setup failure* shape writes `pb-error-report-<UTC>.log` to the repo root (stuck-on-blocked and lock contention are user-resolvable, not bugs).
 
 ## Recovering from a stuck dispatch
 
