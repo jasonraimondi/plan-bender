@@ -488,16 +488,16 @@ func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
 	assert.Contains(t, out, "plan-bender-agent complete")
 }
 
-func TestLoadTemplates_ErrorsWhenOverrideSkillHasNoBody(t *testing.T) {
+func TestLoadTemplates_IgnoresUnknownOverrideDir(t *testing.T) {
 	dir := t.TempDir()
 	base := filepath.Join(dir, ".plan-bender", "templates", "brand-new-skill")
 	require.NoError(t, os.MkdirAll(base, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTES.md"), []byte("x"), 0o644))
 
-	_, err := LoadTemplates(dir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "brand-new-skill")
-	assert.Contains(t, err.Error(), "SKILL.md.tmpl")
+	skills, err := LoadTemplates(dir)
+	require.NoError(t, err, "stray override dir must not block loading other skills")
+	assert.NotContains(t, skills, "brand-new-skill", "unknown override dir must not be promoted to a phantom skill")
+	assert.Contains(t, skills, "bender-write-prd", "bundled skills must still load")
 }
 
 func TestLoadTemplates_ErrorsOnOutputCollision(t *testing.T) {

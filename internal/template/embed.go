@@ -51,7 +51,11 @@ func LoadTemplates(projectRoot string) (map[string]Skill, error) {
 		return nil, err
 	}
 
-	if err := mergeOverrides(skills, filepath.Join(projectRoot, ".plan-bender", "templates")); err != nil {
+	known := make(map[string]bool, len(skills))
+	for name := range skills {
+		known[name] = true
+	}
+	if err := mergeOverrides(skills, known, filepath.Join(projectRoot, ".plan-bender", "templates")); err != nil {
 		return nil, err
 	}
 
@@ -74,7 +78,10 @@ func addSkillFile(skills map[string]Skill, name, file, content string) {
 // mergeOverrides walks .plan-bender/templates/{name}/ and upserts each file into
 // the matching skill at the file level. A file directly under templates/ (no
 // {name}/ dir) is ignored here; generate.go warns about that legacy flat layout.
-func mergeOverrides(skills map[string]Skill, overrideRoot string) error {
+// A subdir whose name is not in `known` is only accepted when it ships its own
+// SKILL.md.tmpl — without one it is treated as a stray and silently skipped,
+// so a random dir cannot brick LoadTemplates for every agent.
+func mergeOverrides(skills map[string]Skill, known map[string]bool, overrideRoot string) error {
 	info, err := os.Stat(overrideRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -85,26 +92,45 @@ func mergeOverrides(skills map[string]Skill, overrideRoot string) error {
 	if !info.IsDir() {
 		return nil
 	}
-	return filepath.WalkDir(overrideRoot, func(p string, d fs.DirEntry, err error) error {
+	entries, err := os.ReadDir(overrideRoot)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue // flat file directly under templates/ is no longer a skill
+		}
+		name := e.Name()
+		skillDir := filepath.Join(overrideRoot, name)
+		if !known[name] {
+			if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md.tmpl")); err != nil {
+				continue // stray dir without a body; not a skill
+			}
+		}
+		if err := mergeSkillDir(skills, name, skillDir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeSkillDir(skills map[string]Skill, name, skillDir string) error {
+	return filepath.WalkDir(skillDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(overrideRoot, p)
+		rel, err := filepath.Rel(skillDir, p)
 		if err != nil {
 			return err
-		}
-		name, file, ok := strings.Cut(filepath.ToSlash(rel), "/")
-		if !ok {
-			return nil // flat file directly under templates/ is no longer a skill
 		}
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		addSkillFile(skills, name, file, string(data))
+		addSkillFile(skills, name, filepath.ToSlash(rel), string(data))
 		return nil
 	})
 }
