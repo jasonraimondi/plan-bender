@@ -115,11 +115,11 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 		assert.Len(t, entries, 10, "agent %s should have 10 skill dirs", agent)
 	}
 
-	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-interview-me", "SKILL.md"))
+	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-implement-hitl", "SKILL.md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(ccData), "AskUserQuestionTool")
 
-	ocData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "openclaw", "bender-interview-me", "SKILL.md"))
+	ocData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "openclaw", "bender-implement-hitl", "SKILL.md"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(ocData), "AskUserQuestionTool")
 	assert.Contains(t, string(ocData), "Ask the user directly in conversation")

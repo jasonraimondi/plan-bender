@@ -110,30 +110,6 @@ func TestImplementHitlTemplate_AgentConditional(t *testing.T) {
 	})
 }
 
-func TestInterviewTemplate_AgentConditional(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	tmplContent := tmpls["bender-interview-me"].Main()
-
-	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "claude-code"
-		out, err := Render("interview", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.Contains(t, out, "AskUserQuestionTool")
-	})
-
-	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "openclaw"
-		out, err := Render("interview", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.NotContains(t, out, "AskUserQuestionTool")
-		assert.Contains(t, out, "Ask the user directly in conversation")
-	})
-}
-
 func TestReviewPrdTemplate_AgentConditional(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
@@ -286,7 +262,9 @@ func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
 			out, err := Render(name, skill.Main(), ctx)
 			require.NoError(t, err)
 			assert.Contains(t, out, marker)
-			assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
+			if name != "bender-interview-me" {
+				assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
+			}
 		})
 	}
 }
@@ -296,7 +274,7 @@ func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 	require.NoError(t, err)
 	content := tmpls["bender-interview-me"].Main()
 
-	t.Run("off renders identical to absent and keeps the question-tool intro", func(t *testing.T) {
+	t.Run("off renders identical to absent and omits the domain block", func(t *testing.T) {
 		ctx := fixtureContext()
 		ctx["interview_with_docs"] = false
 		off, err := Render("interview", content, ctx)
@@ -309,16 +287,14 @@ func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 
 		assert.Equal(t, none, off, "false must render byte-identical to an absent flag")
 		assert.NotContains(t, off, "Domain awareness")
-		assert.Contains(t, off, "AskUserQuestionTool")
 	})
 
-	t.Run("on swaps the intro and appends the grill block", func(t *testing.T) {
+	t.Run("on appends the grill block", func(t *testing.T) {
 		ctx := fixtureContext()
 		ctx["interview_with_docs"] = true
 		out, err := Render("interview", content, ctx)
 		require.NoError(t, err)
 
-		assert.NotContains(t, out, "AskUserQuestionTool")
 		assert.Contains(t, out, "one at a time")
 		assert.Contains(t, out, "## Domain awareness")
 		assert.Contains(t, out, "Update CONTEXT.md inline")
