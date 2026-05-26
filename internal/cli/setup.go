@@ -121,6 +121,8 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 		return err
 	}
 
+	warnStaleTemplateOverrides(root, cmd.ErrOrStderr())
+
 	count, err := symlinkSkills(root, cfg)
 	if err != nil {
 		return err

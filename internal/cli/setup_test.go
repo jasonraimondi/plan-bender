@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -300,6 +301,29 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, info.Mode()&os.ModeSymlink != 0, "%s should be a symlink", e.Name())
 	}
+}
+
+func TestSetup_FlatOverride_WarnsMigration(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "bender-interview-me.skill.tmpl"),
+		[]byte("stale flat override"),
+		0o644,
+	))
+
+	h := testSetupCmd(setupDeps{})
+	var stderr bytes.Buffer
+	h.cmd.SetErr(&stderr)
+	require.NoError(t, h.execute())
+
+	out := stderr.String()
+	assert.Contains(t, out, "bender-interview-me.skill.tmpl")
+	assert.Contains(t, out, "no longer read")
+	assert.Contains(t, out, "bender-interview-me/SKILL.md.tmpl")
 }
 
 func TestSetup_GitignoreRegistryDriven(t *testing.T) {
