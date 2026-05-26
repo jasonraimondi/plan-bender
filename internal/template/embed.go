@@ -16,7 +16,6 @@ var embeddedFS embed.FS
 // Skill is one skill template: every file in the template directory keyed by its
 // path relative to that directory (forward slashes), including SKILL.md.tmpl.
 type Skill struct {
-	Name  string
 	Files map[string]string
 }
 
@@ -69,7 +68,7 @@ func LoadTemplates(projectRoot string) (map[string]Skill, error) {
 func addSkillFile(skills map[string]Skill, name, file, content string) {
 	s, ok := skills[name]
 	if !ok {
-		s = Skill{Name: name, Files: make(map[string]string)}
+		s = Skill{Files: make(map[string]string)}
 	}
 	s.Files[file] = content
 	skills[name] = s
@@ -140,12 +139,23 @@ func mergeSkillDir(skills map[string]Skill, name, skillDir string) error {
 // (e.g. "X.tmpl" and "X", or "SKILL.md.tmpl" and a verbatim "SKILL.md").
 func validate(skills map[string]Skill) error {
 	var missing []string
-	for name, s := range skills {
+	names := make([]string, 0, len(skills))
+	for name := range skills {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		s := skills[name]
 		if _, ok := s.Files["SKILL.md.tmpl"]; !ok {
 			missing = append(missing, name)
 		}
-		seen := make(map[string]string, len(s.Files))
+		files := make([]string, 0, len(s.Files))
 		for file := range s.Files {
+			files = append(files, file)
+		}
+		sort.Strings(files)
+		seen := make(map[string]string, len(files))
+		for _, file := range files {
 			out := strings.TrimSuffix(file, ".tmpl")
 			if prev, ok := seen[out]; ok {
 				return fmt.Errorf("skill %q: files %q and %q both produce %q", name, prev, file, out)
@@ -154,7 +164,6 @@ func validate(skills map[string]Skill) error {
 		}
 	}
 	if len(missing) > 0 {
-		sort.Strings(missing)
 		return fmt.Errorf("skill templates missing SKILL.md.tmpl body: %s", strings.Join(missing, ", "))
 	}
 	return nil
