@@ -38,6 +38,36 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	}
 }
 
+func TestGenerateSkills_OmitsBackendSkillWhenLinearDisabled(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	require.False(t, cfg.Linear.Enabled, "default config has Linear disabled")
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-sync-linear"))
+	assert.True(t, os.IsNotExist(err), "bender-sync-linear must not be generated when Linear is disabled")
+}
+
+func TestGenerateSkills_EmitsBackendSkillWhenLinearEnabled(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	cfg.Linear.Enabled = true
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-sync-linear", "SKILL.md"))
+	require.NoError(t, err, "bender-sync-linear must be generated when Linear is enabled")
+}
+
 func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
