@@ -38,14 +38,44 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	}
 }
 
+func TestGenerateSkills_OmitsBackendSkillWhenLinearDisabled(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	require.False(t, cfg.Linear.Enabled, "default config has Linear disabled")
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-sync-linear"))
+	assert.True(t, os.IsNotExist(err), "bender-sync-linear must not be generated when Linear is disabled")
+}
+
+func TestGenerateSkills_EmitsBackendSkillWhenLinearEnabled(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	cfg.Linear.Enabled = true
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-sync-linear", "SKILL.md"))
+	require.NoError(t, err, "bender-sync-linear must be generated when Linear is enabled")
+}
+
 func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
 	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
 	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-interview-me.skill.tmpl"),
+		filepath.Join(overrideDir, "SKILL.md.tmpl"),
 		[]byte("Custom content for {{.plans_dir}}"),
 		0o644,
 	))
@@ -85,11 +115,11 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 		assert.Len(t, entries, 10, "agent %s should have 10 skill dirs", agent)
 	}
 
-	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-interview-me", "SKILL.md"))
+	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-implement-hitl", "SKILL.md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(ccData), "AskUserQuestionTool")
 
-	ocData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "openclaw", "bender-interview-me", "SKILL.md"))
+	ocData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "openclaw", "bender-implement-hitl", "SKILL.md"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(ocData), "AskUserQuestionTool")
 	assert.Contains(t, string(ocData), "Ask the user directly in conversation")
@@ -113,13 +143,9 @@ func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-implement-prd.skill.tmpl"),
-		[]byte("---\nname: x\n---\nbody"),
-		0o644,
-	))
+	fork := filepath.Join(dir, ".plan-bender", "templates", "bender-implement-prd")
+	require.NoError(t, os.MkdirAll(fork, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 
 	cmd := NewGenerateCmd()
 	var stdout, stderr bytes.Buffer
@@ -129,23 +155,19 @@ func TestGenerateCmd_ForkedImplementPrd_Warns(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.Contains(t, out, "bender-implement-prd")
 	assert.Contains(t, out, "pba next")
 	assert.Contains(t, out, "re-fork")
-	assert.NotContains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.NotContains(t, out, "bender-orchestrator")
 }
 
 func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(overrideDir, "bender-orchestrator.skill.tmpl"),
-		[]byte("---\nname: x\n---\nbody"),
-		0o644,
-	))
+	fork := filepath.Join(dir, ".plan-bender", "templates", "bender-orchestrator")
+	require.NoError(t, os.MkdirAll(fork, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 
 	cmd := NewGenerateCmd()
 	var stdout, stderr bytes.Buffer
@@ -155,24 +177,20 @@ func TestGenerateCmd_ForkedOrchestrator_Warns(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, out, "bender-orchestrator")
 	assert.Contains(t, out, "pba next")
 	assert.Contains(t, out, "re-fork")
-	assert.NotContains(t, out, "bender-implement-prd.skill.tmpl")
+	assert.NotContains(t, out, "bender-implement-prd")
 }
 
 func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
 
-	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
-	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
-	for _, name := range []string{"bender-implement-prd.skill.tmpl", "bender-orchestrator.skill.tmpl"} {
-		require.NoError(t, os.WriteFile(
-			filepath.Join(overrideDir, name),
-			[]byte("---\nname: x\n---\nbody"),
-			0o644,
-		))
+	for _, name := range []string{"bender-implement-prd", "bender-orchestrator"} {
+		fork := filepath.Join(dir, ".plan-bender", "templates", name)
+		require.NoError(t, os.MkdirAll(fork, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(fork, "SKILL.md.tmpl"), []byte("---\nname: x\n---\nbody"), 0o644))
 	}
 
 	cmd := NewGenerateCmd()
@@ -183,7 +201,88 @@ func TestGenerateCmd_BothForks_WarnsBoth(t *testing.T) {
 
 	require.NoError(t, cmd.Execute())
 	out := stderr.String()
-	assert.Contains(t, out, "bender-implement-prd.skill.tmpl")
-	assert.Contains(t, out, "bender-orchestrator.skill.tmpl")
+	assert.Contains(t, out, "bender-implement-prd")
+	assert.Contains(t, out, "bender-orchestrator")
 	assert.Equal(t, 2, strings.Count(out, "warning:"), "expected exactly two warning lines")
+}
+
+func TestGenerateSkills_EmitsSupportingFiles(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	// Inject supporting files onto an existing skill via override: one verbatim
+	// file and one nested .tmpl file.
+	base := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "refs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "CONTEXT-FORMAT.md"), []byte("verbatim {{.plans_dir}}"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "refs", "notes.md.tmpl"), []byte("rendered {{.plans_dir}}"), 0o644))
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	out := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-interview-me")
+
+	verbatim, err := os.ReadFile(filepath.Join(out, "CONTEXT-FORMAT.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "verbatim {{.plans_dir}}", string(verbatim), "non-.tmpl file copied byte-for-byte")
+
+	nested, err := os.ReadFile(filepath.Join(out, "refs", "notes.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "rendered ./.plan-bender/plans/", string(nested), ".tmpl rendered, suffix stripped, subdir preserved")
+
+	_, err = os.Stat(filepath.Join(out, "SKILL.md"))
+	require.NoError(t, err, "body still emitted")
+}
+
+func TestGenerateSkills_RemovesStaleSupportingFiles(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	base := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "EXTRA.md"), []byte("x"), 0o644))
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	staleOut := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-interview-me", "EXTRA.md")
+	_, err = os.Stat(staleOut)
+	require.NoError(t, err, "supporting file present after first generate")
+
+	require.NoError(t, os.Remove(filepath.Join(base, "EXTRA.md")))
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(staleOut)
+	assert.True(t, os.IsNotExist(err), "stale supporting file removed on regenerate")
+}
+
+func TestGenerateCmd_FlatOverride_WarnsMigration(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	overrideDir := filepath.Join(dir, ".plan-bender", "templates")
+	require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(overrideDir, "bender-interview-me.skill.tmpl"),
+		[]byte("stale flat override"),
+		0o644,
+	))
+
+	cmd := NewGenerateCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute())
+	out := stderr.String()
+	assert.Contains(t, out, "bender-interview-me.skill.tmpl")
+	assert.Contains(t, out, "no longer read")
+	assert.Contains(t, out, "bender-interview-me/SKILL.md.tmpl")
+	assert.NotContains(t, out, "pba next")
 }

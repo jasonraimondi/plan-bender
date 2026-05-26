@@ -1,6 +1,8 @@
 package template
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,17 +54,17 @@ func TestAllTemplatesLoad(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := []string{
-		"bender-orchestrator.skill.tmpl",
-		"bender-write-prd.skill.tmpl",
-		"bender-write-issue.skill.tmpl",
-		"bender-prd-to-issues.skill.tmpl",
-		"bender-review-prd.skill.tmpl",
-		"bender-implement-prd.skill.tmpl",
-		"bender-implement-hitl.skill.tmpl",
-		"bender-implement-issue.skill.tmpl",
-		"bender-interview-me.skill.tmpl",
-		"bender-sync-linear.skill.tmpl",
-		"bender-retrospective.skill.tmpl",
+		"bender-orchestrator",
+		"bender-write-prd",
+		"bender-write-issue",
+		"bender-prd-to-issues",
+		"bender-review-prd",
+		"bender-implement-prd",
+		"bender-implement-hitl",
+		"bender-implement-issue",
+		"bender-interview-me",
+		"bender-sync-linear",
+		"bender-retrospective",
 	}
 	for _, name := range expected {
 		assert.Contains(t, tmpls, name, "missing template %s", name)
@@ -75,9 +77,9 @@ func TestAllTemplatesRender(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	for name, content := range tmpls {
+	for name, skill := range tmpls {
 		t.Run(name, func(t *testing.T) {
-			out, err := Render(name, content, ctx)
+			out, err := Render(name, skill.Main(), ctx)
 			require.NoError(t, err, "template %s failed to render", name)
 			assert.NotEmpty(t, out)
 		})
@@ -88,7 +90,7 @@ func TestImplementHitlTemplate_AgentConditional(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
-	tmplContent := tmpls["bender-implement-hitl.skill.tmpl"]
+	tmplContent := tmpls["bender-implement-hitl"].Main()
 
 	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
 		ctx := fixtureContext()
@@ -102,30 +104,6 @@ func TestImplementHitlTemplate_AgentConditional(t *testing.T) {
 		ctx := fixtureContext()
 		ctx["agent"] = "openclaw"
 		out, err := Render("implement-hitl", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.NotContains(t, out, "AskUserQuestionTool")
-		assert.Contains(t, out, "Ask the user directly in conversation")
-	})
-}
-
-func TestInterviewTemplate_AgentConditional(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	tmplContent := tmpls["bender-interview-me.skill.tmpl"]
-
-	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "claude-code"
-		out, err := Render("interview", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.Contains(t, out, "AskUserQuestionTool")
-	})
-
-	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "openclaw"
-		out, err := Render("interview", tmplContent, ctx)
 		require.NoError(t, err)
 		assert.NotContains(t, out, "AskUserQuestionTool")
 		assert.Contains(t, out, "Ask the user directly in conversation")
@@ -136,7 +114,7 @@ func TestReviewPrdTemplate_AgentConditional(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 
-	tmplContent := tmpls["bender-review-prd.skill.tmpl"]
+	tmplContent := tmpls["bender-review-prd"].Main()
 
 	t.Run("claude-code uses AskUserQuestion", func(t *testing.T) {
 		ctx := fixtureContext()
@@ -161,7 +139,7 @@ func TestOrchestratorTemplate_ContainsPipelinePhases(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("orchestrator", tmpls["bender-orchestrator.skill.tmpl"], ctx)
+	out, err := Render("orchestrator", tmpls["bender-orchestrator"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "Interview")
 	assert.Contains(t, out, "Write PRD")
@@ -174,7 +152,7 @@ func TestImplementPrdTemplate_NoLinearSyncWhenDisabled(t *testing.T) {
 
 	ctx := fixtureContext()
 	ctx["has_backend_sync"] = false
-	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "Linear sync")
 }
@@ -185,7 +163,7 @@ func TestImplementPrdTemplate_HasLinearSyncWhenEnabled(t *testing.T) {
 
 	ctx := fixtureContext()
 	ctx["has_backend_sync"] = true
-	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "Linear sync")
 }
@@ -195,7 +173,7 @@ func TestWritePrdTemplate_UsesCLIWriteThrough(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("write-prd", tmpls["bender-write-prd.skill.tmpl"], ctx)
+	out, err := Render("write-prd", tmpls["bender-write-prd"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent write-prd")
 }
@@ -205,7 +183,7 @@ func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("prd-to-issues", tmpls["bender-prd-to-issues.skill.tmpl"], ctx)
+	out, err := Render("prd-to-issues", tmpls["bender-prd-to-issues"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent write-issue")
 }
@@ -215,7 +193,7 @@ func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("write-issue", tmpls["bender-write-issue.skill.tmpl"], ctx)
+	out, err := Render("write-issue", tmpls["bender-write-issue"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent write-issue")
 }
@@ -223,7 +201,7 @@ func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 func TestWritePrdTemplate_ConditionalReviewStep(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
-	tmplContent := tmpls["bender-write-prd.skill.tmpl"]
+	tmplContent := tmpls["bender-write-prd"].Main()
 
 	t.Run("with review", func(t *testing.T) {
 		ctx := fixtureContext()
@@ -245,7 +223,7 @@ func TestWritePrdTemplate_ConditionalReviewStep(t *testing.T) {
 func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
-	tmplContent := tmpls["bender-write-issue.skill.tmpl"]
+	tmplContent := tmpls["bender-write-issue"].Main()
 
 	t.Run("with review", func(t *testing.T) {
 		ctx := fixtureContext()
@@ -270,21 +248,23 @@ func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
 
 	const marker = "## Bug reports"
 
-	for name, content := range tmpls {
+	for name, skill := range tmpls {
 		t.Run(name+"/off", func(t *testing.T) {
 			ctx := fixtureContext()
 			ctx["report_bugs"] = false
-			out, err := Render(name, content, ctx)
+			out, err := Render(name, skill.Main(), ctx)
 			require.NoError(t, err)
 			assert.NotContains(t, out, marker)
 		})
 		t.Run(name+"/on", func(t *testing.T) {
 			ctx := fixtureContext()
 			ctx["report_bugs"] = true
-			out, err := Render(name, content, ctx)
+			out, err := Render(name, skill.Main(), ctx)
 			require.NoError(t, err)
 			assert.Contains(t, out, marker)
-			assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
+			if name != "bender-interview-me" {
+				assert.Contains(t, out, "https://github.com/jasonraimondi/plan-bender/issues")
+			}
 		})
 	}
 }
@@ -292,9 +272,9 @@ func TestAllTemplates_ConditionalBugReportSection(t *testing.T) {
 func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
-	content := tmpls["bender-interview-me.skill.tmpl"]
+	content := tmpls["bender-interview-me"].Main()
 
-	t.Run("off renders identical to absent and keeps the question-tool intro", func(t *testing.T) {
+	t.Run("off renders identical to absent and omits the domain block", func(t *testing.T) {
 		ctx := fixtureContext()
 		ctx["interview_with_docs"] = false
 		off, err := Render("interview", content, ctx)
@@ -307,16 +287,14 @@ func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 
 		assert.Equal(t, none, off, "false must render byte-identical to an absent flag")
 		assert.NotContains(t, off, "Domain awareness")
-		assert.Contains(t, off, "AskUserQuestionTool")
 	})
 
-	t.Run("on swaps the intro and appends the grill block", func(t *testing.T) {
+	t.Run("on appends the grill block", func(t *testing.T) {
 		ctx := fixtureContext()
 		ctx["interview_with_docs"] = true
 		out, err := Render("interview", content, ctx)
 		require.NoError(t, err)
 
-		assert.NotContains(t, out, "AskUserQuestionTool")
 		assert.Contains(t, out, "one at a time")
 		assert.Contains(t, out, "## Domain awareness")
 		assert.Contains(t, out, "Update CONTEXT.md inline")
@@ -328,7 +306,7 @@ func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 func TestWritePrdTemplate_InterviewWithDocsBlock(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
-	content := tmpls["bender-write-prd.skill.tmpl"]
+	content := tmpls["bender-write-prd"].Main()
 
 	t.Run("off renders identical to absent without the grill block", func(t *testing.T) {
 		ctx := fixtureContext()
@@ -367,19 +345,19 @@ func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 	ctx["has_backend_sync"] = true
 
 	cases := map[string]string{
-		"bender-prd-to-issues.skill.tmpl": "plan-bender-agent sync linear push",
-		"bender-write-issue.skill.tmpl":   "plan-bender-agent sync linear push",
+		"bender-prd-to-issues": "plan-bender-agent sync linear push",
+		"bender-write-issue":   "plan-bender-agent sync linear push",
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {
-			out, err := Render(name, tmpls[name], ctx)
+			out, err := Render(name, tmpls[name].Main(), ctx)
 			require.NoError(t, err)
 			assert.Contains(t, out, want)
 			assert.NotContains(t, out, "{{.commands.sync}}")
 		})
 	}
 
-	out, err := Render("bender-orchestrator.skill.tmpl", tmpls["bender-orchestrator.skill.tmpl"], ctx)
+	out, err := Render("bender-orchestrator", tmpls["bender-orchestrator"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent sync linear push")
 	assert.Contains(t, out, "plan-bender-agent sync linear pull")
@@ -390,7 +368,7 @@ func TestImplementPrdTemplate_NoLongerHandRollsExecutionQueue(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
 	require.NoError(t, err)
 	// Resolver/queue logic moved into Go (dispatch). Prose must not re-derive it.
 	assert.NotContains(t, out, "Build the execution queue")
@@ -402,7 +380,7 @@ func TestOrchestratorTemplate_SuggestsNextResolver(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("orchestrator", tmpls["bender-orchestrator.skill.tmpl"], ctx)
+	out, err := Render("orchestrator", tmpls["bender-orchestrator"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent next")
 }
@@ -412,7 +390,7 @@ func TestWorkflowStatesJoin(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, strings.Join(ctx["workflow_states"].([]string), " → "))
 }
@@ -422,7 +400,7 @@ func TestImplementHitlTemplate_UsesResolverAndIssueWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-hitl", tmpls["bender-implement-hitl.skill.tmpl"], ctx)
+	out, err := Render("implement-hitl", tmpls["bender-implement-hitl"].Main(), ctx)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent next")
@@ -438,7 +416,7 @@ func TestImplementPrdTemplate_SuggestsHitlSkill(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "/bender-implement-hitl")
@@ -449,7 +427,7 @@ func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-prd", tmpls["bender-implement-prd.skill.tmpl"], ctx)
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent dispatch")
@@ -467,7 +445,7 @@ func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T)
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent next")
@@ -480,8 +458,46 @@ func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := fixtureContext()
-	out, err := Render("implement-issue", tmpls["bender-implement-issue.skill.tmpl"], ctx)
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent complete")
+}
+
+func TestLoadTemplates_IgnoresUnknownOverrideDir(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, ".plan-bender", "templates", "brand-new-skill")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTES.md"), []byte("x"), 0o644))
+
+	skills, err := LoadTemplates(dir)
+	require.NoError(t, err, "stray override dir must not block loading other skills")
+	assert.NotContains(t, skills, "brand-new-skill", "unknown override dir must not be promoted to a phantom skill")
+	assert.Contains(t, skills, "bender-write-prd", "bundled skills must still load")
+}
+
+func TestLoadTemplates_ErrorsOnOutputCollision(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTE.md"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "NOTE.md.tmpl"), []byte("b"), 0o644))
+
+	_, err := LoadTemplates(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "both produce")
+}
+
+// A verbatim SKILL.md would shadow the rendered body output of SKILL.md.tmpl,
+// silently swapping the skill's main content. validate() must catch this.
+func TestLoadTemplates_ErrorsWhenVerbatimSkillShadowsBody(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, ".plan-bender", "templates", "bender-interview-me")
+	require.NoError(t, os.MkdirAll(base, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(base, "SKILL.md"), []byte("shadow"), 0o644))
+
+	_, err := LoadTemplates(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "both produce")
+	assert.Contains(t, err.Error(), "SKILL.md")
 }

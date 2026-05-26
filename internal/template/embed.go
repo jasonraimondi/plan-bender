@@ -2,54 +2,169 @@ package template
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
-//go:embed all:embedded/*.tmpl
+//go:embed all:embedded
 var embeddedFS embed.FS
 
-// LoadTemplates returns a map of template name -> content.
-// Bundled templates from embed.FS are loaded first, then local overrides
-// from .plan-bender/templates/ replace matching filenames.
-func LoadTemplates(projectRoot string) (map[string]string, error) {
-	templates := make(map[string]string)
+// Skill is one skill template: every file in the template directory keyed by its
+// path relative to that directory (forward slashes), including SKILL.md.tmpl.
+type Skill struct {
+	Files map[string]string
+}
 
-	entries, err := fs.ReadDir(embeddedFS, "embedded")
-	if err != nil {
+// Main returns the skill body template (the SKILL.md.tmpl content).
+func (s Skill) Main() string { return s.Files["SKILL.md.tmpl"] }
+
+// LoadTemplates returns skill templates keyed by skill name. Bundled skills from
+// embed.FS load first, then per-skill overrides from .plan-bender/templates/{name}/
+// merge in at the file level (an override file replaces or adds an individual file).
+func LoadTemplates(projectRoot string) (map[string]Skill, error) {
+	skills := make(map[string]Skill)
+
+	if err := fs.WalkDir(embeddedFS, "embedded", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel := strings.TrimPrefix(p, "embedded/")
+		name, file, ok := strings.Cut(rel, "/")
+		if !ok {
+			return nil // a stray top-level file under embedded/ is not a skill
+		}
+		data, err := fs.ReadFile(embeddedFS, p)
+		if err != nil {
+			return err
+		}
+		addSkillFile(skills, name, file, string(data))
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tmpl") {
-			continue
-		}
-		data, err := fs.ReadFile(embeddedFS, "embedded/"+e.Name())
-		if err != nil {
-			return nil, err
-		}
-		templates[e.Name()] = string(data)
+
+	known := make(map[string]bool, len(skills))
+	for name := range skills {
+		known[name] = true
+	}
+	if err := mergeOverrides(skills, known, filepath.Join(projectRoot, ".plan-bender", "templates")); err != nil {
+		return nil, err
 	}
 
-	overrideDir := filepath.Join(projectRoot, ".plan-bender", "templates")
-	entries2, err := os.ReadDir(overrideDir)
+	if err := validate(skills); err != nil {
+		return nil, err
+	}
+
+	return skills, nil
+}
+
+func addSkillFile(skills map[string]Skill, name, file, content string) {
+	s, ok := skills[name]
+	if !ok {
+		s = Skill{Files: make(map[string]string)}
+	}
+	s.Files[file] = content
+	skills[name] = s
+}
+
+// mergeOverrides walks .plan-bender/templates/{name}/ and upserts each file into
+// the matching skill at the file level. A file directly under templates/ (no
+// {name}/ dir) is ignored here; generate.go warns about that legacy flat layout.
+// A subdir whose name is not in `known` is only accepted when it ships its own
+// SKILL.md.tmpl — without one it is treated as a stray and silently skipped,
+// so a random dir cannot brick LoadTemplates for every agent.
+func mergeOverrides(skills map[string]Skill, known map[string]bool, overrideRoot string) error {
+	info, err := os.Stat(overrideRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return templates, nil
+			return nil
 		}
-		return nil, err
+		return err
 	}
-	for _, e := range entries2 {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tmpl") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(overrideDir, e.Name()))
-		if err != nil {
-			return nil, err
-		}
-		templates[e.Name()] = string(data)
+	if !info.IsDir() {
+		return nil
 	}
+	entries, err := os.ReadDir(overrideRoot)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue // flat file directly under templates/ is no longer a skill
+		}
+		name := e.Name()
+		skillDir := filepath.Join(overrideRoot, name)
+		if !known[name] {
+			if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md.tmpl")); err != nil {
+				continue // stray dir without a body; not a skill
+			}
+		}
+		if err := mergeSkillDir(skills, name, skillDir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	return templates, nil
+func mergeSkillDir(skills map[string]Skill, name, skillDir string) error {
+	return filepath.WalkDir(skillDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(skillDir, p)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		addSkillFile(skills, name, filepath.ToSlash(rel), string(data))
+		return nil
+	})
+}
+
+// validate enforces post-merge invariants: every skill template must contain a
+// SKILL.md.tmpl body, and no two source files may produce the same output path
+// (e.g. "X.tmpl" and "X", or "SKILL.md.tmpl" and a verbatim "SKILL.md").
+func validate(skills map[string]Skill) error {
+	var missing []string
+	names := make([]string, 0, len(skills))
+	for name := range skills {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		s := skills[name]
+		if _, ok := s.Files["SKILL.md.tmpl"]; !ok {
+			missing = append(missing, name)
+		}
+		files := make([]string, 0, len(s.Files))
+		for file := range s.Files {
+			files = append(files, file)
+		}
+		sort.Strings(files)
+		seen := make(map[string]string, len(files))
+		for _, file := range files {
+			out := strings.TrimSuffix(file, ".tmpl")
+			if prev, ok := seen[out]; ok {
+				return fmt.Errorf("skill %q: files %q and %q both produce %q", name, prev, file, out)
+			}
+			seen[out] = file
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("skill templates missing SKILL.md.tmpl body: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
