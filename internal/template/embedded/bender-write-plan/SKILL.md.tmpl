@@ -1,0 +1,387 @@
+---
+name: bender-write-plan
+description: Write a full plan in one pass — interview the user, explore the codebase, draft the PRD, and decompose it into thin vertical-slice issues. Writes `{{.plans_dir}}{slug}/prd.json` and `{{.plans_dir}}{slug}/issues/*.json`. Use when user says "write a plan", "plan this feature", "create a plan", or wants a PRD plus issue breakdown end-to-end.
+---
+
+# Write a Plan
+
+Produce a complete plan in one skill invocation: PRD + decomposed issues.
+
+This skill replaces the older two-step flow (`/bender-write-prd` → `/bender-prd-to-issues`). Both legacy skills still work but are deprecated.
+
+## Plan structure
+
+Every plan lives in its own directory:
+
+```
+{{.plans_dir}}{project-slug}/
+  prd.json
+  issues/
+    1-setup-auth-middleware.json
+    2-add-token-refresh.json
+    ...
+```
+
+Issue filenames follow `{id}-{slug}.json`. IDs are integers starting at 1, assigned in creation order.
+
+{{if .interview_with_docs}}## Domain awareness
+
+During codebase exploration, also look for existing documentation: a root `CONTEXT.md` (the project glossary) and `docs/adr/` (architecture decision records). If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts — read it to find where each `CONTEXT.md` lives. Create these files lazily — only when you have something to write.
+
+As you interview, work the plan against the domain model:
+
+- **Challenge against the glossary.** When a term conflicts with the existing language in `CONTEXT.md`, call it out immediately: "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
+- **Sharpen fuzzy language.** When a term is vague or overloaded, propose a precise canonical term: "You're saying 'account' — do you mean the Customer or the User? Those are different things."
+- **Stress-test with scenarios.** When domain relationships come up, invent concrete scenarios that probe edge cases and force precision about the boundaries between concepts.
+- **Cross-reference with code.** When the user states how something works, check whether the code agrees. Surface contradictions: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
+
+### Update CONTEXT.md inline
+
+When a term is resolved, update `CONTEXT.md` right there — don't batch them up. `CONTEXT.md` is a glossary and nothing else: no implementation details, no specs, no scratch notes.
+
+Format it as a `# {Context Name}` heading with a one-sentence description, then: a `## Language` section with one entry per term (bold term name, a one-sentence definition of what it IS, and an `_Avoid_:` line listing aliases to reject); a `## Relationships` section expressing cardinality between bold terms; an `## Example dialogue` between a dev and a domain expert; and a `## Flagged ambiguities` section recording terms used ambiguously and how they were resolved. Be opinionated — when multiple words exist for one concept, pick the best and list the rest as aliases. Keep definitions to one sentence. Only include terms specific to this project's domain; general programming concepts do not belong.
+
+### Offer ADRs sparingly
+
+Only offer to create an ADR when all three are true:
+
+1. **Hard to reverse** — the cost of changing your mind later is meaningful.
+2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
+3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons.
+
+If any one is missing, skip the ADR. ADRs live in `docs/adr/` with sequential numbering (`0001-slug.md`, `0002-slug.md`, ...); scan for the highest existing number and increment. Keep them minimal — a `# {Short title}` heading and 1-3 sentences covering the context, the decision, and why. An ADR can be a single paragraph; the value is recording *that* a decision was made and *why*. Add optional `Status` frontmatter, `Considered Options`, or `Consequences` only when they add genuine value.
+
+{{end}}## PRD schema
+
+```json
+{
+  "name": "Project Name",
+  "slug": "project-name",
+  "status": "draft",
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "description": "One-line summary.",
+  "why": "The problem from the user's perspective and why it matters now.",
+  "outcome": "What success looks like.",
+  "in_scope": ["Behavior or surface included"],
+  "out_of_scope": ["What this PRD explicitly does not cover"],
+  "use_cases": [
+    {"id": "UC-1", "description": "Short actor + action + outcome"},
+    {"id": "UC-2", "description": "Short actor + action + outcome"}
+  ],
+  "decisions": ["Decision that is already settled"],
+  "open_questions": ["Question that materially affects scope or architecture"],
+  "risks": ["Constraint, dependency, or rollout risk"],
+  "validation": ["How we know the work is correct or successful"],
+  "notes": "High-signal notes about modules, contracts, schema changes, or testing strategy.",
+  "dev_command": "npm run dev",
+  "base_url": "http://localhost:3000"
+}
+```
+
+`status` is one of: `draft`, `active`, `complete`, `archived`.
+
+## Issue schema
+
+```json
+{
+  "id": 1,
+  "slug": "setup-auth-middleware",
+  "name": "Set up authentication middleware",
+  "track": "rules",
+  "status": "backlog",
+  "priority": "high",
+  "points": 3,
+  "labels": ["AFK"],
+  "assignee": null,
+  "blocked_by": [],
+  "blocking": [],
+  "branch": null,
+  "pr": null,
+  "linear_id": null,
+  "created": "YYYY-MM-DD",
+  "updated": "YYYY-MM-DD",
+  "tdd": true,
+  "headed": false,{{range .custom_fields}}
+  "{{.name}}": null,{{end}}
+  "outcome": "What this slice delivers.",
+  "scope": "What is included. Keep it narrow.",
+  "acceptance_criteria": ["Criterion 1", "Criterion 2"],
+  "steps": ["{{.step_pattern}}"],
+  "use_cases": ["UC-1"],
+  "notes": "Relevant context, constraints, or prior art."
+}
+```
+
+Enum values:
+- `track`: {{join " | " .tracks}}
+- `status`: {{join " | " .workflow_states}}
+- `priority`: urgent | high | medium | low
+- `points`: fibonacci 1, 2, 3 (max {{.max_points}})
+- `labels`: `AFK` (autonomous) or `HITL` (needs human input)
+
+### Field reference
+
+#### `track`
+
+Classifies the issue's primary concern. Every issue gets exactly one track.
+
+| Track | When to use |
+|-------|-------------|
+{{range .track_descriptions}}
+| `{{.name}}` | {{.description}} |
+{{end}}
+
+#### `tdd`
+
+Mark `"tdd": true` when the issue has testable behavior:
+
+- `rules` issues — almost always
+- `data` issues — CRUD, cascade, lifecycle behavior
+- `intent` issues with API/service behavior
+- `resilience` issues — error handling, retry logic
+
+Skip for pure UI/styling, configuration-only, or wiring-only issues.
+
+When `"tdd": true`, the implementation agent invokes the `testing-tdd` skill and decides the RED→GREEN structure based on the steps.
+
+#### `headed`
+
+Mark `"headed": true` when correctness requires browser-visible verification:
+
+- `experience` issues — almost always
+- Any issue where visual state, layout, or interaction must be verified
+
+When `"headed": true`, include visual verification targets in steps:
+```
+Route /dashboard — verify search input renders and filters list on keystrokes
+```
+
+The implementation agent invokes the `tooling-agent-browser` skill.
+
+#### `steps`
+
+Ordered implementation actions following the `{{.step_pattern}}` pattern:
+
+```json
+"steps": [
+  "Route /auth/login — reject expired tokens with 401",
+  "Token refresh endpoint — issue new token when refresh token is valid and not revoked",
+  "Auth middleware — attach user context to request on valid token"
+]
+```
+
+Steps tell the implementation agent **how** to build the issue. Acceptance criteria tell reviewers **what** to verify.
+
+Step count scales with issue complexity — a 1-point issue might have 2 steps, a {{.max_points}}-point issue might have 5-6. Every step must include location context (route, file path, service name, component).
+
+#### `points`
+
+Fibonacci scale: 1, 2, 3. **Maximum {{.max_points}} points per issue.** Issues estimated at {{.max_points}}+ points must be split into smaller slices. If you cannot find a natural seam to split on, the issue scope is too broad — narrow the outcome.
+{{range .custom_fields}}
+
+#### `{{.name}}`
+{{if .required}}
+Required custom field ({{.type}}).
+{{end}}
+{{if not .required}}
+Optional custom field ({{.type}}).
+{{end}}
+{{if .enum_values}}
+Allowed values: {{join ", " .enum_values}}
+{{end}}
+{{end}}
+
+## Workflow states
+
+```
+{{join " → " .workflow_states}}
+```
+
+## Process
+
+Work through these phases in order. Phase headings carry the sequence — the conditional review checkpoints fall in naturally where marked.
+
+### Clarify the problem
+
+Ask the user for:
+
+- the problem to solve
+- desired outcome
+- constraints or deadlines
+- rough scope
+- known solution ideas
+
+### Explore the repo
+
+Explore the codebase to verify assumptions, understand the current system, find existing patterns, and learn likely slice boundaries. This single exploration grounds both PRD scope and per-issue step specificity.
+
+### Interview to convergence
+
+Interview the user until you reach shared understanding. Resolve:
+
+- core use cases
+- non-goals
+- constraints
+- rollout and validation expectations
+- open questions that materially change scope or architecture
+
+### Sketch modules and testing strategy
+
+Identify the major modules you expect to build or modify. Prefer deep, stable, testable modules over shallow glue.
+
+Check with the user that:
+
+- the module boundaries make sense
+- the testing plan matches expectations
+- any risky unknowns are called out explicitly
+
+### Draft the PRD
+
+Write the PRD JSON using the schema above.
+
+Rules:
+
+- the `slug` is a kebab-case version of the project name, used as the directory name
+- use_cases are numbered (UC-1, UC-2, ...) so issues can reference them
+- do not include file paths or code snippets in the PRD
+- emit valid JSON — strings quoted, no trailing commas, no comments
+
+Keep it scannable. The PRD should support decomposition into issues — not be a dumping ground for every implementation detail.
+{{if .review_with_user}}
+
+### Review the PRD with the user
+
+Present the drafted PRD. Ask:
+
+- Does the scope feel right?
+- Are the use cases complete?
+- Are the decisions and risks accurate?
+- Any open questions to resolve before proceeding?
+
+Iterate until approved.
+{{end}}
+
+### Write the PRD file
+
+Pipe the PRD JSON to `{{.commands.write_prd}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/prd.json` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+
+```bash
+{{.commands.write_prd}} {slug} <<'EOF'
+<full PRD JSON from the schema above>
+EOF
+```
+
+### Draft vertical slices
+
+Break the PRD into **tracer-bullet** issues. Each issue is a thin vertical slice cutting through all relevant layers end-to-end — not a horizontal slice of one layer.
+
+Labels:
+
+- **AFK**: can be implemented and merged without human intervention
+- **HITL**: requires human input — product decision, UX review, or architectural choice
+
+Prefer AFK over HITL where possible.
+
+Rules:
+
+- each slice delivers a narrow but complete path through all relevant layers
+- a completed slice is demoable or independently verifiable on its own
+- prefer many thin slices over few thick ones
+- avoid layer-only tickets unless they unlock multiple later slices or materially reduce risk
+- **maximum {{.max_points}} points per issue** — split anything larger
+- assign a `track` to every issue based on its primary concern
+
+#### Track coverage check
+
+After drafting all slices, verify track coverage against the PRD:
+
+{{range .tracks}}
+- Feature has `{{.}}` concerns? → needs `{{.}}` track issues
+{{end}}
+
+Missing tracks are the highest-signal gap. Flag them to the user.
+
+### Write steps for each issue
+
+For each issue, write concrete implementation steps using the `{{.step_pattern}}` pattern.
+
+Rules:
+
+- every step includes location context (route, file, service, component)
+- no vague language: "handle errors appropriately", "set up properly", "add necessary validation"
+- `"headed": true` steps include visual verification targets
+- steps are ordered by implementation sequence
+{{if .review_with_user}}
+
+### Review the breakdown with the user
+
+Present the proposed breakdown as a numbered list. For each slice:
+
+- **Title** and **track**
+- **Routing label**: AFK / HITL
+- **Points estimate** (max {{.max_points}})
+- **Priority**: urgent / high / medium / low
+- **tdd** / **headed** flags
+- **Initial status**: backlog or todo
+- **Blocked by**: which other slices must complete first
+- **Use cases covered**: which PRD use cases this addresses
+- **Acceptance criteria**: 2-4 bullets
+- **Steps**: implementation actions
+
+Ask the user:
+
+- Does the granularity feel right?
+- Are the dependencies correct?
+- Should any slices be merged or split?
+- Are the right slices marked AFK vs HITL?
+- Which slices should start in todo vs stay in backlog?
+- Is the track coverage complete?
+
+Iterate until the user approves.
+{{end}}
+
+### Write the issue files
+
+For each issue, pipe the JSON to `{{.commands.write_issue}} {slug}` via stdin (heredoc). The CLI validates and writes atomically to `{{.plans_dir}}{slug}/issues/{id}-{issue-slug}.json` — nothing lands on disk until validation passes. Do not stage a temporary file first.
+
+```bash
+{{.commands.write_issue}} {slug} <<'EOF'
+<full issue JSON from the schema above>
+EOF
+```
+
+Rules:
+
+- `blocked_by` and `blocking` must be kept in sync across issues
+- IDs are sequential integers starting at 1
+- filename is `{id}-{slug}.json`
+- structure lives in JSON fields — do not duplicate dependencies or status in prose
+- emit valid JSON — strings quoted, no trailing commas, no comments
+{{if .has_backend_sync}}
+
+### Sync to backend
+
+After writing issue files, run `{{.commands.sync_push}} {slug}` to push issues to the configured backend.
+{{end}}
+
+### Update the PRD status
+
+Set `"status": "active"` and update the `updated` date in `prd.json`.
+
+### Confirm the result
+
+After creation, share:
+
+- the path to the PRD and the issues directory
+- issue IDs in dependency order
+- track coverage summary (which tracks are represented)
+- which issues are in todo (ready now)
+- which issues are in backlog (waiting)
+- total points estimate
+- a one-paragraph summary of the recommended next step (`/bender-implement-prd`)
+{{if .report_bugs}}
+## Bug reports
+
+If any plan-bender command (`pb` or `pba`) fails or behaves unexpectedly, write a detailed bug report to `pb-error-report-<UTC-timestamp>.log` in the project root (e.g. `pb-error-report-20260502T143000Z.log`). Include the exact command, full stdout/stderr, expected vs actual behavior, the relevant `.plan-bender.json` config, the issue/PRD slug in play, and `pb --version`. Tell the user where you saved it and link to https://github.com/jasonraimondi/plan-bender/issues so they can file it.
+{{end}}

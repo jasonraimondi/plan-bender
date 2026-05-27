@@ -294,7 +294,7 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 	targetDir := filepath.Join(dir, ".claude", "skills")
 	entries, err := os.ReadDir(targetDir)
 	require.NoError(t, err)
-	assert.Len(t, entries, 10)
+	assert.Len(t, entries, 11)
 
 	for _, e := range entries {
 		info, err := os.Lstat(filepath.Join(targetDir, e.Name()))

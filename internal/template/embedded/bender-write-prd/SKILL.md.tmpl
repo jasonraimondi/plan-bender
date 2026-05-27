@@ -1,9 +1,11 @@
 ---
 name: bender-write-prd
-description: Create a PRD by interviewing the user, exploring the codebase, and writing a structured JSON plan to {{.plans_dir}}{slug}/prd.json. Use when user says "write a PRD", "plan this feature", "create a plan", or wants structured project planning.
+description: "[DEPRECATED — use /bender-write-plan instead; removed in plan-bender >=0.0.60] Create a PRD by interviewing the user, exploring the codebase, and writing a structured JSON plan to {{.plans_dir}}{slug}/prd.json."
 ---
 
 # Write a PRD
+
+> **Deprecated.** This skill is superseded by `/bender-write-plan`, which performs the PRD draft and issue decomposition in a single pass. `bender-write-prd` still functions today but will be removed in plan-bender `>=0.0.60`. Prefer `/bender-write-plan` for new plans.
 
 Create a PRD as a structured JSON file in the project's `{{.plans_dir}}` directory.
 

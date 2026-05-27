@@ -1,9 +1,11 @@
 ---
 name: bender-prd-to-issues
-description: Break a PRD into independently grabbable issues using thin vertical slices, writing structured JSON files to {{.plans_dir}}{slug}/issues/. Use when user says "break this down", "create issues", "decompose the PRD", or wants to convert a PRD into actionable work items.
+description: "[DEPRECATED — use /bender-write-plan instead; removed in plan-bender >=0.0.60] Break a PRD into independently grabbable issues using thin vertical slices, writing structured JSON files to {{.plans_dir}}{slug}/issues/."
 ---
 
 # PRD to Issues
+
+> **Deprecated.** This skill is superseded by `/bender-write-plan`, which performs the PRD draft and issue decomposition in a single pass. `bender-prd-to-issues` still functions today but will be removed in plan-bender `>=0.0.60`. Prefer `/bender-write-plan` for new plans.
 
 Break a PRD into implementation issues stored as JSON files.
 

@@ -55,6 +55,7 @@ func TestAllTemplatesLoad(t *testing.T) {
 
 	expected := []string{
 		"bender-orchestrator",
+		"bender-write-plan",
 		"bender-write-prd",
 		"bender-write-issue",
 		"bender-prd-to-issues",

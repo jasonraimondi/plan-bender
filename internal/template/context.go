@@ -47,8 +47,9 @@ func SkillRequiresBackend(skill string) bool {
 
 var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Interview", Description: "Stress-test your plan", Skill: "bender-interview-me"},
-	{Name: "Write PRD", Description: "Create a PRD", Skill: "bender-write-prd"},
-	{Name: "PRD to Issues", Description: "Break PRD into issues", Skill: "bender-prd-to-issues"},
+	{Name: "Write Plan", Description: "Create a PRD and decompose it into issues in one pass", Skill: "bender-write-plan"},
+	{Name: "Write PRD", Description: "Create a PRD (deprecated — prefer Write Plan)", Skill: "bender-write-prd"},
+	{Name: "PRD to Issues", Description: "Break PRD into issues (deprecated — prefer Write Plan)", Skill: "bender-prd-to-issues"},
 	{Name: "Write Issue", Description: "Create a single issue", Skill: "bender-write-issue"},
 	{Name: "Review PRD", Description: "Review plan quality", Skill: "bender-review-prd"},
 	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd"},
