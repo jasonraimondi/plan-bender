@@ -435,10 +435,155 @@ func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
 
 	assert.NotContains(t, out, "git worktree add")
 	assert.NotContains(t, out, "git worktree remove")
-	assert.NotContains(t, out, "git merge --no-ff")
 	assert.NotContains(t, out, "ultrathink")
+}
 
-	assert.Contains(t, out, "Open the combined PR")
+// sliceBetween returns the substring of haystack between the first occurrence of
+// start (inclusive) and the next occurrence of any string in stops (exclusive),
+// or the rest of haystack if no stop is found. Returns "" if start is absent.
+func sliceBetween(haystack, start string, stops ...string) string {
+	i := strings.Index(haystack, start)
+	if i < 0 {
+		return ""
+	}
+	rest := haystack[i:]
+	end := len(rest)
+	for _, s := range stops {
+		if j := strings.Index(rest[len(start):], s); j >= 0 && j+len(start) < end {
+			end = j + len(start)
+		}
+	}
+	return rest[:end]
+}
+
+func TestImplementPrdTemplate_PromptsForMode_ClaudeCode(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	ctx["agent"] = "claude-code"
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "AskUserQuestion")
+	assert.Contains(t, out, "landing branch")
+	assert.Contains(t, out, "git branch --show-current")
+	assert.NotContains(t, out, "Ask the user directly in conversation")
+}
+
+func TestImplementPrdTemplate_PromptsForMode_Pi(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	ctx["agent"] = "pi"
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	assert.NotContains(t, out, "AskUserQuestion")
+	assert.Contains(t, out, "Ask the user directly in conversation")
+	assert.Contains(t, out, "landing branch")
+	assert.Contains(t, out, "git branch --show-current")
+}
+
+func TestImplementPrdTemplate_MergeMode_EmitsGitMergeAndDelete(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "git merge --no-ff")
+	assert.Contains(t, mergeBlock, "git branch -d")
+}
+
+func TestImplementPrdTemplate_MergeMode_IncludesConflictHint(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "merge conflicts",
+		"merge block must include a one-line conflict-recovery hint")
+	assert.Contains(t, mergeBlock, "integration branch is preserved",
+		"hint must reassure the operator that the source branch survives a failed merge")
+}
+
+func TestImplementPrdTemplate_PrMode_PreservesPushAndGhPrCreate(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	prBlock := sliceBetween(out, "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, prBlock, "pr sub-section missing")
+	assert.Contains(t, prBlock, "git push -u origin")
+	assert.Contains(t, prBlock, "PR off `<user>/<slug>`")
+	assert.Contains(t, prBlock, "default branch")
+}
+
+func TestImplementPrdTemplate_BranchMode_NoPushOrPR(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	branchBlock := sliceBetween(out, "If you chose `branch`", "If you chose `pr`", "If you chose `merge`", "### 5.")
+	require.NotEmpty(t, branchBlock, "branch sub-section missing")
+	assert.NotContains(t, branchBlock, "git push")
+	assert.NotContains(t, branchBlock, "gh pr")
+	assert.NotContains(t, branchBlock, "git merge")
+}
+
+func TestImplementPrdTemplate_StatusReport_ConditionalPRLine(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	report := sliceBetween(out, "### 5. Status report", "Update `prd.json`")
+	require.NotEmpty(t, report, "status report section missing")
+
+	prReport := sliceBetween(report, "If you chose `pr`", "If you chose `merge`", "If you chose `branch`")
+	require.NotEmpty(t, prReport, "pr-mode status block missing")
+	assert.Contains(t, prReport, "PR:")
+	assert.NotContains(t, prReport, "Integration branch:")
+
+	mergeBranchReport := sliceBetween(report, "If you chose `merge` or `branch`", "Update `prd.json`")
+	require.NotEmpty(t, mergeBranchReport, "merge/branch status block missing")
+	assert.Contains(t, mergeBranchReport, "Integration branch:")
+	assert.NotContains(t, mergeBranchReport, "PR:")
+}
+
+func TestImplementPrdTemplate_HideMergeWhenLandingIsIntegration(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	preflight := sliceBetween(out, "### 2.", "### 3.")
+	require.NotEmpty(t, preflight, "pre-flight section missing")
+	assert.Contains(t, preflight, "working tree dirty",
+		"dirty-tree hide reason must be documented")
+	assert.Contains(t, preflight, "HEAD detached",
+		"detached-HEAD hide reason must be documented")
+	assert.Contains(t, preflight, "landing branch is the integration branch",
+		"self-merge hide reason must be documented")
 }
 
 func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T) {
@@ -463,6 +608,134 @@ func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, out, "plan-bender-agent complete")
+}
+
+func TestImplementIssueTemplate_StandalonePromptsForMode(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	content := tmpls["bender-implement-issue"].Main()
+
+	t.Run("claude-code uses AskUserQuestion", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "claude-code"
+		out, err := Render("implement-issue", content, ctx)
+		require.NoError(t, err)
+
+		assert.Contains(t, out, "AskUserQuestion")
+		assert.Contains(t, out, "landing branch")
+		assert.Contains(t, out, "git branch --show-current")
+		assert.NotContains(t, out, "Ask the user directly in conversation")
+	})
+
+	t.Run("pi uses conversational phrasing", func(t *testing.T) {
+		ctx := fixtureContext()
+		ctx["agent"] = "pi"
+		out, err := Render("implement-issue", content, ctx)
+		require.NoError(t, err)
+
+		assert.NotContains(t, out, "AskUserQuestion")
+		assert.Contains(t, out, "Ask the user directly in conversation")
+		assert.Contains(t, out, "landing branch")
+		assert.Contains(t, out, "git branch --show-current")
+	})
+}
+
+// TestImplementIssueTemplate_WorktreeModeSkipsPrompt asserts the pre-flight
+// prompt section is gated by a prose skip-marker that points to bender-implement-prd
+// integration mode. The skill is rendered once at install time and read by both
+// standalone and worktree-mode agents; the marker is what tells the worktree-mode
+// agent to bypass the prompt section.
+func TestImplementIssueTemplate_WorktreeModeSkipsPrompt(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
+	require.NoError(t, err)
+
+	preflight := sliceBetween(out, "### 2.", "### 3.")
+	require.NotEmpty(t, preflight, "pre-flight section missing")
+	assert.Contains(t, preflight, "Skip this section when invoked under `bender-implement-prd` integration mode",
+		"prompt section must carry the worktree-mode skip marker so dispatch sub-agents bypass it")
+	// The distinguishing prompt mechanic (AskUserQuestion for claude-code) must
+	// sit below the skip marker; an agent under worktree-mode that follows the
+	// marker will not execute the prompt mechanic below it.
+	skipIdx := strings.Index(preflight, "Skip this section when invoked under `bender-implement-prd`")
+	promptIdx := strings.Index(preflight, "AskUserQuestion")
+	require.GreaterOrEqual(t, skipIdx, 0, "skip marker missing")
+	require.GreaterOrEqual(t, promptIdx, 0, "AskUserQuestion mechanic missing under claude-code agent")
+	assert.Less(t, skipIdx, promptIdx,
+		"skip marker must precede the prompt so worktree-mode readers bail before reaching it")
+}
+
+func TestImplementIssueTemplate_MergeMode_EmitsGitMergeAndWorktreeGc(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 9.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "git merge --no-ff")
+	assert.Contains(t, mergeBlock, "plan-bender-agent worktree gc",
+		"merge block must use worktree gc (which removes the worktree AND deletes the branch)")
+	assert.NotContains(t, mergeBlock, "git branch -d",
+		"raw `git branch -d` fails on a branch checked out in another worktree — must use `pba worktree gc` instead")
+}
+
+func TestImplementIssueTemplate_MergeMode_IncludesConflictHint(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 9.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "merge conflicts",
+		"merge block must include a one-line conflict-recovery hint")
+	assert.Contains(t, mergeBlock, "issue branch and worktree are preserved",
+		"hint must reassure the operator that the per-issue branch and worktree survive a failed merge")
+}
+
+func TestImplementIssueTemplate_HideMergeWhenLandingIsIssueBranch(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
+	require.NoError(t, err)
+
+	preflight := sliceBetween(out, "### 2.", "### 3.")
+	require.NotEmpty(t, preflight, "pre-flight section missing")
+	assert.Contains(t, preflight, "working tree dirty",
+		"dirty-tree hide reason must be documented")
+	assert.Contains(t, preflight, "HEAD detached",
+		"detached-HEAD hide reason must be documented")
+	assert.Contains(t, preflight, "landing branch is the issue branch",
+		"self-merge hide reason must be documented (landing branch equals per-issue branch)")
+}
+
+func TestImplementIssueTemplate_PrMode_PreservesPushAndGhPrCreate(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
+	require.NoError(t, err)
+
+	prBlock := sliceBetween(out, "If you chose `pr`", "### 9.")
+	require.NotEmpty(t, prBlock, "pr sub-section missing")
+	assert.Contains(t, prBlock, "Push the branch with `-u`",
+		"pr block must preserve the original push instruction from the legacy §7")
+	assert.Contains(t, prBlock, "Create a PR with the issue reference",
+		"pr block must preserve the original PR creation instruction from the legacy §7")
+	assert.Contains(t, prBlock, "test plan",
+		"pr block must preserve the test-plan instruction from the legacy §7")
 }
 
 func TestLoadTemplates_IgnoresUnknownOverrideDir(t *testing.T) {

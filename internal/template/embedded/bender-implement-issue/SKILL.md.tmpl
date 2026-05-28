@@ -45,7 +45,37 @@ If unresolved blockers exist (blocked_by issues not in done/canceled), report th
 If the issue is blocked, confirm the blocker is cleared before resuming.
 If assigned to someone else, ask before taking it.
 
-### 2. Update status
+### 2. Pre-flight: capture landing branch and choose completion mode (standalone only)
+
+**Skip this section when invoked under `bender-implement-prd` integration mode** — dispatch handles per-issue worktree cleanup and merge-back itself; the pre-flight prompt is for operator-driven standalone runs only.
+
+Capture the **landing branch** — the parent repo's HEAD at this moment. Remember the value; you will act on it in step 8 after implementation completes. Capture this BEFORE running `{{.commands.worktree_create}}` so it reflects the parent branch, not the per-issue branch.
+
+```bash
+git branch --show-current
+```
+
+Determine which completion modes to offer. The `merge` option is hidden when any of the following preconditions fire — show only the one-line reason that applies:
+
+- `git status --porcelain` returns non-empty output → hide `merge`, reason: `working tree dirty`
+- `git symbolic-ref --quiet HEAD` errors → hide `merge`, reason: `HEAD detached`
+- landing branch already equals the would-be per-issue branch `<user>/<slug>/<id>-<issue-slug>` → hide `merge`, reason: `landing branch is the issue branch`
+
+Then ask the operator which mode to use. Remember the choice — it fires in step 8 after implementation completes successfully. On any non-zero exit from implementation, the choice is ignored.
+
+{{if eq .agent "claude-code"}}Use `AskUserQuestion` with these options (omit `merge` if any precondition above fired, surface the reason in the question header):
+
+- **merge** — after implementation completes, run `git merge --no-ff <user>/<slug>/<id>-<issue-slug>` onto the landing branch, then `plan-bender-agent worktree gc <slug>` to remove the per-issue worktree and delete the branch.
+- **branch** — no-op after implementation. Worktree and per-issue branch left in place; nothing is pushed and no PR is opened.
+- **pr** — push the per-issue branch and open a PR off `<user>/<slug>/<id>-<issue-slug>` against the default branch.
+{{else}}Ask the user directly in conversation which completion mode they want. List only the modes that are not hidden by the preconditions above; if `merge` is hidden, mention the one-line reason.
+
+- **merge** — after implementation completes, run `git merge --no-ff <user>/<slug>/<id>-<issue-slug>` onto the landing branch, then `plan-bender-agent worktree gc <slug>` to remove the per-issue worktree and delete the branch.
+- **branch** — no-op after implementation. Worktree and per-issue branch left in place; nothing is pushed and no PR is opened.
+- **pr** — push the per-issue branch and open a PR off `<user>/<slug>/<id>-<issue-slug>` against the default branch.
+{{end}}
+
+### 3. Update status
 
 **Never** edit the JSON's `status` or `branch` fields by hand — the strict decoder rejects duplicate keys, and a misplaced Edit silently produces them. Use CLI commands; they round-trip through the issue struct so the file always parses.
 
@@ -56,14 +86,14 @@ If assigned to someone else, ask before taking it.
 - if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section). The CLIs above only update the local JSON.
 {{- end}}
 
-### 3. Branch setup
+### 4. Branch setup
 
 Check if the current branch is already dedicated to this issue or its parent project.
 
 - If yes: stay on the current branch
 - If no: create a new branch using `<user>/<project-slug>/<issue-id>-<issue-slug>`
 
-### 4. Explore the codebase
+### 5. Explore the codebase
 
 Understand:
 
@@ -71,7 +101,7 @@ Understand:
 - adjacent code paths and existing patterns
 - existing tests for similar behavior
 
-### 5. Implement
+### 6. Implement
 
 #### When `steps` exist
 
@@ -95,25 +125,51 @@ Fall back to acceptance criteria:
 - lint and test after implementation
 - fix lint and test failures before moving on
 
-### 6. Commit
+### 7. Commit
 
 Create meaningful commits using conventional commit format: `type(scope): description`.
 
-### 7. Open PR
+### 8. Complete the issue
 
-Once implementation is complete and tests pass:
+**Skip this step when invoked under `bender-implement-prd` integration mode** — the parent merges all issue branches into a single feature branch and opens one combined PR. In that mode: commit on the assigned branch only; do not push, do not open a PR.
+
+Otherwise, execute the completion mode you captured in §2. Follow only the block matching the chosen mode.
+
+#### If you chose `merge`
+
+Run from the parent repo dir (where the landing branch is checked out):
+
+```bash
+git checkout <landing-branch>
+git merge --no-ff <user>/<slug>/<id>-<issue-slug>
+# if merge conflicts, resolve and `git commit`; the issue branch and worktree are preserved either way
+plan-bender-agent worktree gc <slug>
+```
+
+`plan-bender-agent worktree gc` removes the per-issue worktree directory AND deletes the branch in one step. The branch is still checked out in the worktree dir, so deletion must go through the worktree-aware command.
+
+#### If you chose `branch`
+
+No git actions. Per-issue worktree and branch are left in place. Nothing is pushed and no PR is opened.
+
+Status report names the worktree path and the per-issue branch so the operator can inspect:
+
+```text
+Worktree: <worktree-path>
+Branch:   <user>/<slug>/<id>-<issue-slug> @ <sha>
+```
+
+#### If you chose `pr`
 
 1. Push the branch with `-u`
 2. Create a PR with the issue reference in the title and body
 3. Include a concise test plan in the PR body
 
-**Skip this step when invoked under `bender-implement-prd` integration mode** — the parent merges all issue branches into a single feature branch and opens one combined PR. In that mode: commit on the assigned branch only; do not push, do not open a PR.
-
-### 8. Mark complete
+### 9. Mark complete
 
 Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review`, bumps `updated`, and emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
 
-If you opened a PR in step 7, set the `pr` field with Edit on the **exact** existing line (`"pr": null`) so it replaces in place. Don't append a new `pr` entry.
+If you opened a PR in step 8, set the `pr` field with Edit on the **exact** existing line (`"pr": null`) so it replaces in place. Don't append a new `pr` entry.
 
 If blocked after starting, do not edit `status` by hand — exit non-zero and let the parent dispatch flip the issue to blocked via its `Transition` call.
 {{- if .has_backend_sync}}
@@ -121,7 +177,7 @@ If blocked after starting, do not edit `status` by hand — exit non-zero and le
 If the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local JSON.
 {{- end}}
 
-### 9. Next issue
+### 10. Next issue
 
 If there are more issues, proceed to the next one.
 
@@ -134,7 +190,7 @@ If there are more issues, proceed to the next one.
 
 When a plan has been synced to Linear (issues have a `linear_id` field), update both local JSON **and** Linear on every status change. Local JSON is always updated first. Linear updates are best-effort — if they fail, log the failure and continue.
 
-Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 2 and 8 push to Linear.
+Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 3 and 9 push to Linear.
 
 **Update status:**
 
@@ -142,7 +198,7 @@ Check for `linear_id` once when reading the issue (step 1). If present, all stat
 linear issue update {linear_id} --state "{new_status}"
 ```
 
-**Attach PR** (after creating a PR in step 7):
+**Attach PR** (after creating a PR in step 8):
 
 ```bash
 linear api --method POST --body '{"query":"mutation{attachmentCreate(input:{issueId:\"{linear_id}\",url:\"{pr_url}\",title:\"Pull Request\"}){success}}"}'
