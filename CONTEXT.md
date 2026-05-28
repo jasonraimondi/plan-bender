@@ -4,6 +4,16 @@ Domain language for plan-bender. This glossary captures terms specific to the pr
 
 ## Language
 
+### Dispatch
+
+**Integration branch**:
+The branch dispatch builds work onto, named `<user>/<slug>`. Forked from the `base` (default branch unless `--base` is passed). Per-issue worktrees merge into it; dispatch never touches the parent repo's HEAD.
+_Avoid_: feature branch, work branch, dispatch branch
+
+**Landing branch**:
+The branch the parent repo's HEAD is on when the operator invokes a dispatch skill. Distinct from `base` (where the integration branch forks from) and from the integration branch itself. Used as the merge destination when the operator picks the `merge` completion mode.
+_Avoid_: target branch, starting branch, current branch (ambiguous), feature branch
+
 ### Skill pipeline
 
 **Skill template**:
