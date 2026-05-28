@@ -8,7 +8,7 @@ allowed-tools: Bash(linear:*), Bash(jq:*)
 
 # Work on PRD
 
-Work through a PRD's issues in dependency order. Default execution model: one integration feature branch, with parallel git worktrees for independent AFK issues, merged back and cleaned up at the end.
+Work through a PRD's issues in dependency order. Default execution model: one integration feature branch, with parallel git worktrees for independent AFK issues, completed via an operator-chosen mode on clean dispatch exit.
 
 ## Input
 
@@ -30,21 +30,66 @@ Read `{{.plans_dir}}{slug}/prd.json` and all files in `{{.plans_dir}}{slug}/issu
 
 If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-prd-to-issues` first."
 
-### 2. Run dispatch
+### 2. Capture landing branch and choose completion mode
+
+Capture the **landing branch** — the parent repo's HEAD at this moment. Remember the value; you will act on it in step 4 after dispatch returns.
+
+```bash
+git branch --show-current
+```
+
+Determine which completion modes to offer. The `merge` option is hidden when any of the following preconditions fire — show only the one-line reason that applies:
+
+- `git status --porcelain` returns non-empty output → hide `merge`, reason: `working tree dirty`
+- `git symbolic-ref --quiet HEAD` errors → hide `merge`, reason: `HEAD detached`
+- landing branch already equals the would-be integration branch `<user>/<slug>` → hide `merge`, reason: `landing branch is the integration branch`
+
+Then ask the operator which mode to use. Remember the choice — it fires in step 4 only on a clean dispatch exit (code 0). On any other exit, the choice is ignored.
+
+{{if eq .agent "claude-code"}}Use `AskUserQuestion` with these options (omit `merge` if any precondition above fired, surface the reason in the question header):
+
+- **merge** — on dispatch exit 0, run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
+- **branch** — no-op after dispatch. Integration branch left local; no push, no PR.
+- **pr** — push the integration branch and open a PR off `<user>/<slug>` against the default branch.
+{{else}}Ask the user directly in conversation which completion mode they want. List only the modes that are not hidden by the preconditions above; if `merge` is hidden, mention the one-line reason.
+
+- **merge** — on dispatch exit 0, run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
+- **branch** — no-op after dispatch. Integration branch left local; no push, no PR.
+- **pr** — push the integration branch and open a PR off `<user>/<slug>` against the default branch.
+{{end}}
+
+### 3. Run dispatch
 
 Run `{{.commands.dispatch}} {slug}` and wait for it to exit. Dispatch handles the full implementation loop: integration branch setup, parallel worktrees per AFK issue, sub-agent spawning, prefixed log streaming, merge-back in dependency order, and worktree cleanup. The skill body's job is just to invoke it.
 
 Exit codes:
 
-- **0** — every issue is `done`. Proceed to §6.
-- **2** — only HITL issues remain. The HITL summary is on stdout — surface it to the user and suggest `/bender-implement-hitl {slug}`.
-- **non-zero (other)** — dispatch could not finish. Two distinct causes:
+- **0** — every issue is `done`. Proceed to §4.
+- **2** — only HITL issues remain. The HITL summary is on stdout — surface it to the user and suggest `/bender-implement-hitl {slug}`. **Ignore the completion mode** captured in step 2; the integration branch is preserved.
+- **non-zero (other)** — dispatch could not finish. **Ignore the completion mode** captured in step 2. Two distinct causes:
   - *Dependency-stuck* (`dispatch stuck: ... N blocked`) — blocked issues with no AFK candidates ready. Inspect the output, mark/unblock issues, and re-run.
   - *Environment/setup failure* (`dispatch setup failed for every ready issue ...`) — every issue failed before its sub-agent ran. Re-running won't help until the environment is fixed; the message names the shared cause. **Worktree skill-linking:** if the cause is `building prompt: reading skill ... bender-implement-issue/SKILL.md: no such file`, the gitignored `bender-*` skills weren't provisioned into the worktree. Confirm those skills exist under the repo's `.claude/skills/` (run `{{.commands.dispatch}}` from the repo root), then re-run.
 
 Sub-agent stdout is streamed as `[issue-N] ...` so you can watch progress. Full per-issue logs land at `.plan-bender/logs/{slug}/{id}.log`.
 
-### 6. Open the combined PR
+### 4. Execute the completion mode (dispatch exit 0 only)
+
+On any non-zero exit, skip this section and surface the dispatch diagnostic from §3. Otherwise follow only the block matching the mode you captured in §2.
+
+#### If you chose `merge`
+
+```bash
+git checkout <landing-branch>
+git merge --no-ff <user>/<slug>
+# if merge conflicts, resolve and `git commit`; the integration branch is preserved either way
+git branch -d <user>/<slug>
+```
+
+#### If you chose `branch`
+
+No git actions. Integration branch is left local at `<user>/<slug>`; nothing is pushed and no PR is opened.
+
+#### If you chose `pr`
 
 ```bash
 git push -u origin <user>/<slug>
@@ -55,9 +100,11 @@ Open one PR off `<user>/<slug>` to the default branch. Title: the PRD title. Bod
 - one bullet per issue (id, title, key acceptance)
 - aggregated test plan from each issue's verification
 
-### 7. Status report
+### 5. Status report
 
 Use `{{.commands.context}} {slug}` to get current issue counts per track.
+
+If you chose `pr`:
 
 ```text
 PRD: <project name>
@@ -68,6 +115,24 @@ QA:          <count>
 Remaining:   <count> (<issue list>)
 Points done: <sum> / <total>
 PR:          <integration PR URL>
+
+Track coverage:
+{{range .tracks}}
+  {{.}}:     <done>/<total>
+{{end}}
+```
+
+If you chose `merge` or `branch`:
+
+```text
+PRD: <project name>
+Done:        <count>
+In Review:   <count>
+Blocked:     <count> (<issue IDs>)
+QA:          <count>
+Remaining:   <count> (<issue list>)
+Points done: <sum> / <total>
+Integration branch: <name> @ <sha>
 
 Track coverage:
 {{range .tracks}}

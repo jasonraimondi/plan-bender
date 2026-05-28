@@ -435,10 +435,155 @@ func TestImplementPrdTemplate_DelegatesToDispatch(t *testing.T) {
 
 	assert.NotContains(t, out, "git worktree add")
 	assert.NotContains(t, out, "git worktree remove")
-	assert.NotContains(t, out, "git merge --no-ff")
 	assert.NotContains(t, out, "ultrathink")
+}
 
-	assert.Contains(t, out, "Open the combined PR")
+// sliceBetween returns the substring of haystack between the first occurrence of
+// start (inclusive) and the next occurrence of any string in stops (exclusive),
+// or the rest of haystack if no stop is found. Returns "" if start is absent.
+func sliceBetween(haystack, start string, stops ...string) string {
+	i := strings.Index(haystack, start)
+	if i < 0 {
+		return ""
+	}
+	rest := haystack[i:]
+	end := len(rest)
+	for _, s := range stops {
+		if j := strings.Index(rest[len(start):], s); j >= 0 && j+len(start) < end {
+			end = j + len(start)
+		}
+	}
+	return rest[:end]
+}
+
+func TestImplementPrdTemplate_PromptsForMode_ClaudeCode(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	ctx["agent"] = "claude-code"
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "AskUserQuestion")
+	assert.Contains(t, out, "landing branch")
+	assert.Contains(t, out, "git branch --show-current")
+	assert.NotContains(t, out, "Ask the user directly in conversation")
+}
+
+func TestImplementPrdTemplate_PromptsForMode_Pi(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	ctx["agent"] = "pi"
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	assert.NotContains(t, out, "AskUserQuestion")
+	assert.Contains(t, out, "Ask the user directly in conversation")
+	assert.Contains(t, out, "landing branch")
+	assert.Contains(t, out, "git branch --show-current")
+}
+
+func TestImplementPrdTemplate_MergeMode_EmitsGitMergeAndDelete(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "git merge --no-ff")
+	assert.Contains(t, mergeBlock, "git branch -d")
+}
+
+func TestImplementPrdTemplate_MergeMode_IncludesConflictHint(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	mergeBlock := sliceBetween(out, "If you chose `merge`", "If you chose `branch`", "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, mergeBlock, "merge sub-section missing")
+	assert.Contains(t, mergeBlock, "merge conflicts",
+		"merge block must include a one-line conflict-recovery hint")
+	assert.Contains(t, mergeBlock, "integration branch is preserved",
+		"hint must reassure the operator that the source branch survives a failed merge")
+}
+
+func TestImplementPrdTemplate_PrMode_PreservesPushAndGhPrCreate(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	prBlock := sliceBetween(out, "If you chose `pr`", "### 5.")
+	require.NotEmpty(t, prBlock, "pr sub-section missing")
+	assert.Contains(t, prBlock, "git push -u origin")
+	assert.Contains(t, prBlock, "PR off `<user>/<slug>`")
+	assert.Contains(t, prBlock, "default branch")
+}
+
+func TestImplementPrdTemplate_BranchMode_NoPushOrPR(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	branchBlock := sliceBetween(out, "If you chose `branch`", "If you chose `pr`", "If you chose `merge`", "### 5.")
+	require.NotEmpty(t, branchBlock, "branch sub-section missing")
+	assert.NotContains(t, branchBlock, "git push")
+	assert.NotContains(t, branchBlock, "gh pr")
+	assert.NotContains(t, branchBlock, "git merge")
+}
+
+func TestImplementPrdTemplate_StatusReport_ConditionalPRLine(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	report := sliceBetween(out, "### 5. Status report", "Update `prd.json`")
+	require.NotEmpty(t, report, "status report section missing")
+
+	prReport := sliceBetween(report, "If you chose `pr`", "If you chose `merge`", "If you chose `branch`")
+	require.NotEmpty(t, prReport, "pr-mode status block missing")
+	assert.Contains(t, prReport, "PR:")
+	assert.NotContains(t, prReport, "Integration branch:")
+
+	mergeBranchReport := sliceBetween(report, "If you chose `merge` or `branch`", "Update `prd.json`")
+	require.NotEmpty(t, mergeBranchReport, "merge/branch status block missing")
+	assert.Contains(t, mergeBranchReport, "Integration branch:")
+	assert.NotContains(t, mergeBranchReport, "PR:")
+}
+
+func TestImplementPrdTemplate_HideMergeWhenLandingIsIntegration(t *testing.T) {
+	tmpls, err := LoadTemplates(t.TempDir())
+	require.NoError(t, err)
+
+	ctx := fixtureContext()
+	out, err := Render("implement-prd", tmpls["bender-implement-prd"].Main(), ctx)
+	require.NoError(t, err)
+
+	preflight := sliceBetween(out, "### 2.", "### 3.")
+	require.NotEmpty(t, preflight, "pre-flight section missing")
+	assert.Contains(t, preflight, "working tree dirty",
+		"dirty-tree hide reason must be documented")
+	assert.Contains(t, preflight, "HEAD detached",
+		"detached-HEAD hide reason must be documented")
+	assert.Contains(t, preflight, "landing branch is the integration branch",
+		"self-merge hide reason must be documented")
 }
 
 func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T) {
