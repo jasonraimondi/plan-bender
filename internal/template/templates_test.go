@@ -23,7 +23,7 @@ func fixtureContext() map[string]any {
 		"has_backend_sync": false,
 		"pipeline_phases": []map[string]string{
 			{"name": "Interview", "description": "Stress-test your plan", "skill": "bender-interview-me"},
-			{"name": "Write PRD", "description": "Create a PRD", "skill": "bender-write-prd"},
+			{"name": "Write Plan", "description": "Create a PRD and decompose it into issues in one pass", "skill": "bender-write-plan"},
 		},
 		"custom_fields":       []map[string]any{},
 		"track_descriptions":  []map[string]string{},
@@ -56,9 +56,7 @@ func TestAllTemplatesLoad(t *testing.T) {
 	expected := []string{
 		"bender-orchestrator",
 		"bender-write-plan",
-		"bender-write-prd",
 		"bender-write-issue",
-		"bender-prd-to-issues",
 		"bender-review-prd",
 		"bender-implement-prd",
 		"bender-implement-hitl",
@@ -143,7 +141,7 @@ func TestOrchestratorTemplate_ContainsPipelinePhases(t *testing.T) {
 	out, err := Render("orchestrator", tmpls["bender-orchestrator"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "Interview")
-	assert.Contains(t, out, "Write PRD")
+	assert.Contains(t, out, "Write Plan")
 	assert.Contains(t, out, "./.plan-bender/plans/")
 }
 
@@ -169,26 +167,6 @@ func TestImplementPrdTemplate_HasLinearSyncWhenEnabled(t *testing.T) {
 	assert.Contains(t, out, "Linear sync")
 }
 
-func TestWritePrdTemplate_UsesCLIWriteThrough(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	ctx := fixtureContext()
-	out, err := Render("write-prd", tmpls["bender-write-prd"].Main(), ctx)
-	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender-agent write-prd")
-}
-
-func TestPrdToIssuesTemplate_UsesCLIWriteThrough(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	ctx := fixtureContext()
-	out, err := Render("prd-to-issues", tmpls["bender-prd-to-issues"].Main(), ctx)
-	require.NoError(t, err)
-	assert.Contains(t, out, "plan-bender-agent write-issue")
-}
-
 func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
@@ -197,28 +175,6 @@ func TestWriteIssueTemplate_UsesCLIWriteThrough(t *testing.T) {
 	out, err := Render("write-issue", tmpls["bender-write-issue"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, "plan-bender-agent write-issue")
-}
-
-func TestWritePrdTemplate_ConditionalReviewStep(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-	tmplContent := tmpls["bender-write-prd"].Main()
-
-	t.Run("with review", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["review_with_user"] = true
-		out, err := Render("write-prd", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.Contains(t, out, "Review with the user")
-	})
-
-	t.Run("without review", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["review_with_user"] = false
-		out, err := Render("write-prd", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.NotContains(t, out, "Review with the user")
-	})
 }
 
 func TestWriteIssueTemplate_ConditionalReviewStep(t *testing.T) {
@@ -304,40 +260,6 @@ func TestInterviewMeTemplate_InterviewWithDocsBlock(t *testing.T) {
 	})
 }
 
-func TestWritePrdTemplate_InterviewWithDocsBlock(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-	content := tmpls["bender-write-prd"].Main()
-
-	t.Run("off renders identical to absent without the grill block", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["interview_with_docs"] = false
-		off, err := Render("write-prd", content, ctx)
-		require.NoError(t, err)
-
-		absent := fixtureContext()
-		delete(absent, "interview_with_docs")
-		none, err := Render("write-prd", content, absent)
-		require.NoError(t, err)
-
-		assert.Equal(t, none, off, "false must render byte-identical to an absent flag")
-		assert.NotContains(t, off, "Domain awareness")
-	})
-
-	t.Run("on appends the grill block before Process", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["interview_with_docs"] = true
-		out, err := Render("write-prd", content, ctx)
-		require.NoError(t, err)
-
-		assert.Contains(t, out, "## Domain awareness")
-		assert.Contains(t, out, "Update CONTEXT.md inline")
-		assert.Contains(t, out, "Offer ADRs sparingly")
-		assert.Less(t, strings.Index(out, "## Domain awareness"), strings.Index(out, "## Process"),
-			"grill block must precede the Process section")
-	})
-}
-
 func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
@@ -346,8 +268,8 @@ func TestSyncCommands_RenderWithLinearTool(t *testing.T) {
 	ctx["has_backend_sync"] = true
 
 	cases := map[string]string{
-		"bender-prd-to-issues": "plan-bender-agent sync linear push",
-		"bender-write-issue":   "plan-bender-agent sync linear push",
+		"bender-write-plan":  "plan-bender-agent sync linear push",
+		"bender-write-issue": "plan-bender-agent sync linear push",
 	}
 	for name, want := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -747,7 +669,7 @@ func TestLoadTemplates_IgnoresUnknownOverrideDir(t *testing.T) {
 	skills, err := LoadTemplates(dir)
 	require.NoError(t, err, "stray override dir must not block loading other skills")
 	assert.NotContains(t, skills, "brand-new-skill", "unknown override dir must not be promoted to a phantom skill")
-	assert.Contains(t, skills, "bender-write-prd", "bundled skills must still load")
+	assert.Contains(t, skills, "bender-write-plan", "bundled skills must still load")
 }
 
 func TestLoadTemplates_ErrorsOnOutputCollision(t *testing.T) {

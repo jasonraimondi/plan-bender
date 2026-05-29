@@ -108,7 +108,7 @@ Tracks and workflow states are fully customizable.
 
 ## Customizing templates
 
-Override a bundled skill by creating `.plan-bender/templates/{name}/SKILL.md.tmpl` (e.g. `.plan-bender/templates/bender-write-prd/SKILL.md.tmpl`) and editing it. Run `pb setup` to re-render.
+Override a bundled skill by creating `.plan-bender/templates/{name}/SKILL.md.tmpl` (e.g. `.plan-bender/templates/bender-write-plan/SKILL.md.tmpl`) and editing it. Run `pb setup` to re-render.
 
 A skill template is a directory: the `SKILL.md.tmpl` body plus any **supporting files** beside it. Files ending in `.tmpl` are rendered with the same context and lose the suffix; all other files are copied verbatim. Supporting files (including nested subdirectories) are emitted into the generated skill and reached through the installed-skill symlink, so `SKILL.md` can reference a sibling like `./CONTEXT-FORMAT.md`. Overrides merge per file, so dropping one file into `.plan-bender/templates/{name}/` replaces or adds just that file.
 

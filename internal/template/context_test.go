@@ -89,7 +89,7 @@ func TestBuildContext_BackendOnlyPhaseShownWhenLinearEnabled(t *testing.T) {
 
 func TestSkillRequiresBackend(t *testing.T) {
 	assert.True(t, SkillRequiresBackend("bender-sync-linear"))
-	assert.False(t, SkillRequiresBackend("bender-write-prd"))
+	assert.False(t, SkillRequiresBackend("bender-write-plan"))
 	assert.False(t, SkillRequiresBackend("does-not-exist"))
 }
 

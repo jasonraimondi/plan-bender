@@ -68,6 +68,10 @@ All notable changes to plan-bender are documented here. Format loosely follows [
 
 - `pb setup` backfills a `$schema` key into existing `.plan-bender.json` / `.plan-bender.local.json` files that lack one, preserving formatting and unknown keys.
 
+### Removed
+
+- **`bender-write-prd` and `bender-prd-to-issues` skills removed.** Both were deprecated in favor of `bender-write-plan`, which performs the PRD draft and issue decomposition in a single pass. `pb setup` no longer generates either skill; the planning pipeline menu no longer lists them. Migrate to `/bender-write-plan`. The `plan-bender-agent write-prd` CLI command is unaffected — `bender-write-plan` still uses it to write `prd.json`.
+
 ### Fixed
 
 - `write-prd` now creates the PRD even when the slug directory already exists without a `prd.json` (e.g. an empty/leftover dir from a prior partial run). Previously `OpenOrCreate` treated any existing slug dir as loadable and failed with `reading prd {slug}/prd.json: no such file or directory`. A directory that holds an `issues/` tree but no `prd.json` is still surfaced as a loud half-built error.
