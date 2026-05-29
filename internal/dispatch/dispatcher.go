@@ -361,7 +361,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 	// hold the only copy of committed work and must be preserved.
 	merged := make(map[string]bool, len(successful))
 	for _, r := range successful {
-		mergeOut, mergeErr := runGitOutput(ctx, iwt.Path, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue #%d", r.IssueID), r.Branch)
+		mergeOut, mergeErr := runGitOutput(ctx, iwt.Path, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue %d", r.IssueID), r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, iwt.Path, "merge", "--abort")
 			d.markBlockedAndWarn(slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))

@@ -812,7 +812,7 @@ func TestDispatcher_MergeBackRecoversFromStaleMergeState(t *testing.T) {
 
 	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
 	require.NoError(t, err, "git log: %s", string(logOut))
-	assert.Contains(t, string(logOut), "merge issue #1", "integration branch must carry the merge commit")
+	assert.Contains(t, string(logOut), "merge issue 1", "integration branch must carry the merge commit")
 }
 
 // TestDispatcher_CrossSlugParallelRuns asserts two Run calls on distinct slugs
@@ -1062,7 +1062,7 @@ func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
 
 	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
 	require.NoError(t, err, "git log: %s", string(logOut))
-	assert.Contains(t, string(logOut), "merge issue #1", "integration branch must contain merge commit from recovery")
+	assert.Contains(t, string(logOut), "merge issue 1", "integration branch must contain merge commit from recovery")
 }
 
 // TestDispatcher_RecoveryUnblocksDependents reproduces the dispatch-stuck bug:
