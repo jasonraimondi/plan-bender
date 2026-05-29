@@ -361,7 +361,15 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 	// hold the only copy of committed work and must be preserved.
 	merged := make(map[string]bool, len(successful))
 	for _, r := range successful {
-		mergeOut, mergeErr := runGitOutput(ctx, iwt.Path, "merge", "--no-ff", "-m", fmt.Sprintf("merge issue %d", r.IssueID), r.Branch)
+		// Subject describes the merged work, not the plan-local issue number:
+		// "#N" auto-links to an unrelated GitHub issue, and a bare number is
+		// meaningless on the remote. Fall back to the branch name if the issue
+		// can't be loaded.
+		mergeMsg := r.Branch
+		if iss, err := loadIssue(ctx, d.plansRepo(), slug, r.IssueID); err == nil && iss.Name != "" {
+			mergeMsg = iss.Name
+		}
+		mergeOut, mergeErr := runGitOutput(ctx, iwt.Path, "merge", "--no-ff", "-m", mergeMsg, r.Branch)
 		if mergeErr != nil {
 			_ = runGit(ctx, iwt.Path, "merge", "--abort")
 			d.markBlockedAndWarn(slug, r.IssueID, fmt.Sprintf("merge conflict on branch %s:\n%s", r.Branch, mergeOut))

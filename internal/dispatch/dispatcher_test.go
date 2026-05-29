@@ -778,6 +778,7 @@ func TestDispatcher_MergeBackRecoversFromStaleMergeState(t *testing.T) {
 	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
 
 	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Name = "route customer-scoped webhook"
 	iss.Branch = &branch
 	writeIssue(t, fix.plansDir, iss)
 	installSkillFile(t, fix.root)
@@ -812,7 +813,8 @@ func TestDispatcher_MergeBackRecoversFromStaleMergeState(t *testing.T) {
 
 	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
 	require.NoError(t, err, "git log: %s", string(logOut))
-	assert.Contains(t, string(logOut), "merge issue 1", "integration branch must carry the merge commit")
+	assert.Contains(t, string(logOut), "route customer-scoped webhook", "merge subject must carry the issue name")
+	assert.NotContains(t, string(logOut), "#1", "merge subject must not reference a plan-local issue number")
 }
 
 // TestDispatcher_CrossSlugParallelRuns asserts two Run calls on distinct slugs
@@ -1048,6 +1050,7 @@ func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
 	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
 
 	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Name = "recover unmerged commit"
 	iss.Branch = &branch
 	writeIssue(t, fix.plansDir, iss)
 	installSkillFile(t, fix.root)
@@ -1062,7 +1065,8 @@ func TestDispatcher_RecoversInReviewWithUnmergedBranch(t *testing.T) {
 
 	logOut, err := exec.Command("git", "-C", fix.root, "log", "--oneline", integrationBranch).CombinedOutput()
 	require.NoError(t, err, "git log: %s", string(logOut))
-	assert.Contains(t, string(logOut), "merge issue 1", "integration branch must contain merge commit from recovery")
+	assert.Contains(t, string(logOut), "recover unmerged commit", "merge subject must carry the issue name from recovery")
+	assert.NotContains(t, string(logOut), "#1", "merge subject must not reference a plan-local issue number")
 }
 
 // TestDispatcher_RecoveryUnblocksDependents reproduces the dispatch-stuck bug:
