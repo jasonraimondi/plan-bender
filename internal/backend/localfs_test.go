@@ -58,7 +58,7 @@ func testIssue(id int) *schema.Issue {
 func TestFactory_LocalFS(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.PlansDir = t.TempDir()
-	b, err := New(context.Background(), cfg)
+	b, err := New(context.Background(), t.TempDir(), cfg)
 	require.NoError(t, err)
 	assert.NotNil(t, b)
 }

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -30,12 +32,24 @@ func (t *captureTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}, nil
 }
 
-func backendWithCapture(response string, estimationEnabled bool) (*linearBackend, *captureTransport) {
+// enabledRoot writes a minimal .plan-bender.json with linear enabled to a temp
+// dir and returns it, so ensureEnabled's disk re-read passes during tests.
+func enabledRoot(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := `{"linear":{"enabled":true,"api_key":"k","team":"team-1"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".plan-bender.json"), []byte(cfg), 0o644))
+	return dir
+}
+
+func backendWithCapture(t *testing.T, response string, estimationEnabled bool) (*linearBackend, *captureTransport) {
+	t.Helper()
 	ct := &captureTransport{response: response}
 	client := linear.NewClientWithHTTP(&http.Client{Transport: ct})
 	b := &linearBackend{
 		client:            client,
 		cfg:               config.Defaults(),
+		root:              enabledRoot(t),
 		teamID:            "team-1",
 		stateIDs:          map[string]string{"Backlog": "state-1"},
 		estimationEnabled: estimationEnabled,
@@ -204,7 +218,7 @@ const createIssueResponse = `{"data":{"issueCreate":{"success":true,"issue":{"id
 const updateIssueResponse = `{"data":{"issueUpdate":{"success":true,"issue":{"id":"i1","title":"T","state":{"name":"Backlog"}}}}}`
 
 func TestCreateIssue_EstimationEnabled(t *testing.T) {
-	b, ct := backendWithCapture(createIssueResponse, true)
+	b, ct := backendWithCapture(t, createIssueResponse, true)
 	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
 
 	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
@@ -213,7 +227,7 @@ func TestCreateIssue_EstimationEnabled(t *testing.T) {
 }
 
 func TestCreateIssue_EstimationDisabled(t *testing.T) {
-	b, ct := backendWithCapture(createIssueResponse, false)
+	b, ct := backendWithCapture(t, createIssueResponse, false)
 	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 5}
 
 	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
@@ -222,7 +236,7 @@ func TestCreateIssue_EstimationDisabled(t *testing.T) {
 }
 
 func TestUpdateIssue_EstimationEnabled(t *testing.T) {
-	b, ct := backendWithCapture(updateIssueResponse, true)
+	b, ct := backendWithCapture(t, updateIssueResponse, true)
 	linearID := "lin-1"
 	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
 
@@ -232,13 +246,41 @@ func TestUpdateIssue_EstimationEnabled(t *testing.T) {
 }
 
 func TestUpdateIssue_EstimationDisabled(t *testing.T) {
-	b, ct := backendWithCapture(updateIssueResponse, false)
+	b, ct := backendWithCapture(t, updateIssueResponse, false)
 	linearID := "lin-1"
 	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog", Points: 3, LinearID: &linearID}
 
 	_, err := b.UpdateIssue(t.Context(), issue, "slug")
 	require.NoError(t, err)
 	assert.NotContains(t, ct.body, "estimate")
+}
+
+func TestEnsureEnabled_RereadsFileOnEachOp(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".plan-bender.json")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`{"linear":{"enabled":true,"api_key":"k","team":"team-1"}}`), 0o644))
+
+	ct := &captureTransport{response: createIssueResponse}
+	b := &linearBackend{
+		client:   linear.NewClientWithHTTP(&http.Client{Transport: ct}),
+		cfg:      config.Defaults(),
+		root:     dir,
+		teamID:   "team-1",
+		stateIDs: map[string]string{"Backlog": "state-1"},
+	}
+	issue := &schema.Issue{ID: 1, Name: "T", Status: "backlog"}
+
+	// Enabled at op time: the write reaches Linear.
+	_, err := b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.NoError(t, err)
+
+	// Disable in the file; the next op must re-read and refuse rather than
+	// continue on the stale enabled value.
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`{"linear":{"enabled":false}}`), 0o644))
+
+	_, err = b.CreateIssue(t.Context(), issue, "proj-1", "slug")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "disabled")
 }
 
 func TestLinearIssueToRemote_MultipleLabels(t *testing.T) {

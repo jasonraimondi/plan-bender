@@ -2,8 +2,13 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
@@ -28,13 +33,14 @@ var linearToPriority = map[int]string{
 type linearBackend struct {
 	client            *linear.Client
 	cfg               config.Config
+	root              string // project root, re-read on each op to re-check linear.enabled
 	teamID            string
 	stateIDs          map[string]string
 	labelIDs          map[string]string // lowercased label name → Linear label id; nil until first load
 	estimationEnabled bool
 }
 
-func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
+func NewLinear(ctx context.Context, root string, cfg config.Config) (Backend, error) {
 	if cfg.Linear.APIKey == "" {
 		return nil, fmt.Errorf("linear.api_key is required")
 	}
@@ -58,13 +64,58 @@ func NewLinear(ctx context.Context, cfg config.Config) (Backend, error) {
 	return &linearBackend{
 		client:            client,
 		cfg:               cfg,
+		root:              root,
 		teamID:            teamID,
 		stateIDs:          states,
 		estimationEnabled: estimationEnabled,
 	}, nil
 }
 
+// ensureEnabled re-reads the project .plan-bender.json from disk and fails if
+// it explicitly sets linear.enabled:false. Checking on every read and write
+// makes the flag a live kill-switch: flip it off in the file and the next
+// Linear operation refuses rather than continuing on the value the backend was
+// built with. The file's explicit flag is read directly (not the merged
+// config) because mergeLinear only ever turns enabled on — a project-level
+// false could never override a global enable through the normal merge. When
+// the flag is absent we fall back to the constructed config; when root is
+// empty (tests building the backend directly) the check is skipped.
+func (b *linearBackend) ensureEnabled() error {
+	if b.root == "" {
+		return nil
+	}
+	enabled := b.cfg.Linear.Enabled
+
+	data, err := os.ReadFile(filepath.Join(b.root, ".plan-bender.json"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no project file — keep the constructed value
+	case err != nil:
+		return fmt.Errorf("re-checking linear config: %w", err)
+	default:
+		var doc struct {
+			Linear struct {
+				Enabled *bool `json:"enabled"`
+			} `json:"linear"`
+		}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			return fmt.Errorf("re-checking linear config: %w", err)
+		}
+		if doc.Linear.Enabled != nil {
+			enabled = *doc.Linear.Enabled
+		}
+	}
+
+	if !enabled {
+		return fmt.Errorf("linear is disabled in .plan-bender.json")
+	}
+	return nil
+}
+
 func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return RemoteProject{}, err
+	}
 	description, content := renderProjectBody(prd)
 	project, err := b.client.CreateProject(ctx, linear.ProjectCreateInput{
 		Name:        prd.Name,
@@ -79,6 +130,9 @@ func (b *linearBackend) CreateProject(ctx context.Context, prd *schema.PRD) (Rem
 }
 
 func (b *linearBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (RemoteProject, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return RemoteProject{}, err
+	}
 	if prd.Linear == nil || prd.Linear.ProjectID == "" {
 		return RemoteProject{}, fmt.Errorf("PRD has no linear project_id")
 	}
@@ -94,6 +148,9 @@ func (b *linearBackend) UpdateProject(ctx context.Context, prd *schema.PRD) (Rem
 }
 
 func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, projectID, slug string) (RemoteIssue, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return RemoteIssue{}, err
+	}
 	labelIDs, err := b.resolveLabels(ctx, issue.Labels)
 	if err != nil {
 		return RemoteIssue{}, err
@@ -121,6 +178,9 @@ func (b *linearBackend) CreateIssue(ctx context.Context, issue *schema.Issue, pr
 }
 
 func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, slug string) (RemoteIssue, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return RemoteIssue{}, err
+	}
 	if issue.LinearID == nil || *issue.LinearID == "" {
 		return RemoteIssue{}, fmt.Errorf("issue #%d has no linear_id", issue.ID)
 	}
@@ -150,6 +210,9 @@ func (b *linearBackend) UpdateIssue(ctx context.Context, issue *schema.Issue, sl
 }
 
 func (b *linearBackend) PullIssue(ctx context.Context, remoteID string) (RemoteIssue, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return RemoteIssue{}, err
+	}
 	issue, err := b.client.GetIssue(ctx, remoteID)
 	if err != nil {
 		return RemoteIssue{}, err
@@ -158,6 +221,9 @@ func (b *linearBackend) PullIssue(ctx context.Context, remoteID string) (RemoteI
 }
 
 func (b *linearBackend) PullProject(ctx context.Context, projectID string) (PullProjectResult, error) {
+	if err := b.ensureEnabled(); err != nil {
+		return PullProjectResult{}, err
+	}
 	project, issues, err := b.client.GetProject(ctx, projectID)
 	if err != nil {
 		return PullProjectResult{}, err

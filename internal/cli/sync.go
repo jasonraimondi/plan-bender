@@ -75,7 +75,7 @@ func syncPush(cmd *cobra.Command, slug string) error {
 		return err
 	}
 
-	be, err := backend.New(ctx, cfg)
+	be, err := backend.New(ctx, root, cfg)
 	if err != nil {
 		return fmt.Errorf("creating backend: %w", err)
 	}
@@ -98,7 +98,7 @@ func syncPull(cmd *cobra.Command, slug string) error {
 		return err
 	}
 
-	be, err := backend.New(ctx, cfg)
+	be, err := backend.New(ctx, root, cfg)
 	if err != nil {
 		return fmt.Errorf("creating backend: %w", err)
 	}
