@@ -28,6 +28,27 @@ If none provided, ask: "Which issue should I work on? (issue ref, or a plan slug
 
 ## Process (per issue)
 
+### 0. Detect your mode FIRST — integration vs standalone
+
+Before anything else, decide whether dispatch spawned you (**INTEGRATION mode**) or an operator invoked you directly (**STANDALONE mode**). Getting this wrong stalls the whole dispatch.
+
+You are in **INTEGRATION mode** if ANY of these holds:
+
+- your current working directory is inside a plan-bender worktree (the path contains `-wt/`), or
+- `git branch --show-current` returns a per-issue dispatch branch (it contains `--`, e.g. `<user>/<slug>--<id>-<issue-slug>`), or
+- the issue JSON in your prompt already shows `status: in-progress` with a `branch` you did not create.
+
+**In INTEGRATION mode you MUST:**
+
+- SKIP §2 and §8 entirely — no landing branch, no completion-mode prompt, no merge/push/PR. Dispatch handles merge-back itself.
+- After committing (§7), run §9 `{{.commands.complete}} {slug} {id}` and then STOP.
+- NEVER ask the operator anything. Your stdout is consumed by dispatch — a question reaches no one, and dispatch will mark the issue blocked. Complete and exit.
+- NEVER hand-edit the issue JSON `status` or `branch` fields. Only `{{.commands.complete}}` advances status in this mode.
+
+**In STANDALONE mode** (none of the above): follow §2 and §8 as written, then §9.
+
+If unsure, assume INTEGRATION mode — it is the common case. Run §9 `{{.commands.complete}}` and do not ask.
+
 ### 1. Read the issue
 
 Read the issue JSON file. Check:
@@ -167,7 +188,7 @@ Branch:   <user>/<slug>/<id>-<issue-slug> @ <sha>
 
 ### 9. Mark complete
 
-Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review`, bumps `updated`, and emits the dispatch sentinel `<pba:complete issue-id="{id}"/>` on stdout — the parent dispatch process detects it and proceeds to merge-back. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
+Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review` and bumps `updated`. **This status flip is how dispatch detects completion**: after your subprocess exits, the parent re-reads the issue file and proceeds to merge-back only if it sees `in-review`. The `<pba:complete issue-id="{id}"/>` line it prints is a human-readable marker, not the trigger. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
 
 If you opened a PR in step 8, set the `pr` field with Edit on the **exact** existing line (`"pr": null`) so it replaces in place. Don't append a new `pr` entry.
 
