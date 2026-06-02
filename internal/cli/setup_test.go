@@ -303,6 +303,55 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 	}
 }
 
+func TestSetup_PrunesStaleSkillSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"agents": ["claude-code"]}`),
+		0o644,
+	))
+
+	require.NoError(t, testSetupCmd(setupDeps{}).execute())
+
+	// Build paths from Getwd so the planted symlink's target matches the form pb
+	// stores (macOS Getwd resolves /tmp -> /private/tmp); the prune compares link
+	// strings, so the prefixes must agree.
+	root, err := os.Getwd()
+	require.NoError(t, err)
+	sourceDir := filepath.Join(root, ".plan-bender", "skills", "claude-code")
+	targetDir := filepath.Join(root, ".claude", "skills")
+
+	// Simulate a stale skill left over from an older version: a generated source
+	// dir plus its installed symlink in the agent target.
+	staleSrc := filepath.Join(sourceDir, "bender-OLD-removed")
+	require.NoError(t, os.MkdirAll(staleSrc, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(staleSrc, "SKILL.md"), []byte("stale"), 0o644))
+	require.NoError(t, os.Symlink(staleSrc, filepath.Join(targetDir, "bender-OLD-removed")))
+
+	// A user's own skill (real dir) and a symlink pointing outside the pb source
+	// dir must both survive pruning.
+	userDir := filepath.Join(targetDir, "my-own-skill")
+	require.NoError(t, os.MkdirAll(userDir, 0o755))
+	elsewhere := filepath.Join(dir, "elsewhere")
+	require.NoError(t, os.MkdirAll(elsewhere, 0o755))
+	require.NoError(t, os.Symlink(elsewhere, filepath.Join(targetDir, "user-link")))
+
+	require.NoError(t, testSetupCmd(setupDeps{}).execute())
+
+	_, err = os.Stat(staleSrc)
+	assert.True(t, os.IsNotExist(err), "stale skill source dir removed")
+
+	_, err = os.Lstat(filepath.Join(targetDir, "bender-OLD-removed"))
+	assert.True(t, os.IsNotExist(err), "stale skill symlink removed from target dir")
+
+	_, err = os.Stat(userDir)
+	require.NoError(t, err, "user's own skill dir preserved")
+	_, err = os.Lstat(filepath.Join(targetDir, "user-link"))
+	require.NoError(t, err, "user's own foreign symlink preserved")
+}
+
 func TestSetup_FlatOverride_WarnsMigration(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

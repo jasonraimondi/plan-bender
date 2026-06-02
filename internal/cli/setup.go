@@ -372,9 +372,41 @@ func symlinkSkills(root string, cfg config.Config) (int, error) {
 			}
 			count++
 		}
+
+		if err := pruneStaleSkillLinks(targetDir, sourceDir); err != nil {
+			return 0, err
+		}
 	}
 
 	return count, nil
+}
+
+// pruneStaleSkillLinks removes dangling symlinks in targetDir that pb installed
+// for this agent — links pointing into sourceDir whose skill no longer exists
+// (renamed, removed, or filtered out). It deliberately ignores real directories
+// and symlinks pointing elsewhere, so a user's own skills and the links other
+// projects installed into a shared user-scoped dir are left intact.
+func pruneStaleSkillLinks(targetDir, sourceDir string) error {
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		return fmt.Errorf("reading target dir %s: %w", targetDir, err)
+	}
+	prefix := sourceDir + string(os.PathSeparator)
+	for _, e := range entries {
+		dst := filepath.Join(targetDir, e.Name())
+		info, err := os.Lstat(dst)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		link, err := os.Readlink(dst)
+		if err != nil || !strings.HasPrefix(link, prefix) {
+			continue
+		}
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			os.Remove(dst)
+		}
+	}
+	return nil
 }
 
 // resolveAgentDir returns the absolute target directory for an agent based on its scope.

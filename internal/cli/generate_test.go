@@ -261,6 +261,32 @@ func TestGenerateSkills_RemovesStaleSupportingFiles(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "stale supporting file removed on regenerate")
 }
 
+func TestGenerateSkills_RemovesStaleSkillDir(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	// Simulate a skill an older pb version generated that is no longer in the
+	// template set (renamed or removed).
+	staleDir := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-OLD-removed")
+	require.NoError(t, os.MkdirAll(staleDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(staleDir, "SKILL.md"), []byte("stale"), 0o644))
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(staleDir)
+	assert.True(t, os.IsNotExist(err), "stale skill dir must be removed on regenerate")
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-write-plan"))
+	require.NoError(t, err, "current skill still generated")
+}
+
 func TestGenerateCmd_FlatOverride_WarnsMigration(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

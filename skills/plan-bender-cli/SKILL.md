@@ -33,7 +33,7 @@ pb setup --linear       # also configure Linear backend
 pb setup --yes          # non-interactive
 ```
 
-Re-run after config changes; it regenerates skills and re-symlinks. It also backfills a `$schema` reference into existing config files that lack one. If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set `manage_gitignore: false` to keep `pb setup` from touching `.gitignore`.
+Re-run after config changes; it regenerates skills and re-symlinks. Regeneration is a clean rebuild — skills that were renamed, removed, or filtered out (e.g. backend skills with Linear disabled) are deleted and their dangling symlinks pruned. It also backfills a `$schema` reference into existing config files that lack one. If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set `manage_gitignore: false` to keep `pb setup` from touching `.gitignore`.
 
 ## Human CLI (`pb`)
 

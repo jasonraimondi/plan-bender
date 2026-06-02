@@ -69,15 +69,20 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 
 	count := 0
 	for _, agent := range cfg.Agents {
+		// Wipe the agent's skill dir up front so skills that were renamed,
+		// removed, or filtered out (e.g. backend skills with Linear disabled)
+		// don't survive as orphans. This dir is entirely pb-generated.
+		agentDir := filepath.Join(root, ".plan-bender", "skills", agent.Name)
+		if err := os.RemoveAll(agentDir); err != nil {
+			return 0, fmt.Errorf("clearing %s: %w", agentDir, err)
+		}
+
 		ctx := tmpl.BuildContext(cfg, agent)
 		for name, skill := range skills {
 			if tmpl.SkillRequiresBackend(name) && !cfg.Linear.Enabled {
 				continue
 			}
-			outDir := filepath.Join(root, ".plan-bender", "skills", agent.Name, name)
-			if err := os.RemoveAll(outDir); err != nil {
-				return 0, fmt.Errorf("clearing %s: %w", outDir, err)
-			}
+			outDir := filepath.Join(agentDir, name)
 			if err := writeSkill(name, skill, ctx, outDir); err != nil {
 				return 0, err
 			}

@@ -25,6 +25,7 @@
 | `pb docs --full` | Print full config reference |
 
 `pb setup` is idempotent. First run writes config, subsequent runs regenerate skills and re-symlink.
+Regeneration is a clean rebuild: skills that were renamed, removed, or filtered out (e.g. backend skills with Linear disabled) are deleted from `.plan-bender/skills/`, and the now-dangling symlinks pb installed for them are pruned from each agent's skills dir.
 It also backfills a `$schema` reference into existing config files that lack one (for editor validation/autocomplete).
 If `.plan-bender.local.json` already exists, no `.plan-bender.json` is created. Set
 `manage_gitignore: false` in config to prevent `pb setup` from modifying `.gitignore`.
