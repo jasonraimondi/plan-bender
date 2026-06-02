@@ -36,6 +36,32 @@ func TestLoad_LocalOverridesProject(t *testing.T) {
 	assert.Equal(t, 8, cfg.MaxPoints)
 }
 
+// TestLoad_PlansDirEnvOverridesConfig guards the dispatch fix: a sub-agent
+// running in a worktree must resolve plans_dir to the parent store the
+// dispatcher reads, not its own checkout. Dispatch injects PLAN_BENDER_PLANS_DIR
+// with the parent's absolute path; it must win over the worktree's .plan-bender.json.
+func TestLoad_PlansDirEnvOverridesConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeJSON(t, filepath.Join(dir, ".plan-bender.json"), `{"plans_dir": "./plans/"}`)
+	t.Setenv(PlansDirEnv, "/abs/parent/plans")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "/abs/parent/plans", cfg.PlansDir)
+}
+
+// TestLoad_PlansDirEnvUnsetLeavesConfig confirms the override is inert when the
+// env var is absent, so non-dispatch invocations keep their configured value.
+func TestLoad_PlansDirEnvUnsetLeavesConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeJSON(t, filepath.Join(dir, ".plan-bender.json"), `{"plans_dir": "./plans/"}`)
+	t.Setenv(PlansDirEnv, "")
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "./plans/", cfg.PlansDir)
+}
+
 // TestLoad_LegacyYAMLHintsAtMigrate guards the upgrade-path footgun: silently
 // falling back to defaults when a user upgraded the binary but didn't run
 // `pb migrate` would hide their entire config behind a default starter.

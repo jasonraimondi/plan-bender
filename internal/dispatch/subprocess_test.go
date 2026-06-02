@@ -134,6 +134,38 @@ exit 0
 	assert.Contains(t, string(logBytes), "working")
 }
 
+// TestRunSubprocess_InjectsParentPlansDirEnv guards the dispatch-completion fix:
+// the sub-agent runs with cmd.Dir set to the worktree, but its `pba complete`
+// must write to the parent store the dispatcher re-reads. RunSubprocess pins
+// that store via PLAN_BENDER_PLANS_DIR. The fake claude records the env it was
+// handed; it must equal the plans handle's dir, not the worktree CWD.
+func TestRunSubprocess_InjectsParentPlansDirEnv(t *testing.T) {
+	plansDir := filepath.Join(t.TempDir(), "plans")
+	writeStubIssue(t, plansDir, "ship", "")
+	issuePath := filepath.Join(plansDir, "ship", "issues", "5-ship-it.json")
+
+	worktree := t.TempDir()
+	seen := filepath.Join(worktree, "seen-plans-dir")
+	body := `printf '%s' "$PLAN_BENDER_PLANS_DIR" > "` + seen + `"
+sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "` + issuePath + `"
+exit 0
+`
+	installFakeClaude(t, body)
+
+	logDir := filepath.Join(t.TempDir(), "logs")
+	var out bytes.Buffer
+	issue := schema.Issue{ID: 5, Slug: "ship-it", Status: "in-progress"}
+	res := RunSubprocess(context.Background(), newTestOwner(plansDir), planrepo.NewProd(plansDir), "ship", issue,
+		"some prompt", worktree, logDir, &out)
+
+	require.True(t, res.Success, "expected success, got err: %v, out: %s", res.Err, out.String())
+	got, err := os.ReadFile(seen)
+	require.NoError(t, err)
+	assert.Equal(t, plansDir, string(got),
+		"sub-agent must see the parent plans dir via PLAN_BENDER_PLANS_DIR, not its worktree CWD")
+	assert.NotEqual(t, worktree, string(got))
+}
+
 func TestRunSubprocess_FailureMarksBlocked(t *testing.T) {
 	plansDir := filepath.Join(t.TempDir(), "plans")
 	writeStubIssue(t, plansDir, "ship", "")

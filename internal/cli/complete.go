@@ -14,8 +14,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// CompleteSentinel formats the marker line written to stdout when an issue is marked complete.
-// Dispatch scans subprocess output for this string to detect successful completion.
+// CompleteSentinel formats the marker line written to stdout when an issue is
+// marked complete. It is a human-readable progress marker, not dispatch's
+// completion signal: dispatch detects success by re-reading the issue file
+// after the subprocess exits (see dispatch.Verdict) and acting on an in-review
+// status. The line stays useful in the streamed sub-agent log and for any
+// out-of-band tooling that tails it.
 func CompleteSentinel(id int) string {
 	return fmt.Sprintf(`<pba:complete issue-id="%d"/>`, id)
 }
@@ -24,8 +28,8 @@ func CompleteSentinel(id int) string {
 // status.Owner.Transition. The from-set covers todo, in-progress, and backlog
 // because sub-agents may skip straight from any of those into in-review on
 // completion. Re-completing an already-in-review issue is idempotent: the
-// sentinel is still emitted so a dispatcher that lost track of an earlier
-// completion can detect the result.
+// status stays in-review and the OK result (with sentinel) is re-emitted, so a
+// retried completion is harmless.
 func NewCompleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "complete <slug> <id>",

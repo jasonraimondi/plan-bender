@@ -60,6 +60,11 @@ func New(plansDir string, adapters Adapters) *Plans {
 	return &Plans{plansDir: plansDir, adapters: adapters}
 }
 
+// Dir returns the directory this handle is rooted at. Dispatch passes it to
+// sub-agents so a worktree-side `pba` resolves the same on-disk store the
+// parent reads, instead of its own checkout's copy.
+func (p *Plans) Dir() string { return p.plansDir }
+
 // NewProd wires production adapters: an os filesystem reader rooted at
 // plansDir, atomic temp+rename writes, recursive mkdir, and a flock on
 // .pb-lock inside plansDir that serializes write-side access across

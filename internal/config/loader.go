@@ -11,6 +11,13 @@ import (
 	"strings"
 )
 
+// PlansDirEnv overrides the resolved plans_dir with an absolute path when set.
+// Dispatch sets it on each sub-agent subprocess so a worktree-side `pba`
+// (which resolves plans_dir relative to its own CWD) writes to the parent
+// repo's store — the one the dispatcher re-reads to detect completion —
+// instead of the worktree's checkout copy.
+const PlansDirEnv = "PLAN_BENDER_PLANS_DIR"
+
 func Load(root string) (Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -54,6 +61,10 @@ func loadWithHome(root, home string) (Config, error) {
 	}
 
 	expandEnv(&base)
+
+	if dir := os.Getenv(PlansDirEnv); dir != "" {
+		base.PlansDir = dir
+	}
 
 	if err := validate(&base); err != nil {
 		return Config{}, err

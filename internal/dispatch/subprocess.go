@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
@@ -82,6 +83,12 @@ func RunSubprocess(
 	cmd := exec.CommandContext(ctx, "claude", "--print", "--verbose", "--output-format", "stream-json")
 	cmd.Dir = worktreePath
 	cmd.Stdin = strings.NewReader(prompt)
+
+	// The sub-agent runs from the worktree, where `pba complete` would resolve
+	// a relative plans_dir against the worktree's own checkout and flip a copy
+	// the dispatcher never re-reads. Pin it to the parent store this handle is
+	// rooted at, so the completion status lands where Verdict looks for it.
+	cmd.Env = append(os.Environ(), config.PlansDirEnv+"="+plans.Dir())
 
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
