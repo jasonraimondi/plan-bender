@@ -10,8 +10,11 @@ import (
 
 func NewCompletionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:       "completion [bash|zsh|fish]",
-		Short:     "Generate shell completion scripts",
+		Use:   "completion [bash|zsh|fish]",
+		Short: "Generate shell completion scripts",
+		// Hidden so it doesn't sit next to (and collide with) `complete` in the
+		// help listing or in "Did you mean" suggestions. Still fully runnable.
+		Hidden:    true,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"bash", "zsh", "fish"},
 		RunE: func(cmd *cobra.Command, args []string) error {

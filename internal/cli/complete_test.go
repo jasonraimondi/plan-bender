@@ -65,7 +65,7 @@ func loadCompleteIssue(t *testing.T, dir string) schema.Issue {
 	return issue
 }
 
-func TestComplete_FlipsStatusAndEmitsSentinel(t *testing.T) {
+func TestComplete_FlipsStatusAndEmitsMarker(t *testing.T) {
 	dir := setupCompletePlan(t, "")
 
 	cmd := NewCompleteCmd()
@@ -111,7 +111,7 @@ func TestComplete_IdempotentInReview(t *testing.T) {
 	require.NoError(t, cmd.Execute(), "re-completing an in-review issue is a no-op success")
 
 	assert.Contains(t, out.String(), `<pba:complete issue-id="3"/>`,
-		"sentinel must be emitted so dispatcher detects completion on retry")
+		"marker must be emitted so the sub-agent log records completion on retry")
 
 	issue := loadCompleteIssue(t, dir)
 	assert.Equal(t, "in-review", issue.Status)
@@ -179,8 +179,8 @@ func TestComplete_AgentModeJSON(t *testing.T) {
 	require.NoError(t, root.Execute())
 
 	output := out.String()
-	assert.Contains(t, output, `"sentinel"`)
-	// JSON encodes < and > as unicode escapes; verify the issue-id appears in the encoded sentinel.
+	assert.Contains(t, output, `"marker"`)
+	// JSON encodes < and > as unicode escapes; verify the issue-id appears in the encoded marker.
 	assert.Contains(t, output, `pba:complete issue-id=\"3\"`)
 	assert.Contains(t, output, `"id":3`)
 }

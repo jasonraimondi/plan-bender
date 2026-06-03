@@ -6,7 +6,7 @@
 | --- | --- |
 | `pb setup` | Write defaults, generate skills, symlink install (idempotent — re-run after config changes) |
 | `pb setup --linear` | Configure Linear integration |
-| `pb setup --yes` | Non-interactive mode |
+| `pb setup --yes` (`-y`) | Non-interactive mode |
 | `pb sync linear push <slug>` | Push local issues to Linear |
 | `pb sync linear pull <slug>` | Pull Linear state into local JSON |
 | `pb migrate` | One-shot conversion of legacy `.yaml` plan/config files to `.json` (idempotent; supports `--dry-run`) |
@@ -14,12 +14,12 @@
 | `pb self-update` | Update to latest release |
 | `pb next <slug>` | Show recommended next issue (formatted text) |
 | `pb dispatch <slug>` | Run the autonomous implementation loop for a plan |
-| `pb complete <slug> <id>` | Flip an issue to in-review and emit the dispatch sentinel |
+| `pb complete <slug> <id>` | Mark an issue in-review (ready for review); prints the completion marker |
 | `pb worktree create <slug> <id>` | Create a git branch and worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan, including the per-slug integration worktree (preserves unmerged) |
 | `pb status <slug>` | Per-issue state for a plan: status counts, labels, blocked notes, branch/PR |
 | `pb retry <slug> <id>` | Reset a blocked issue to `todo` (appends a structured transition note) |
-| `pb completion <shell>` | Shell completion — bash, zsh, fish |
+| `pb completion <shell>` | Shell completion — bash, zsh, fish (hidden from `--help`) |
 | `pb docs` | Open GitHub repo in browser |
 | `pb docs --print` | Print repo URL without opening |
 | `pb docs --full` | Print full config reference |
@@ -47,7 +47,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 | `plan-bender-agent sync linear pull <slug>` | Pull remote state to local |
 | `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |
 | `plan-bender-agent dispatch <slug>` | Autonomous implementation loop (see below) |
-| `plan-bender-agent complete <slug> <id>` | Mark issue in-review + emit completion sentinel |
+| `plan-bender-agent complete <slug> <id>` | Mark issue in-review; JSON includes the completion `marker` |
 | `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch, status}` — status is the post-claim issue status (`in-progress`) |
 | `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; cleans issue worktrees and the per-slug integration worktree, unmerged branches are preserved and logged to stderr |
 | `plan-bender-agent status <slug>` | JSON `{plan, issues}` — per-issue id, status, labels, branch, full notes |
@@ -81,9 +81,9 @@ The integration worktree persists across runs of the same slug for fast resumpti
 
 Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure). A `1` has two distinct shapes: *stuck-on-blocked* / lock contention (a dependency or operational problem — fix the issues and re-run), and *setup failure* (`dispatch setup failed for every ready issue ...`, an environment problem where no sub-agent ran — re-running won't help until it's fixed; the message names the shared cause). When `report_bugs` is enabled, a *setup failure* (and only that shape) also writes a `pb-error-report-<UTC>.log` to the repo root capturing the command and error — that failure happens in Go before any sub-agent runs, so the agent-facing report_bugs prompt can't cover it. Stuck-on-blocked and lock contention are user-resolvable, not bugs, so they don't write a report.
 
-### Completion sentinel
+### Completion marker
 
-A sub-agent signals completion by calling `pba complete <slug> <id>`. The command flips the issue JSON to `status: in-review` and writes `<pba:complete issue-id="N"/>` to stdout. Dispatch treats a successful subprocess as `exit 0 AND status == in-review`. Exit 0 without the status flip is treated as failure (issue marked `blocked`).
+A sub-agent signals completion by calling `pba complete <slug> <id>`, which flips the issue JSON to `status: in-review` and prints `<pba:complete issue-id="N"/>` — the **completion marker**. The marker is a progress line for logs and out-of-band tooling; it is **not** the completion signal. Dispatch keys on the status flip: a successful subprocess is `exit 0 AND status == in-review`, and exit 0 without the flip is treated as failure (issue marked `blocked`). In agent mode the command's JSON response carries the same line in its `marker` field.
 
 ## Recovering from a stuck dispatch
 

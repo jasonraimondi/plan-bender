@@ -48,7 +48,7 @@ func newSyncPushCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "push <slug>",
 		Short: "Push local issues to remote backend",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return syncPush(cmd, args[0])
 		},
@@ -59,7 +59,7 @@ func newSyncPullCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pull <slug>",
 		Short: "Pull remote state to local JSON",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return syncPull(cmd, args[0])
 		},

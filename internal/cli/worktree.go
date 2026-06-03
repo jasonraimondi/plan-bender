@@ -27,7 +27,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "create <slug> <issue-id>",
 		Short: "Create a worktree for one issue",
-		Args:  cobra.ExactArgs(2),
+		Args:  exactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			id, err := strconv.Atoi(args[1])
@@ -114,7 +114,7 @@ func newWorktreeGCCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "gc <slug>",
 		Short: "Remove worktrees and branches for a plan",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			root, _ := os.Getwd()

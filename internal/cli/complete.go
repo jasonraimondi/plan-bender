@@ -14,13 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// CompleteSentinel formats the marker line written to stdout when an issue is
-// marked complete. It is a human-readable progress marker, not dispatch's
+// CompleteMarker formats the completion marker line written to stdout when an
+// issue is marked complete. It is a human-readable progress marker, not the
 // completion signal: dispatch detects success by re-reading the issue file
 // after the subprocess exits (see dispatch.Verdict) and acting on an in-review
 // status. The line stays useful in the streamed sub-agent log and for any
 // out-of-band tooling that tails it.
-func CompleteSentinel(id int) string {
+func CompleteMarker(id int) string {
 	return fmt.Sprintf(`<pba:complete issue-id="%d"/>`, id)
 }
 
@@ -33,8 +33,14 @@ func CompleteSentinel(id int) string {
 func NewCompleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "complete <slug> <id>",
-		Short: "Flip an issue to in-review and emit the dispatch completion sentinel",
-		Args:  cobra.ExactArgs(2),
+		Short: "Mark an issue in-review (ready for review)",
+		Long: `Flip an issue to in-review and print its completion marker.
+
+The marker line (<pba:complete issue-id="N"/>) is a progress marker for logs
+and out-of-band tooling — it is not how dispatch detects success. Dispatch
+re-reads the issue after the sub-agent exits and keys on the in-review status.`,
+		Example: "  pb complete my-plan 3",
+		Args:    exactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			id, err := strconv.Atoi(args[1])
@@ -72,16 +78,16 @@ func NewCompleteCmd() *cobra.Command {
 }
 
 func emitCompleteOK(cmd *cobra.Command, slug string, id int) error {
-	sentinel := CompleteSentinel(id)
+	marker := CompleteMarker(id)
 	if isAgentMode(cmd) {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
-			"status":   "ok",
-			"id":       id,
-			"slug":     slug,
-			"sentinel": sentinel,
+			"status": "ok",
+			"id":     id,
+			"slug":   slug,
+			"marker": marker,
 		})
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), sentinel)
+	fmt.Fprintln(cmd.OutOrStdout(), marker)
 	fmt.Fprintf(cmd.OutOrStdout(), "issue #%d marked in-review\n", id)
 	return nil
 }

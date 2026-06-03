@@ -50,7 +50,7 @@ func newSetupCmd(deps setupDeps) *cobra.Command {
 			return runSetup(cmd, deps, yes, useLinear)
 		},
 	}
-	cmd.Flags().BoolVar(&yes, "yes", false, "Non-interactive mode")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Non-interactive mode")
 	cmd.Flags().BoolVar(&useLinear, "linear", false, "Configure Linear integration")
 	return cmd
 }

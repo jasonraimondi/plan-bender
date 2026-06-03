@@ -1,6 +1,6 @@
 ---
 name: plan-bender-cli
-description: Reference for the plan-bender CLI (`pb` and `pba` / `plan-bender-agent`). Use when the user asks about plan-bender commands, dispatch lifecycle, worktree management, completion sentinel, exit codes, recovering a stuck dispatch, or Linear sync. Also triggers on "what does pb / pba do", "how do I run plan-bender", "pb dispatch", "pb status", "pb retry", or any question about plan-bender's command surface.
+description: Reference for the plan-bender CLI (`pb` and `pba` / `plan-bender-agent`). Use when the user asks about plan-bender commands, dispatch lifecycle, worktree management, completion marker, exit codes, recovering a stuck dispatch, or Linear sync. Also triggers on "what does pb / pba do", "how do I run plan-bender", "pb dispatch", "pb status", "pb retry", or any question about plan-bender's command surface.
 ---
 
 # plan-bender CLI
@@ -43,7 +43,7 @@ Re-run after config changes; it regenerates skills and re-symlinks. Regeneration
 | `pb status <slug>` | Per-issue state: status counts, labels, blocked notes, branch/PR |
 | `pb dispatch <slug>` | Autonomous implementation loop |
 | `pb dispatch <slug> --base <ref>` | Override auto-detected default branch (any `git rev-parse` ref) |
-| `pb complete <slug> <id>` | Flip issue to `in-review` + emit dispatch sentinel |
+| `pb complete <slug> <id>` | Mark issue `in-review` (ready for review); prints the completion marker |
 | `pb retry <slug> <id>` | Reset a `blocked` issue back to `todo` |
 | `pb worktree create <slug> <id>` | Branch + worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees + merged branches incl. the per-slug integration worktree (keeps unmerged) |
@@ -101,14 +101,14 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 
 Dispatch refuses to run with a dirty working tree (checks `git diff-index` for tracked-file changes). HEAD is captured and restored on exit so a successful run never silently leaves the user on the integration branch.
 
-### Completion sentinel
+### Completion marker
 
 A sub-agent signals completion with `pba complete <slug> <id>`. The command:
 
 - Flips the issue JSON to `status: in-review`
-- Writes `<pba:complete issue-id="N"/>` to stdout
+- Prints `<pba:complete issue-id="N"/>` — the **completion marker** (also in the JSON `marker` field in agent mode)
 
-Dispatch treats a subprocess as successful if **exit 0 AND status == in-review**. Exit 0 without the status flip is treated as failure (issue marked `blocked`).
+The marker is a progress line for logs and out-of-band tooling; it is **not** the completion signal. Dispatch keys on the status flip: a subprocess is successful if **exit 0 AND status == in-review**. Exit 0 without the flip is treated as failure (issue marked `blocked`).
 
 ### Exit codes
 

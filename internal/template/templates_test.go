@@ -599,7 +599,7 @@ func TestImplementIssueTemplate_DiscoversViaNextAndSkipsPrUnderPrd(t *testing.T)
 	assert.Contains(t, out, "do not push")
 }
 
-func TestImplementIssueTemplate_CallsCompleteSentinel(t *testing.T) {
+func TestImplementIssueTemplate_CallsComplete(t *testing.T) {
 	tmpls, err := LoadTemplates(t.TempDir())
 	require.NoError(t, err)
 

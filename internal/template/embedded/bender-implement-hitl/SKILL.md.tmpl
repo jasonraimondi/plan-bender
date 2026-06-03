@@ -103,7 +103,7 @@ If implementing now, follow the same execution rules as `/bender-implement-issue
 4. Run lint/tests and headed verification when `headed: true`.
 5. Commit the work.
 6. If standalone, push and open a PR. If under a PRD dispatch/integration branch, do not push or open a PR.
-7. Run `{{.commands.complete}} {slug} {id}` to flip to `in-review` and emit the dispatch sentinel.
+7. Run `{{.commands.complete}} {slug} {id}` to flip to `in-review` and print the completion marker.
 
 If blocked after starting, do not edit `status` by hand — exit non-zero and let the dispatch/parent process mark it blocked, or report the blocker if working standalone.
 {{if .report_bugs}}

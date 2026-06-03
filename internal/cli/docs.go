@@ -70,12 +70,17 @@ issue_schema.custom_fields entry:
     "enum_values": ["frontend", "backend", "platform"] }
 `
 
-// docsOpener opens a URL in the browser. Swappable for tests.
+// docsOpener opens a URL in the browser using the platform's launcher.
+// Swappable for tests. On failure the caller falls back to printing the URL.
 var docsOpener = func(url string) error {
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("browser open not supported on %s", runtime.GOOS)
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Run()
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "", url).Run()
+	default:
+		return exec.Command("xdg-open", url).Run()
 	}
-	return exec.Command("open", url).Run()
 }
 
 func NewDocsCmd() *cobra.Command {
@@ -86,7 +91,7 @@ func NewDocsCmd() *cobra.Command {
 		Short: "Open docs or show config reference",
 		Long: `Open the plan-bender GitHub repo in your browser, or print config reference.
 
-  pb docs          Open GitHub repo in browser (macOS) or print URL
+  pb docs          Open GitHub repo in browser, or print the URL on failure
   pb docs --print  Print the repo URL without opening
   pb docs --full   Print full config reference with all options`,
 		RunE: func(cmd *cobra.Command, args []string) error {

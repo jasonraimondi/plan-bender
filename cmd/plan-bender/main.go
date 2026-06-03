@@ -86,21 +86,32 @@ func rootCmd() *cobra.Command {
 
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
+	root.AddGroup(
+		&cobra.Group{ID: "workflow", Title: "Plan workflow:"},
+		&cobra.Group{ID: "workspace", Title: "Workspace:"},
+		&cobra.Group{ID: "project", Title: "Project:"},
+	)
+	group := func(id string, c *cobra.Command) *cobra.Command {
+		c.GroupID = id
+		return c
+	}
+
 	root.AddCommand(
-		cli.NewSetupCmd(version),
+		group("workflow", cli.NewDispatchCmd(version)),
+		group("workflow", cli.NewNextCmd()),
+		group("workflow", cli.NewStatusCmd()),
+		group("workflow", cli.NewCompleteCmd()),
+		group("workflow", cli.NewRetryCmd()),
+		group("workspace", cli.NewWorktreeCmd()),
+		group("workspace", cli.NewSyncCmd()),
+		group("project", cli.NewSetupCmd(version)),
+		group("project", cli.NewDoctorCmd(version)),
+		group("project", cli.NewSelfUpdateCmd(version)),
+		group("project", cli.NewMigrateCmd()),
+		group("project", cli.NewDocsCmd()),
+		// Ungrouped (fall under "Additional Commands", or hidden):
 		cli.NewGenerateCmd(),
-		cli.NewSyncCmd(),
-		cli.NewDoctorCmd(version),
-		cli.NewSelfUpdateCmd(version),
 		cli.NewCompletionCmd(),
-		cli.NewDocsCmd(),
-		cli.NewNextCmd(),
-		cli.NewCompleteCmd(),
-		cli.NewWorktreeCmd(),
-		cli.NewDispatchCmd(version),
-		cli.NewStatusCmd(),
-		cli.NewRetryCmd(),
-		cli.NewMigrateCmd(),
 	)
 
 	return root

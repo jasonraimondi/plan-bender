@@ -19,7 +19,17 @@ func NewDispatchCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dispatch <slug>",
 		Short: "Run the autonomous implementation loop for a plan",
-		Args:  cobra.ExactArgs(1),
+		Long: `Run the autonomous implementation loop for a plan.
+
+Dispatch forks an integration branch (<git-user>/<slug>) off the base, then
+loops: pick the ready AFK batch, run each issue in its own git worktree via a
+sub-agent, and merge successful branches back in dependency order. The parent
+repo's HEAD is never touched; HITL-only issues are left for /bender-implement-hitl.
+
+Exit codes: 0 all done, 2 HITL-only remain, 1 failure (inspect 'pb status <slug>').`,
+		Example: `  pb dispatch my-plan
+  pb dispatch my-plan --base origin/main`,
+		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			root, err := os.Getwd()

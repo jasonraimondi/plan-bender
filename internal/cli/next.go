@@ -15,9 +15,10 @@ import (
 // Pure read; does not mutate any file.
 func NewNextCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "next <slug>",
-		Short: "Show the recommended next issue for a plan",
-		Args:  cobra.ExactArgs(1),
+		Use:     "next <slug>",
+		Short:   "Show the recommended next issue for a plan",
+		Example: "  pb next my-plan",
+		Args:    exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			root, _ := os.Getwd()

@@ -20,9 +20,10 @@ import (
 // than silently overwriting live work.
 func NewRetryCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "retry <slug> <id>",
-		Short: "Reset a blocked issue to todo",
-		Args:  cobra.ExactArgs(2),
+		Use:     "retry <slug> <id>",
+		Short:   "Reset a blocked issue to todo",
+		Example: "  pb retry my-plan 3",
+		Args:    exactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			id, err := strconv.Atoi(args[1])

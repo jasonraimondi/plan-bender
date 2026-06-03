@@ -14,7 +14,9 @@ import (
 // else is genuinely internal.
 func openErrorToAgent(slug string, err error) *AgentError {
 	if errors.Is(err, fs.ErrNotExist) {
-		return NewAgentError(fmt.Sprintf("plan %q not found: %s", slug, err), ErrPlanNotFound)
+		// Drop the wrapped reading-prd/open ENOENT chain: for a missing plan it
+		// is pure noise — the slug already names what wasn't found.
+		return NewAgentError(fmt.Sprintf("plan %q not found", slug), ErrPlanNotFound)
 	}
 	var parseErr *planrepo.ParseError
 	if errors.As(err, &parseErr) {

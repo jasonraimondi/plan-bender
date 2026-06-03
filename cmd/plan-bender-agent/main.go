@@ -17,6 +17,12 @@ func main() {
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		cli.MarkAgentMode(cmd)
 
+		level := slog.LevelInfo
+		if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
+			level = slog.LevelDebug
+		}
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+
 		wd, err := os.Getwd()
 		if err != nil {
 			return cli.NewAgentError("failed to get working directory: "+err.Error(), cli.ErrConfigError)

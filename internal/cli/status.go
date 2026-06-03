@@ -18,9 +18,10 @@ import (
 // surfaces the blocked reason, retry clears it.
 func NewStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <slug>",
-		Short: "Show per-issue state for a plan: status, blocked reason, branch, labels",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <slug>",
+		Short:   "Show per-issue state for a plan: status, blocked reason, branch, labels",
+		Example: "  pb status my-plan",
+		Args:    exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 			root, _ := os.Getwd()

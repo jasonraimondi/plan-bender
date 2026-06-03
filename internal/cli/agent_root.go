@@ -36,6 +36,14 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		},
 	}
 
+	// Bind -v to --verbose (parity with pb) so cobra does not auto-assign -v to
+	// --version; --version stays long-only on both binaries. The flag is read in
+	// the binary's PersistentPreRunE to set the slog level.
+	root.PersistentFlags().BoolP("verbose", "v", false, "enable debug logging")
+	// Hide the generated shell-completion command so it neither lists beside nor
+	// collides with `complete` (mirrors pb).
+	root.CompletionOptions.HiddenDefaultCmd = true
+
 	slugComplete := SlugCompletionFunc()
 
 	writePrdCmd := NewWritePrdCmd()

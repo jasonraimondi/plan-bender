@@ -14,6 +14,14 @@ _Avoid_: feature branch, work branch, dispatch branch
 The branch the parent repo's HEAD is on when the operator invokes a dispatch skill. Distinct from `base` (where the integration branch forks from) and from the integration branch itself. Used as the merge destination when the operator picks the `merge` completion mode.
 _Avoid_: target branch, starting branch, current branch (ambiguous), feature branch
 
+**Completion signal**:
+What dispatch keys on to judge a sub-agent succeeded: the issue's status flipped to `in-review` (read back from disk after the subprocess exits, with `exit 0`). The signal is the status, never the printed line.
+_Avoid_: sentinel, completion sentinel
+
+**Completion marker**:
+The `<pba:complete issue-id="N"/>` line `pba complete` prints to stdout (and carries in its JSON `marker` field). A progress marker for logs and out-of-band tooling — decorative, **not** the completion signal.
+_Avoid_: sentinel, completion sentinel
+
 ### Skill pipeline
 
 **Skill template**:
@@ -46,3 +54,4 @@ _Avoid_: linked skill
 ## Flagged ambiguities
 
 - "skill" was used for the authored source, the rendered output, and the symlink interchangeably — resolved: **skill template** (source) → **generated skill** (rendered) → **installed skill** (symlink).
+- "sentinel" / "completion sentinel" named the `<pba:complete/>` line as if dispatch keyed on it, but dispatch keys on the `in-review` status. Resolved: **completion signal** (the status flip dispatch acts on) vs **completion marker** (the decorative stdout line). "sentinel" is retained only for unrelated internal uses — Go error sentinels (`IsHITLOnly`/`IsSetupFailure`) and the flock lock-sentinel file.
