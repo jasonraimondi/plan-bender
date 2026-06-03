@@ -96,10 +96,10 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
    - Per-subprocess stdout is serialized through a locked writer and streams as `[issue-N] …`
    - Full transcript: `.plan-bender/logs/<slug>/<id>.log`
    - Capped by `pipeline.subprocess_timeout` (default `30m`); timeouts → `blocked`, reason `timed out`
-6. **Merge back** successful branches into the integration branch in dependency order, flipping each merged issue to `done`. Conflicts → `blocked` + `git merge --abort`. Merge-back is skipped entirely when no issue succeeded.
-7. **`after_batch` hook** runs in the repo root.
+6. **Merge back** successful branches into the integration branch **inside the per-slug integration worktree** in dependency order, flipping each merged issue to `done`. Conflicts → `blocked` + `git merge --abort`. Merge-back is skipped entirely when no issue succeeded.
+7. **`after_batch` hook** runs with cwd set to the integration worktree.
 
-Dispatch refuses to run with a dirty working tree (checks `git diff-index` for tracked-file changes). HEAD is captured and restored on exit so a successful run never silently leaves the user on the integration branch.
+Merge-back never touches the parent repo's HEAD: all merges, status flips, and the `after_batch` hook run in a long-lived per-slug integration worktree (lazy-created on first merge-back, GC'd on all-done). The parent repo can stay on any branch with uncommitted changes — dispatch no longer captures/restores HEAD and no longer refuses a dirty parent. See [ADR-0003](../../docs/adr/0003-merge-in-dedicated-integration-worktree.md).
 
 ### Completion marker
 
