@@ -2,7 +2,71 @@
 
 All notable changes to plan-bender are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); plan-bender is pre-1.0 so breaking changes ship in patch releases until v1.
 
-## Unreleased
+## v0.0.60
+
+### Added
+
+- `bender-implement-issue` gained an integration-mode preamble (§0). A dispatched sub-agent now detects INTEGRATION vs STANDALONE mode up front (cwd under a `-wt/` worktree, a `--`-suffixed branch, or a prompt issue already in-progress on a branch it didn't create). In integration mode it skips the operator prompts and status hand-edits, then just runs `complete` and exits. The mode was previously only implied by scattered skip-markers, so the sub-agent ran the standalone completion flow and stalled dispatch.
+
+### Fixed
+
+- A dispatched sub-agent's `pba complete` now lands in the parent plans store. Dispatch injects `PLAN_BENDER_PLANS_DIR` (the parent's absolute plans dir) into each sub-agent, so completion writes where `Verdict` looks. Previously, with a git-tracked `plans_dir`, the worktree and parent diverged — the worktree showed in-review while the parent stayed in-progress and Verdict blocked the issue (`subprocess exited 0 but issue status is in-progress, expected in-review`).
+- `pb generate` / `pb setup` now prune stale skills. Renamed, removed, or filtered-out skills (e.g. backend skills with Linear disabled) are no longer orphaned in `.plan-bender/skills/` with dangling symlinks in each agent's skills dir. Real directories and symlinks pointing elsewhere (a user's own skills, links from other projects in a shared user-scoped dir) are left intact.
+- Command-surface polish: `pb --help` is grouped into Plan workflow / Workspace / Project; `-v` means verbose consistently across `pb` and `pba` (`--version` is long-only); arg-count errors now name the positional args; the internal `completion` command is hidden so it no longer collides with `complete`; plan-not-found drops the leaked `reading prd`/ENOENT chain; `pb setup` gains a `-y` short flag; and "open browser" works on Linux/Windows, not just macOS.
+- Documentation: corrected the stale dispatch lifecycle in the `plan-bender-cli` skill (merge-back, status flips, and `after_batch` run in the per-slug integration worktree; the parent repo's HEAD is never touched and a dirty parent is allowed). Renamed "completion sentinel" → "completion marker" throughout — the `<pba:complete/>` line is a human-readable log marker, not dispatch's completion signal (the in-review status flip is).
+
+## v0.0.58
+
+### Added
+
+- `linear.enabled: false` in a project's `.plan-bender.json` is now a live kill-switch. Every Linear read/write re-reads the project file's explicit flag and refuses when it's disabled. Previously a project-level `false` could never override a global enable, because the config merge only ever turned Linear on.
+
+### Fixed
+
+- Merge commit subjects are derived from the issue name (falling back to the branch name) instead of `merge issue #N`. The old subject auto-linked to an unrelated GitHub issue, and the plan-local number is meaningless on the remote.
+
+## v0.0.57
+
+### Changed
+
+- Dispatch skills now run a three-mode completion prompt (merge / branch / pr) instead of an unconditional PR-at-end step. `bender-implement-prd` and standalone `bender-implement-issue` capture the landing branch and ask up front how to land the work, then execute the chosen mode only on a successful (exit 0) dispatch. Per-agent rendering mirrors `bender-review-prd` (claude-code → AskUserQuestion, others → conversation). The merge option hides with a one-line reason when the landing tree is dirty, HEAD is detached, or the landing branch is already the would-be integration branch. See [ADR-0005](docs/adr/0005-dispatch-completion-mode-pre-flight-prompt.md).
+
+## v0.0.56
+
+### Added
+
+- New `bender-write-plan` skill that interviews, drafts the PRD, and decomposes it into issues in a single pass (honoring `review_with_user` at both review checkpoints), replacing the forced handoff between the two prior skills.
+
+### Deprecated
+
+- `bender-write-prd` and `bender-prd-to-issues` are deprecated in favor of `bender-write-plan`. Both still work; they are slated for removal in a future release.
+
+## v0.0.55
+
+### Added
+
+- Generated skills can now ship supporting files. Skill templates moved from flat `{name}.skill.tmpl` files to per-skill `{name}/` directories; generation renders every `*.tmpl` file (stripping the suffix) and copies all other files verbatim, preserving subdirectory structure. See [ADR-0004](docs/adr/0004-skill-templates-as-directories.md).
+- Skill templates are validated at load time to have a non-empty body and no output-path collisions, with deterministic (sorted) error output.
+- `pb setup` and skill generation warn on stale flat overrides (`{name}.skill.tmpl`) and dir-located forks under `.plan-bender/templates/`.
+
+### Fixed
+
+- A stray override directory under `.plan-bender/templates/` whose name doesn't match a bundled skill no longer bricks the loader for every agent. An override dir is accepted only when its name matches a bundled skill or it ships its own `SKILL.md.tmpl`; others are silently skipped.
+- Simplified the `bender-interview-me` skill template.
+
+## v0.0.54
+
+### Fixed
+
+- Dispatch now provisions worktree skills per child and surfaces setup failures (#30). When a repo git-tracks any skill, git recreates `.claude/skills` in every fresh worktree, so the old whole-dir linker skipped it and the gitignored `bender-*` skills never arrived — every issue then blocked at `building prompt: reading skill … bender-implement-issue/SKILL.md`. Skills are now symlinked individually per child (committed skills left in place, idempotent on re-entry), and a still-missing required skill hard-errors at worktree setup. When every ready issue fails setup, dispatch returns one environment error naming the shared cause instead of the misleading `stuck: N blocked`.
+- Dispatch writes `pb-error-report-<UTC>.log` to the repo root on any non-HITL failure when `report_bugs` is enabled. Orchestration failures happen in Go before any sub-agent runs, so the agent-facing report prompt never fired — the failure that most needed reporting produced no artifact. Stuck and lock-contention errors are excluded so they don't generate spurious reports.
+- Status-commit validation is scoped to the touched issue (#31). A single rule-invalid issue anywhere in the plan no longer blocks status recovery (retry / complete / worktree-create) for every other issue. Authoring/sync commits and `agent validate` keep the strict whole-plan validation.
+
+## v0.0.53
+
+### Added
+
+- `pb setup` backfills a `$schema` key into existing `.plan-bender.json` / `.plan-bender.local.json` files that lack one, preserving formatting and unknown keys.
 
 ### Fixed
 
