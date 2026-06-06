@@ -2,6 +2,18 @@
 
 All notable changes to plan-bender are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); plan-bender is pre-1.0 so breaking changes ship in patch releases until v1.
 
+## v0.0.62
+
+### Added
+
+- `no_implement` config flag (default `false`). When `true`, `pb setup` / `pb generate` skip generating the implementation skills (`bender-implement-prd`, `bender-implement-hitl`, `bender-implement-issue`) and drop them from the orchestrator menu. Turning the flag on removes any previously generated copies and prunes their installed symlinks on the next run, reusing the existing wipe-and-prune path.
+
+## v0.0.61
+
+### Removed
+
+- **Breaking:** `bender-write-prd` and `bender-prd-to-issues` skills, both superseded by `bender-write-plan` (which drafts the PRD and decomposes issues in one pass) and slated for removal in >=0.0.60. `pb setup` no longer generates either skill and the pipeline menu no longer lists them. The `plan-bender-agent write-prd` CLI command is retained — `bender-write-plan` still uses it to write `prd.json`.
+
 ## v0.0.60
 
 ### Added
