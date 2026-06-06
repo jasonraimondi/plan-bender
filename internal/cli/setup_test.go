@@ -352,6 +352,42 @@ func TestSetup_PrunesStaleSkillSymlinks(t *testing.T) {
 	require.NoError(t, err, "user's own foreign symlink preserved")
 }
 
+func TestSetup_NoImplementRemovesInstalledImplementSkills(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"agents": ["claude-code"]}`),
+		0o644,
+	))
+
+	require.NoError(t, testSetupCmd(setupDeps{}).execute())
+
+	targetDir := filepath.Join(dir, ".claude", "skills")
+	implSkills := []string{"bender-implement-prd", "bender-implement-hitl", "bender-implement-issue"}
+	for _, name := range implSkills {
+		_, err := os.Lstat(filepath.Join(targetDir, name))
+		require.NoError(t, err, "%s symlink installed before flag flip", name)
+	}
+
+	// Turn no_implement on, then re-run setup: the installed symlinks must be pruned.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, ".plan-bender.json"),
+		[]byte(`{"agents": ["claude-code"], "no_implement": true}`),
+		0o644,
+	))
+	require.NoError(t, testSetupCmd(setupDeps{}).execute())
+
+	for _, name := range implSkills {
+		_, err := os.Lstat(filepath.Join(targetDir, name))
+		assert.True(t, os.IsNotExist(err), "%s symlink pruned after no_implement turned on", name)
+	}
+
+	_, err := os.Lstat(filepath.Join(targetDir, "bender-write-plan"))
+	require.NoError(t, err, "non-implement skill symlink preserved")
+}
+
 func TestSetup_FlatOverride_WarnsMigration(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

@@ -216,6 +216,7 @@ type Config struct {
 	ReviewWithUser    bool              `json:"review_with_user"`
 	ReportBugs        bool              `json:"report_bugs"`
 	InterviewWithDocs bool              `json:"interview_with_docs"`
+	NoImplement       bool              `json:"no_implement"`
 }
 
 type PartialConfig struct {
@@ -235,4 +236,5 @@ type PartialConfig struct {
 	ReviewWithUser    *bool                  `json:"review_with_user,omitempty"`
 	ReportBugs        *bool                  `json:"report_bugs,omitempty"`
 	InterviewWithDocs *bool                  `json:"interview_with_docs,omitempty"`
+	NoImplement       *bool                  `json:"no_implement,omitempty"`
 }

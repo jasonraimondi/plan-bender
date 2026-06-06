@@ -92,6 +92,28 @@ func TestPartialConfig_InterviewWithDocsOmittedWhenNil(t *testing.T) {
 	assert.NotContains(t, string(data), "interview_with_docs")
 }
 
+func TestDefaults_NoImplementFalse(t *testing.T) {
+	assert.False(t, Defaults().NoImplement)
+}
+
+func TestPartialConfig_NoImplementRoundTrip(t *testing.T) {
+	pc := PartialConfig{NoImplement: ptr(true)}
+	data, err := json.Marshal(pc)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"no_implement":true`)
+
+	var got PartialConfig
+	require.NoError(t, json.Unmarshal(data, &got))
+	require.NotNil(t, got.NoImplement)
+	assert.True(t, *got.NoImplement)
+}
+
+func TestPartialConfig_NoImplementOmittedWhenNil(t *testing.T) {
+	data, err := json.Marshal(PartialConfig{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "no_implement")
+}
+
 func TestResolvedMaxParallel_DefaultsWhenUnset(t *testing.T) {
 	assert.Equal(t, 3, PipelineConfig{}.ResolvedMaxParallel())
 }

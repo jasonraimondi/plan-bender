@@ -32,6 +32,7 @@ type PipelinePhase struct {
 	Description     string
 	Skill           string
 	RequiresBackend bool
+	Implement       bool
 }
 
 // SkillRequiresBackend reports whether a skill template should only be
@@ -45,14 +46,25 @@ func SkillRequiresBackend(skill string) bool {
 	return false
 }
 
+// SkillIsImplement reports whether a skill template is an implementation skill,
+// suppressed when no_implement is set.
+func SkillIsImplement(skill string) bool {
+	for _, p := range defaultPipelinePhases {
+		if p.Skill == skill {
+			return p.Implement
+		}
+	}
+	return false
+}
+
 var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Interview", Description: "Stress-test your plan", Skill: "bender-interview-me"},
 	{Name: "Write Plan", Description: "Create a PRD and decompose it into issues in one pass", Skill: "bender-write-plan"},
 	{Name: "Write Issue", Description: "Create a single issue", Skill: "bender-write-issue"},
 	{Name: "Review PRD", Description: "Review plan quality", Skill: "bender-review-prd"},
-	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd"},
-	{Name: "Implement HITL", Description: "Resolve human-gated issues", Skill: "bender-implement-hitl"},
-	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue"},
+	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd", Implement: true},
+	{Name: "Implement HITL", Description: "Resolve human-gated issues", Skill: "bender-implement-hitl", Implement: true},
+	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue", Implement: true},
 	{Name: "Sync with Linear", Description: "Push local plan to Linear or pull Linear state", Skill: "bender-sync-linear", RequiresBackend: true},
 }
 
@@ -84,6 +96,9 @@ func BuildContext(cfg config.Config, agent config.ResolvedAgent) map[string]any 
 			continue
 		}
 		if p.RequiresBackend && !cfg.Linear.Enabled {
+			continue
+		}
+		if p.Implement && cfg.NoImplement {
 			continue
 		}
 		phases = append(phases, map[string]string{

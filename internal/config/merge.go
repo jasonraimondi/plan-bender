@@ -76,6 +76,9 @@ func merge(base Config, layer PartialConfig) Config {
 	if layer.InterviewWithDocs != nil {
 		out.InterviewWithDocs = *layer.InterviewWithDocs
 	}
+	if layer.NoImplement != nil {
+		out.NoImplement = *layer.NoImplement
+	}
 
 	return out
 }

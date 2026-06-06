@@ -93,6 +93,25 @@ func TestSkillRequiresBackend(t *testing.T) {
 	assert.False(t, SkillRequiresBackend("does-not-exist"))
 }
 
+func TestSkillIsImplement(t *testing.T) {
+	assert.True(t, SkillIsImplement("bender-implement-prd"))
+	assert.True(t, SkillIsImplement("bender-implement-hitl"))
+	assert.True(t, SkillIsImplement("bender-implement-issue"))
+	assert.False(t, SkillIsImplement("bender-write-plan"))
+	assert.False(t, SkillIsImplement("does-not-exist"))
+}
+
+func TestBuildContext_ImplementPhasesHiddenWhenNoImplement(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.NoImplement = true
+	ctx := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
+
+	phases, _ := ctx["pipeline_phases"].([]map[string]string)
+	for _, p := range phases {
+		assert.False(t, SkillIsImplement(p["skill"]), "implement phase %q must be hidden when no_implement is set", p["skill"])
+	}
+}
+
 func TestBuildContext_InterviewWithDocs(t *testing.T) {
 	cfg := config.Defaults()
 	off := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})

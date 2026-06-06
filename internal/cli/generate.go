@@ -82,6 +82,9 @@ func GenerateSkills(root string, cfg config.Config, out io.Writer) (int, error) 
 			if tmpl.SkillRequiresBackend(name) && !cfg.Linear.Enabled {
 				continue
 			}
+			if tmpl.SkillIsImplement(name) && cfg.NoImplement {
+				continue
+			}
 			outDir := filepath.Join(agentDir, name)
 			if err := writeSkill(name, skill, ctx, outDir); err != nil {
 				return 0, err

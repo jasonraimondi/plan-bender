@@ -60,6 +60,7 @@ All available keys with their default values:
   "review_with_user": false,
   "report_bugs": false,
   "interview_with_docs": false,
+  "no_implement": false,
   "update_check": true,
   "manage_gitignore": false,
   "linear": {
@@ -93,6 +94,7 @@ Field notes:
 - `hooks.after_batch` — runs after merge-back with cwd set to the per-slug integration worktree (the merged commits are checked out there); non-fatal. **Breaking change** from earlier versions, which ran it in the parent repo root.
 - `issue_schema.custom_fields` — add required fields to every issue. Example: `{"name": "team", "type": "enum", "required": true, "enum_values": ["frontend", "backend", "platform"]}`.
 - `manage_gitignore` — when `true`, `pb setup` manages `.plan-bender/`, `.plan-bender.local.json`, and agent skill patterns in `.gitignore`. When `false`, `pb doctor` still warns if `.plan-bender.local.json` is not gitignored.
+- `no_implement` — when `true`, `pb setup`/`pb generate` skip generating the implementation skills (`bender-implement-prd`, `bender-implement-hitl`, `bender-implement-issue`) and drop them from the orchestrator menu. Flipping it on removes any previously generated copies on the next run.
 - `linear` — put credentials in `.plan-bender.local.json` and load from an env file (e.g. direnv). `$VAR` and `${VAR}` are expanded at load time. `status_map` maps local `workflow_states` to Linear state names.
 
 Tracks and workflow states are fully customizable.

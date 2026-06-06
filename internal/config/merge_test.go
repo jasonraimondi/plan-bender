@@ -159,6 +159,18 @@ func TestMerge_InterviewWithDocsThreeLayer(t *testing.T) {
 	assert.False(t, result.InterviewWithDocs)
 }
 
+func TestMerge_NoImplementDefaultFalse(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{})
+	assert.False(t, result.NoImplement)
+}
+
+func TestMerge_NoImplementOverrideToTrue(t *testing.T) {
+	base := Defaults()
+	result := merge(base, PartialConfig{NoImplement: ptr(true)})
+	assert.True(t, result.NoImplement)
+}
+
 func TestMerge_AgentsPerKeyMerge(t *testing.T) {
 	base := Defaults()
 	result := merge(base, PartialConfig{

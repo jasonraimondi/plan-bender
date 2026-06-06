@@ -152,6 +152,11 @@
       "type": "boolean",
       "description": "Include project docs when interviewing during planning.",
       "default": false
+    },
+    "no_implement": {
+      "type": "boolean",
+      "description": "When true, skip generating the implementation skills (bender-implement-prd, bender-implement-hitl, bender-implement-issue). Existing generated copies are removed on the next setup/generate.",
+      "default": false
     }
   },
   "$defs": {

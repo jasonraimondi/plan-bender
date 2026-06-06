@@ -40,5 +40,6 @@ func Defaults() Config {
 		ReviewWithUser:    false,
 		ReportBugs:        false,
 		InterviewWithDocs: false,
+		NoImplement:       false,
 	}
 }

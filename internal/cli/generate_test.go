@@ -68,6 +68,52 @@ func TestGenerateSkills_EmitsBackendSkillWhenLinearEnabled(t *testing.T) {
 	require.NoError(t, err, "bender-sync-linear must be generated when Linear is enabled")
 }
 
+func TestGenerateSkills_OmitsImplementSkillsWhenNoImplement(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+	cfg.NoImplement = true
+
+	var out strings.Builder
+	count, err := GenerateSkills(dir, cfg, &out)
+	require.NoError(t, err)
+
+	// Default config generates 9 skills; no_implement drops the 3 implement ones.
+	assert.Equal(t, 6, count)
+
+	for _, name := range []string{"bender-implement-prd", "bender-implement-hitl", "bender-implement-issue"} {
+		_, err := os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", name))
+		assert.True(t, os.IsNotExist(err), "%s must not be generated when no_implement is set", name)
+	}
+
+	_, err = os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-write-plan", "SKILL.md"))
+	require.NoError(t, err, "non-implement skills still generated")
+}
+
+func TestGenerateSkills_RemovesImplementSkillsWhenFlagFlipped(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	cfg, err := config.Load(dir)
+	require.NoError(t, err)
+
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	implPath := filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-implement-prd")
+	_, err = os.Stat(implPath)
+	require.NoError(t, err, "implement skill present before flag flip")
+
+	cfg.NoImplement = true
+	_, err = GenerateSkills(dir, cfg, &strings.Builder{})
+	require.NoError(t, err)
+
+	_, err = os.Stat(implPath)
+	assert.True(t, os.IsNotExist(err), "implement skill removed on regenerate after no_implement turned on")
+}
+
 func TestGenerateSkills_UsesLocalOverride(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)
