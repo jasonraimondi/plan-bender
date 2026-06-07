@@ -40,7 +40,7 @@ All available keys with their default values:
   },
   "tracks": ["intent", "experience", "data", "rules", "resilience"],
   "workflow_states": [
-    "backlog", "todo", "in-progress", "blocked",
+    "backlog", "todo", "in-progress", "blocked", "needs-input",
     "in-review", "qa", "done", "canceled"
   ],
   "pipeline": {
@@ -84,6 +84,7 @@ Field notes:
   - `~`-prefixed, e.g. `"~/code/wt"` — expanded against `$HOME` at load time.
   - relative, e.g. `"./.worktrees"` — resolved against the repo root.
 - `max_points` — cap per issue; forces thin slices.
+- `workflow_states` — the status chain an issue moves through. `needs-input` (default position between `blocked` and `in-review`) parks an issue on a pending **human decision**: a worker that hits product/policy/UX ambiguity commits its WIP and parks it there. Unlike `blocked` (a technical failure), `needs-input` persists across runs and is excluded from readiness until an operator resolves it and `pb retry` moves it back to `todo`.
 - `agents` — bool toggles registry defaults; or use object form for per-agent overrides (`project_dir`, `scope`, ...). Supported: `claude-code`, `opencode`, `openclaw`, `pi`.
 - `pipeline.skip` — skill names to exclude, e.g. `["bender-interview-me"]`.
 - `pipeline.branch_strategy` — `integration` (dispatch creates `<user>/<slug>` off the default branch and merges issue branches there) or `direct` (dispatch merges issue branches straight into the default branch).
@@ -94,10 +95,17 @@ Field notes:
 - `hooks.after_batch` — runs after merge-back with cwd set to the per-slug integration worktree (the merged commits are checked out there); non-fatal. **Breaking change** from earlier versions, which ran it in the parent repo root.
 - `issue_schema.custom_fields` — add required fields to every issue. Example: `{"name": "team", "type": "enum", "required": true, "enum_values": ["frontend", "backend", "platform"]}`.
 - `manage_gitignore` — when `true`, `pb setup` manages `.plan-bender/`, `.plan-bender.local.json`, and agent skill patterns in `.gitignore`. When `false`, `pb doctor` still warns if `.plan-bender.local.json` is not gitignored.
-- `no_implement` — when `true`, `pb setup`/`pb generate` skip generating the implementation skills (`bender-implement-prd`, `bender-implement-hitl`, `bender-implement-issue`) and drop them from the orchestrator menu. Flipping it on removes any previously generated copies on the next run.
+- `no_implement` — when `true`, `pb setup`/`pb generate` skip generating the implementation skills (`bender-implement-prd`, `bender-implement-issue`) and drop them from the orchestrator menu. Flipping it on removes any previously generated copies on the next run.
 - `linear` — put credentials in `.plan-bender.local.json` and load from an env file (e.g. direnv). `$VAR` and `${VAR}` are expanded at load time. `status_map` maps local `workflow_states` to Linear state names.
 
 Tracks and workflow states are fully customizable.
+
+## Issue labels: `AFK` / `HITL`
+
+The `AFK` and `HITL` labels on an issue are **escalation hints**, not gates on which issues are workable. Readiness is decided purely by the dependency graph and status (deps all `done`/`canceled`, status in `{backlog, todo, in-progress}`) — labels do not select issues in or out. What a label tunes is **how eagerly a worker escalates a human decision**:
+
+- **`HITL`** — escalate eagerly. On any product/policy/UX ambiguity, the worker parks the issue as `needs-input` rather than assuming.
+- **`AFK` / unlabeled** — proceed on a stated low-risk assumption (recorded in the work and commit message); escalate to `needs-input` only when truly stuck or the decision is irreversible / high-impact.
 
 ## Supported agents
 

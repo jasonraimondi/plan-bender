@@ -1,6 +1,6 @@
 ---
 name: plan-bender-cli
-description: Reference for the plan-bender CLI (`pb` and `pba` / `plan-bender-agent`). Use when the user asks about plan-bender commands, dispatch lifecycle, worktree management, completion marker, exit codes, recovering a stuck dispatch, or Linear sync. Also triggers on "what does pb / pba do", "how do I run plan-bender", "pb dispatch", "pb status", "pb retry", or any question about plan-bender's command surface.
+description: Reference for the plan-bender CLI (`pb` and `pba` / `plan-bender-agent`). Use when the user asks about plan-bender commands, the standalone merge command, worktree management, completion marker, the dispatcher skill, recovering a stuck issue, or Linear sync. Also triggers on "what does pb / pba do", "how do I run plan-bender", "pb merge", "pb status", "pb retry", or any question about plan-bender's command surface.
 ---
 
 # plan-bender CLI
@@ -41,8 +41,6 @@ Re-run after config changes; it regenerates skills and re-symlinks. Regeneration
 | --- | --- |
 | `pb next <slug>` | Recommended next issue (text) |
 | `pb status <slug>` | Per-issue state: status counts, labels, blocked notes, branch/PR |
-| `pb dispatch <slug>` | Autonomous implementation loop |
-| `pb dispatch <slug> --base <ref>` | Override auto-detected default branch (any `git rev-parse` ref) |
 | `pb merge <slug>` | Merge in-review/deps-done issues into the integration branch in dependency order |
 | `pb complete <slug> <id>` | Mark issue `in-review` (ready for review); prints the completion marker |
 | `pb retry <slug> <id>` | Reset a `blocked` or `needs-input` issue back to `todo` |
@@ -74,7 +72,6 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 | `pba write-issue <slug> [file]` | Validate + atomically write issue; requires PRD |
 | `pba archive <slug>` | Move completed plan to `.archive/` |
 | `pba sync linear push\|pull <slug>` | JSON-emitting variant |
-| `pba dispatch <slug>` | Autonomous loop (see below) |
 | `pba merge <slug>` | `{merged: [...], conflicted: [...]}`; merges in-review/deps-done issues into the integration branch |
 | `pba complete <slug> <id>` | Flip to `in-review` + emit `<pba:complete issue-id="N"/>` |
 | `pba worktree create <slug> <id>` | `{path, branch, status}` — status is post-claim (`in-progress`) |
@@ -85,52 +82,36 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 
 `write-prd` / `write-issue` read from stdin when no file is given (or when the file arg is `-`).
 
-## Dispatch lifecycle
+## Merge
 
-`pba dispatch <slug>` (or `pb dispatch`) runs the full implementation loop:
+`pb merge <slug>` (or `pba merge`) is a standalone, dependency-ordered merge-back — no dispatch loop. It:
 
-1. **Resolve integration branch** from `pipeline.branch_strategy`:
-   - `integration` (default) — `<git-user>/<slug>` off the repo default branch
-   - `direct` — issue branches merge straight onto the default branch
-   - `--base <ref>` overrides the auto-detected default. Any `git rev-parse` ref (local branch, `origin/x`, tag, SHA). Invalid refs error before any worktree is created. On a re-run, `--base` is **ignored with a warning** to avoid clobbering merged work.
-2. **Loop until done.** Reload issues from disk each iteration; if every issue is `done`/`canceled`, GC the per-slug integration worktree along with any remaining issue worktrees and exit 0. HITL-only or error exits preserve the integration worktree for resumption.
-3. **Compute AFK batch** (`plan.ReadyAFK`): unblocked issues with the `AFK` label and a non-terminal status (excludes `done`, `canceled`, `in-review`, `blocked`).
-4. **HITL fallback**: if no batch and only HITL issues remain, print a summary and exit 2. Resolve with `/bender-implement-hitl <slug>`.
-5. **Per issue in the batch**: create worktree → atomically claim (`status: in-progress` + `branch:` written through a canonical struct round-trip) → `before_issue` hook → spawn `claude --print` in the worktree → `after_issue` hook.
-   - Per-subprocess stdout is serialized through a locked writer and streams as `[issue-N] …`
-   - Full transcript: `.plan-bender/logs/<slug>/<id>.log`
-   - Capped by `pipeline.subprocess_timeout` (default `30m`); timeouts → `blocked`, reason `timed out`
-6. **Merge back** successful branches into the integration branch **inside the per-slug integration worktree** in dependency order, flipping each merged issue to `done`. Conflicts → `blocked` + `git merge --abort`. Merge-back is skipped entirely when no issue succeeded.
-7. **`after_batch` hook** runs with cwd set to the integration worktree.
+- takes the per-slug `.dispatch.lock` at `{plans_dir}/{slug}/.dispatch.lock` (fails fast if another merge holds it)
+- merges every issue that is `in-review` with a branch set **and** whose `blocked_by` are all `done` (or are being merged in the same call) into the integration branch in dependency order
+- merged → `done`; a conflict is `git merge --abort`'d and the issue → `blocked` while siblings still merge
+- nothing in-review → no-op; agent mode emits `{"merged":[...],"conflicted":[...]}`
 
-Merge-back never touches the parent repo's HEAD: all merges, status flips, and the `after_batch` hook run in a long-lived per-slug integration worktree (lazy-created on first merge-back, GC'd on all-done). The parent repo can stay on any branch with uncommitted changes — dispatch no longer captures/restores HEAD and no longer refuses a dirty parent. See [ADR-0003](../../docs/adr/0003-merge-in-dedicated-integration-worktree.md).
-
-### Standalone merge
-
-`pb merge <slug>` (or `pba merge`) runs that same merge-back step on its own, without the dispatch loop. It takes the per-slug `.dispatch.lock` (fails fast if dispatch or another merge holds it), then merges every issue that is `in-review` with a branch set **and** whose `blocked_by` are all done (or are being merged in the same call) into the integration branch in dependency order. Merged → `done`; a conflict is `git merge --abort`'d and the issue → `blocked` while siblings still merge. All git work runs in the per-slug integration worktree (parent HEAD untouched, ADR-0003 preserved). Nothing in-review → no-op. Agent mode emits `{"merged":[...],"conflicted":[...]}`.
+The integration branch is `<git-user>/<slug>` (set `pipeline.branch_strategy` to `integration` or `direct`). All git work runs in a long-lived per-slug integration worktree (lazy-created on first merge, reset on entry, GC'd via `pba worktree gc <slug>`); the parent repo's HEAD is never touched and the parent can stay dirty. See [ADR-0003](../../docs/adr/0003-merge-in-dedicated-integration-worktree.md).
 
 ### Completion marker
 
-A sub-agent signals completion with `pba complete <slug> <id>`. The command:
+A worker signals completion with `pba complete <slug> <id>`. The command:
 
 - Flips the issue JSON to `status: in-review`
 - Prints `<pba:complete issue-id="N"/>` — the **completion marker** (also in the JSON `marker` field in agent mode)
 
-The marker is a progress line for logs and out-of-band tooling; it is **not** the completion signal. Dispatch keys on the status flip: a subprocess is successful if **exit 0 AND status == in-review**. Exit 0 without the flip is treated as failure (issue marked `blocked`).
+The marker is a progress line for logs and out-of-band tooling; it is **not** the completion signal. The merger keys on the status flip: it picks up an issue only once it is `in-review`.
 
-### Exit codes
+## Dispatcher skill
 
-- `0` — all done
-- `2` — only HITL issues remain → run `/bender-implement-hitl <slug>`
-- `1` — other failure. Either *stuck-on-blocked* / lock contention (fix the issues and re-run) or a *setup failure* (`dispatch setup failed for every ready issue ...` — an environment problem where no sub-agent ran; the message names the shared cause, e.g. a worktree missing the `bender-implement-issue` skill). With `report_bugs` on, only the *setup failure* shape writes `pb-error-report-<UTC>.log` to the repo root (stuck-on-blocked and lock contention are user-resolvable, not bugs).
+Multi-issue implementation is the live agent skill **`bender-implement-prd`** (not a CLI subcommand), which drives the harness Workflow tool in a loop-until-stable: **scout** ready issues (deps `done`/`canceled` + status in `{backlog, todo, in-progress}` — label-agnostic) → spawn one **worktree-isolated worker** (`bender-implement-issue`) per ready issue in parallel → run `pba merge <slug>` as the **merger** → re-scout. Each worker returns a `completed` / `blocked` / `needs-decision` outcome and self-advances its own status via the CLI (`worktree create` → `in-progress`, `complete` → `in-review`, `park` → `needs-input`). Between round-sets the dispatcher batches every `needs-input` decision back to the operator, writes the answers into the issue JSON, and resumes with `pb retry`. Once stable with every issue `done`, it runs the operator-chosen completion mode — `merge`, `branch`, or `pr`.
 
-## Recovering from a stuck dispatch
+## Recovering from a stuck issue
 
 ```bash
 pb status <slug>             # per-issue state; failure reason in `notes`
 # fix the underlying problem (build break, missing dep, etc.)
 pb retry <slug> <id>         # blocked or needs-input → todo, appends `[date] blocked→todo: retry` note
-pb dispatch <slug>           # resume
 ```
 
 `retry` refuses any status that is neither `blocked` nor `needs-input` — fix `done` / `in-review` / `canceled` by hand if needed. The prior failure note is preserved as audit trail.
@@ -157,7 +138,7 @@ Three layers, deep-merged (later wins):
     2-add-token-refresh.json
 ```
 
-`track` ∈ `intent | experience | data | rules | resilience`. `points` hard-capped by `max_points` (default 3). `labels`: `AFK` (autonomous) or `HITL` (needs human).
+`track` ∈ `intent | experience | data | rules | resilience`. `points` hard-capped by `max_points` (default 3). `labels`: `AFK` / `HITL` are escalation **hints** that tune how eagerly a worker parks on a human decision — not gates on which issues are workable (readiness is dependency-graph + status only).
 
 ## Discovering more
 
