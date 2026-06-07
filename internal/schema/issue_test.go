@@ -3,10 +3,10 @@ package schema
 import (
 	"testing"
 
+	"encoding/json"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"encoding/json"
 )
 
 func defaultConfig() config.Config {
