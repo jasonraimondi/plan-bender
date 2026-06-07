@@ -260,7 +260,7 @@ func (d *Dispatcher) MergeBack(ctx context.Context, slug string, results []SubRe
 }
 
 // blockFromStatuses is the set of statuses from which a dispatch failure may
-// transition an issue to blocked. Backlog is included because ReadyAFK accepts
+// transition an issue to blocked. Backlog is included because Ready accepts
 // backlog issues: a failure before the sub-agent flips backlog→todo→in-progress
 // would otherwise leave the issue stuck at backlog while CAS rejects every
 // block attempt — the dispatch loop would then re-pick the same issue forever.

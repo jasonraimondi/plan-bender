@@ -18,13 +18,12 @@ const (
 
 // Result is the output of Resolve. Issue is nil when no candidate is ready.
 type Result struct {
-	Issue         *schema.Issue  `json:"issue"`
-	Reason        string         `json:"reason"`
-	WasBlocked    bool           `json:"was_blocked"`
-	RequiresHuman bool           `json:"requires_human"`
-	AllDone       bool           `json:"all_done"`
-	BlockedCount  int            `json:"blocked_count"`
-	Skipped       []SkippedIssue `json:"skipped"`
+	Issue        *schema.Issue  `json:"issue"`
+	Reason       string         `json:"reason"`
+	WasBlocked   bool           `json:"was_blocked"`
+	AllDone      bool           `json:"all_done"`
+	BlockedCount int            `json:"blocked_count"`
+	Skipped      []SkippedIssue `json:"skipped"`
 }
 
 // SkippedIssue is one entry in Result.Skipped — every issue not chosen with a one-line reason.
@@ -40,10 +39,12 @@ type candidate struct {
 	wasBlocked bool
 }
 
-// ReadyAFK returns every AFK-labeled issue that has no open blockers and is in
-// a non-terminal status (not done, canceled, or in-review). This is the parallel
-// batch input for Dispatcher.RunBatch — order is by issue ID for stability.
-func ReadyAFK(issues []schema.Issue) []schema.Issue {
+// Ready returns every issue that is workable on the dependency graph alone:
+// all of its blocked_by are done/canceled and its status is backlog, todo, or
+// in-progress. Readiness is label-agnostic — AFK/HITL labels do not gate it.
+// Done, canceled, blocked, in-review, and needs-input issues are excluded, as
+// are assigned issues. Order is by issue ID for stability.
+func Ready(issues []schema.Issue) []schema.Issue {
 	byID := make(map[int]*schema.Issue, len(issues))
 	for i := range issues {
 		byID[issues[i].ID] = &issues[i]
@@ -57,9 +58,6 @@ func ReadyAFK(issues []schema.Issue) []schema.Issue {
 			continue
 		}
 		if iss.Assignee != nil && *iss.Assignee != "" {
-			continue
-		}
-		if !iss.HasLabel("AFK") {
 			continue
 		}
 		if len(openBlockers(iss.BlockedBy, byID)) > 0 {
@@ -142,28 +140,7 @@ func Resolve(issues []schema.Issue) Result {
 		}
 	}
 
-	hasAFK := false
-	for _, c := range candidates {
-		if c.issue.HasLabel("AFK") {
-			hasAFK = true
-			break
-		}
-	}
-
-	pool := make([]candidate, 0, len(candidates))
-	for _, c := range candidates {
-		if hasAFK && c.issue.HasLabel("HITL") && !c.issue.HasLabel("AFK") {
-			skipped = append(skipped, SkippedIssue{
-				ID:     c.issue.ID,
-				Slug:   c.issue.Slug,
-				Reason: "HITL — AFK pool not empty",
-			})
-			continue
-		}
-		pool = append(pool, c)
-	}
-
-	if len(pool) == 0 {
+	if len(candidates) == 0 {
 		return Result{
 			AllDone:      allDone,
 			BlockedCount: blockedCount,
@@ -171,8 +148,8 @@ func Resolve(issues []schema.Issue) Result {
 		}
 	}
 
-	sort.SliceStable(pool, func(i, j int) bool {
-		a, b := pool[i], pool[j]
+	sort.SliceStable(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
 		ar, br := statusRank(a), statusRank(b)
 		if ar != br {
 			return ar < br
@@ -188,10 +165,9 @@ func Resolve(issues []schema.Issue) Result {
 		return a.issue.ID < b.issue.ID
 	})
 
-	chosen := pool[0]
-	requiresHuman := !hasAFK && chosen.issue.HasLabel("HITL")
+	chosen := candidates[0]
 
-	for _, c := range pool[1:] {
+	for _, c := range candidates[1:] {
 		skipped = append(skipped, SkippedIssue{
 			ID:     c.issue.ID,
 			Slug:   c.issue.Slug,
@@ -200,13 +176,12 @@ func Resolve(issues []schema.Issue) Result {
 	}
 
 	return Result{
-		Issue:         chosen.issue,
-		Reason:        chosenReason(chosen, requiresHuman),
-		WasBlocked:    chosen.wasBlocked,
-		RequiresHuman: requiresHuman,
-		AllDone:       false,
-		BlockedCount:  blockedCount,
-		Skipped:       skipped,
+		Issue:        chosen.issue,
+		Reason:       chosenReason(chosen),
+		WasBlocked:   chosen.wasBlocked,
+		AllDone:      false,
+		BlockedCount: blockedCount,
+		Skipped:      skipped,
 	}
 }
 
@@ -252,13 +227,10 @@ func priorityRank(p string) int {
 	return 4
 }
 
-func chosenReason(c candidate, requiresHuman bool) string {
+func chosenReason(c candidate) string {
 	parts := []string{fmt.Sprintf("status %s, priority %s", c.issue.Status, c.issue.Priority)}
 	if c.wasBlocked {
 		parts = append(parts, "stale-blocked (deps resolved)")
-	}
-	if requiresHuman {
-		parts = append(parts, "HITL — requires human")
 	}
 	return joinReasons(parts)
 }
