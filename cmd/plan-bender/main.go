@@ -26,9 +26,6 @@ type updateResult struct {
 
 func main() {
 	if err := rootCmd().Execute(); err != nil {
-		if cli.IsHITLOnly(err) {
-			os.Exit(2)
-		}
 		os.Exit(1)
 	}
 }
@@ -97,7 +94,6 @@ func rootCmd() *cobra.Command {
 	}
 
 	root.AddCommand(
-		group("workflow", cli.NewDispatchCmd(version)),
 		group("workflow", cli.NewMergeCmd()),
 		group("workflow", cli.NewNextCmd()),
 		group("workflow", cli.NewStatusCmd()),

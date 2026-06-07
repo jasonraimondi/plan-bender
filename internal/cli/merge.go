@@ -10,6 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// DispatcherFromConfig builds a Dispatcher with config-driven defaults. Tests
+// override .Out and may swap fields after construction.
+func DispatcherFromConfig(cfg config.Config, root string) *dispatch.Dispatcher {
+	return &dispatch.Dispatcher{Config: cfg, Root: root}
+}
+
 // NewMergeCmd integrates a plan's completed (in-review) issues into the
 // integration branch in dependency order — the merge-back step lifted out of
 // the dispatch loop so it can run on its own. All git work happens inside the

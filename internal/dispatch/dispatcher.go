@@ -11,28 +11,39 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/config"
-	"github.com/jasonraimondi/plan-bender/internal/plan"
 	"github.com/jasonraimondi/plan-bender/internal/planrepo"
 	"github.com/jasonraimondi/plan-bender/internal/schema"
 	"github.com/jasonraimondi/plan-bender/internal/status"
 	"github.com/jasonraimondi/plan-bender/internal/worktree"
 )
 
-// ErrHITLOnly signals only HITL issues remain. The CLI maps this to exit code 2.
-var ErrHITLOnly = errors.New("only HITL issues remain")
+// subprocessWaitDelay bounds how long cmd.Wait blocks after the process exits
+// or after a ctx-cancel kill: once it elapses, os/exec force-kills the process
+// and closes the pipe fds it owns, unblocking the I/O-copy goroutine even if a
+// surviving grandchild still holds the pipe's write end. Used by RunHook.
+const subprocessWaitDelay = 10 * time.Second
 
-// ErrSetupFailed marks the dispatch failure where every ready issue failed
-// environment setup before any sub-agent ran. The CLI keys the report_bugs
-// artifact off this: unlike stuck-on-blocked or lock contention (both
-// user-resolvable, not bugs), a setup failure is the one exit-1 shape the
-// agent-facing report_bugs prompt can't cover, because no sub-agent runs.
-var ErrSetupFailed = errors.New("dispatch setup failed")
+// blockTransitionTimeout bounds the failure-path blocked-status write. The
+// transition uses a fresh ctx (detached from any caller-supplied deadline) so
+// a Ctrl-C canceling a merge cannot drop the write and leave the issue
+// in-progress for the next loop to re-pick.
+const blockTransitionTimeout = 30 * time.Second
 
-// Dispatcher orchestrates the full implementation loop for a plan: resolve →
-// worktrees → spawn claude subprocesses → merge → cleanup, repeating until
-// all_done or HITL-only.
+// SubResult is the outcome of a single sub-agent run, carried through MergeBack.
+type SubResult struct {
+	IssueID int
+	Success bool
+	Branch  string
+	Err     error
+}
+
+// Dispatcher owns the merge-back internals for a plan: it merges completed
+// issue branches into the integration branch in dependency order and runs the
+// after_batch hook. The cold-subprocess implementation loop has been removed;
+// `pba merge` is the surviving entry point.
 type Dispatcher struct {
 	Config config.Config
 	Root   string // absolute path to the parent repo
@@ -46,29 +57,25 @@ type Dispatcher struct {
 	// the Dispatcher runs.
 	Base string
 
-	// Out is where prefixed sub-agent stdout is streamed. Defaults to os.Stdout.
+	// Out is where prefixed hook stdout and warnings are streamed. Defaults to
+	// os.Stdout.
 	Out io.Writer
 
-	// gitMu serializes git plumbing operations on Root. Concurrent
-	// `git worktree add` invocations deadlock on git's internal locks.
-	gitMu sync.Mutex
-
 	// outOnce + outWriter memoize the synchronized writer wrapping d.Out so
-	// every goroutine streaming sub-agent output shares one mutex.
+	// concurrent writers share one mutex.
 	outOnce   sync.Once
 	outWriter io.Writer
 
-	// ownerOnce + owner memoize the status.Owner so every status write in a
-	// Run goes through one lock-aware adapter without re-allocating. The Owner
-	// wraps its own planrepo.Plans handle (NewProdStatusOwner), distinct from
-	// `plans` below but rooted at the same plansDir.
+	// ownerOnce + owner memoize the status.Owner so every status write goes
+	// through one lock-aware adapter without re-allocating. The Owner wraps its
+	// own planrepo.Plans handle (NewProdStatusOwner), distinct from `plans`
+	// below but rooted at the same plansDir.
 	ownerOnce sync.Once
 	owner     *status.Owner
 
-	// plansOnce + plans memoize the planrepo.Plans handle for every read in a
-	// Run: the resolver and merge-order snapshots, plus the post-subprocess
-	// loadIssue read passed into RunSubprocess. It does not back status writes
-	// — those go through the Owner's own handle (see ownerOnce) — but all
+	// plansOnce + plans memoize the planrepo.Plans handle for the merge-order
+	// snapshots and the loadIssue read in MergeBack. It does not back status
+	// writes — those go through the Owner's own handle (see ownerOnce) — but all
 	// handles target the same plansDir, the single on-disk persistence boundary.
 	plansOnce sync.Once
 	plans     *planrepo.Plans
@@ -103,6 +110,21 @@ func snapshotPlanIssues(ctx context.Context, plans *planrepo.Plans, slug string)
 	cp := make([]schema.Issue, len(issues))
 	copy(cp, issues)
 	return cp, nil
+}
+
+func loadIssue(ctx context.Context, plans *planrepo.Plans, slug string, id int) (*schema.Issue, error) {
+	sess, err := plans.OpenContext(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer sess.Close()
+	for i := range sess.Snapshot().Issues {
+		if sess.Snapshot().Issues[i].ID == id {
+			iss := sess.Snapshot().Issues[i]
+			return &iss, nil
+		}
+	}
+	return nil, fmt.Errorf("issue #%d not found in %q", id, slug)
 }
 
 // statusOwner returns the lazily-constructed status.Owner backed by the
@@ -157,170 +179,6 @@ func (d *Dispatcher) strategy() string {
 		return "integration"
 	}
 	return s
-}
-
-// Run executes the full dispatch loop until all_done or HITL-only.
-// Returns ErrHITLOnly when only human-input issues remain.
-func (d *Dispatcher) Run(ctx context.Context, slug string) error {
-	lockPath := filepath.Join(d.plansDir(), slug, ".dispatch.lock")
-	release, err := planrepo.TryFlock(lockPath)
-	if err != nil {
-		if errors.Is(err, planrepo.ErrLocked) {
-			return fmt.Errorf("dispatch already running for slug %q (lock: %s)", slug, lockPath)
-		}
-		return fmt.Errorf("acquiring dispatch lock for slug %q: %w", slug, err)
-	}
-	defer release()
-
-	integrationBranch, err := d.ensureIntegrationBranch(ctx, slug)
-	if err != nil {
-		return fmt.Errorf("setting up integration branch: %w", err)
-	}
-
-	for {
-		issues, err := d.snapshotIssues(ctx, slug)
-		if err != nil {
-			return fmt.Errorf("loading issues: %w", err)
-		}
-
-		// Recover from a previous run that crashed between the sub-agent
-		// completing (status flipped to in-review by `pba complete`) and
-		// MergeBack running. Without this, ReadyAFK skips the in-review
-		// issue, openBlockers keeps its dependents unready, and Run hits
-		// the "stuck; 0 blocked" error path with no actionable signal.
-		if recovery := pendingMergeBack(issues); len(recovery) > 0 {
-			if err := d.MergeBack(ctx, slug, recovery, integrationBranch); err != nil {
-				return fmt.Errorf("recovering in-review issues: %w", err)
-			}
-			continue
-		}
-
-		res := plan.Resolve(issues)
-		if res.AllDone {
-			// Final cleanup: remove the per-slug integration worktree along with
-			// any remaining issue worktrees. Runs from d.Root (not the iwt) so
-			// `git worktree remove` can target the iwt itself, and `branch -d`
-			// resolves reachability against the parent's HEAD — an unmerged
-			// integration branch is preserved with a warning rather than dropped.
-			if _, err := worktree.GC(ctx, d.Root, slug, nil, d.out(), true); err != nil {
-				return fmt.Errorf("final worktree gc: %w", err)
-			}
-			return nil
-		}
-
-		batch := plan.ReadyAFK(issues)
-		if len(batch) == 0 {
-			if hitlOnlyRemaining(issues) {
-				d.printHITLSummary(issues)
-				return ErrHITLOnly
-			}
-			return fmt.Errorf("dispatch stuck: no AFK candidates ready and no HITL issues; %s", blockedSummary(issues))
-		}
-
-		results := d.RunBatch(ctx, slug, batch, integrationBranch)
-
-		// When every ready issue failed during setup (no sub-agent ran), the
-		// next loop would find them all blocked and report "stuck: N blocked",
-		// which reads like a dependency deadlock. Surface the real cause once.
-		if cause, ok := allSetupFailed(results); ok {
-			return fmt.Errorf("%w for every ready issue (%s); this is an environment problem, not a dependency deadlock — see the bender-implement-prd troubleshooting note on worktree skill-linking", ErrSetupFailed, cause)
-		}
-
-		if err := d.MergeBack(ctx, slug, results, integrationBranch); err != nil {
-			return fmt.Errorf("merging batch: %w", err)
-		}
-	}
-}
-
-// RunBatch dispatches issues through a worker pool capped at
-// ResolvedMaxParallel(): at most that many claude subprocesses run
-// concurrently. Each worker creates a worktree off integrationBranch, renders
-// a prompt, and runs a claude subprocess. Results are returned in input order.
-func (d *Dispatcher) RunBatch(ctx context.Context, slug string, issues []schema.Issue, integrationBranch string) []SubResult {
-	logDir := filepath.Join(d.Root, ".plan-bender", "logs", slug)
-
-	results := make([]SubResult, len(issues))
-	sem := make(chan struct{}, d.Config.Pipeline.ResolvedMaxParallel())
-	var wg sync.WaitGroup
-
-	for i := range issues {
-		wg.Add(1)
-		go func(idx int, issue schema.Issue) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			results[idx] = d.runOne(ctx, slug, issue, logDir, integrationBranch)
-		}(i, issues[i])
-	}
-
-	wg.Wait()
-	return results
-}
-
-func (d *Dispatcher) runOne(ctx context.Context, slug string, issue schema.Issue, logDir, integrationBranch string) SubResult {
-	d.gitMu.Lock()
-	wt, err := worktree.Create(ctx, d.Config, d.Root, slug, issue.ID, issue.Slug, integrationBranch)
-	d.gitMu.Unlock()
-	if err != nil {
-		reason := fmt.Sprintf("creating worktree: %v", err)
-		d.markBlockedAndWarn(slug, issue.ID, reason)
-		return SubResult{IssueID: issue.ID, Err: newSetupError(reason, "")}
-	}
-
-	// Atomic claim: stamp branch + flip to in-progress through the canonical
-	// struct round-trip path. Without this the sub-agent's prompt still shows
-	// status: backlog/todo with branch: null, and the implement-issue skill
-	// instructs it to "set branch" by textual edit — Edit on a non-unique
-	// substring or a naive append produces duplicate `branch` keys, which the
-	// strict JSON decoder then rejects on every subsequent Load.
-	if err := d.statusOwner().Claim(ctx, slug, issue.ID, wt.Branch, "dispatch worktree"); err != nil && !errors.Is(err, status.ErrAlreadyInState) {
-		reason := fmt.Sprintf("claiming issue: %v", err)
-		d.markBlockedAndWarn(slug, issue.ID, reason)
-		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
-	}
-	// Mirror the on-disk update into the in-memory copy so BuildPrompt embeds
-	// the post-claim state. Otherwise the sub-agent's prompt shows backlog/null
-	// and the skill body talks it into re-stamping the same fields by hand.
-	issue.Status = string(status.StatusInProgress)
-	branchCopy := wt.Branch
-	issue.Branch = &branchCopy
-
-	if err := linkPlansDir(d.Root, wt.Path); err != nil {
-		reason := fmt.Sprintf("linking plans dir: %v", err)
-		d.markBlockedAndWarn(slug, issue.ID, reason)
-		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
-	}
-
-	if hook := d.Config.Hooks.BeforeIssue; hook != "" {
-		if stderr, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
-			reason := fmt.Sprintf("before_issue hook failed: %v\n%s", err, stderr)
-			d.markBlockedAndWarn(slug, issue.ID, reason)
-			d.cleanupWorktree(wt.Path)
-			return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
-		}
-	}
-
-	prompt, err := BuildPrompt(wt.Path, issue)
-	if err != nil {
-		reason := fmt.Sprintf("building prompt: %v", err)
-		d.markBlockedAndWarn(slug, issue.ID, reason)
-		d.cleanupWorktree(wt.Path)
-		return SubResult{IssueID: issue.ID, Branch: wt.Branch, Err: newSetupError(reason, wt.Path)}
-	}
-
-	subCtx, cancel := context.WithTimeout(ctx, d.Config.Pipeline.ResolvedSubprocessTimeout())
-	defer cancel()
-	res := RunSubprocess(subCtx, d.statusOwner(), d.plansRepo(), slug, issue, prompt, wt.Path, logDir, d.out())
-	res.Branch = wt.Branch
-
-	if hook := d.Config.Hooks.AfterIssue; hook != "" {
-		if _, err := RunHook(ctx, hook, wt.Path, d.out()); err != nil {
-			fmt.Fprintf(d.out(), "warning: after_issue hook failed for issue #%d: %v\n", issue.ID, err)
-		}
-	}
-	return res
 }
 
 // MergeBack merges every successful branch into integrationBranch in dependency
@@ -432,21 +290,6 @@ func (d *Dispatcher) markBlockedAndWarn(slug string, id int, reason string) {
 	fmt.Fprintf(d.out(), "warning: failed to mark issue #%d blocked (%s); issue may re-dispatch on next loop\n", id, err)
 }
 
-// cleanupWorktree removes a worktree leaked by a runOne failure between
-// worktree.Create and RunSubprocess, so a failed claim/link/hook/prompt does
-// not leave an orphaned worktree on disk. A fresh context is used so a
-// canceled parent ctx (Ctrl-C) still tears the worktree down. A removal
-// failure is warned but not returned — the caller is already surfacing the
-// original failure and must not have it masked.
-func (d *Dispatcher) cleanupWorktree(path string) {
-	d.gitMu.Lock()
-	err := worktree.Remove(context.Background(), d.Root, path)
-	d.gitMu.Unlock()
-	if err != nil {
-		fmt.Fprintf(d.out(), "warning: failed to remove leaked worktree %q: %v\n", path, err)
-	}
-}
-
 func successfulInDepOrder(ctx context.Context, results []SubResult, plans *planrepo.Plans, slug string) []SubResult {
 	successByID := make(map[int]SubResult, len(results))
 	for _, r := range results {
@@ -541,110 +384,6 @@ func pendingMergeBack(issues []schema.Issue) []SubResult {
 		})
 	}
 	return results
-}
-
-func hitlOnlyRemaining(issues []schema.Issue) bool {
-	hasHITL := false
-	for _, iss := range issues {
-		switch iss.Status {
-		case "done", "canceled", "in-review":
-			continue
-		}
-		if iss.HasLabel("AFK") && !iss.HasLabel("HITL") {
-			return false
-		}
-		if iss.HasLabel("HITL") {
-			hasHITL = true
-		}
-	}
-	return hasHITL
-}
-
-// blockedSummary describes the blocked issues in a snapshot for the "stuck"
-// error. It deliberately does not reuse plan.Resolve's BlockedCount: that field
-// counts only dependency-blocked issues (blocked status AND unresolved deps),
-// so an issue blocked operationally — a killed sub-agent, a merge conflict, a
-// failed hook — has no open deps and is undercounted, producing the misleading
-// "0 blocked" on a run that just blocked an issue. The stuck path needs the
-// literal count, plus the IDs so the operator knows what to unblock.
-func blockedSummary(issues []schema.Issue) string {
-	var ids []string
-	for _, iss := range issues {
-		if iss.Status == "blocked" {
-			ids = append(ids, fmt.Sprintf("#%d", iss.ID))
-		}
-	}
-	if len(ids) == 0 {
-		return "0 blocked"
-	}
-	return fmt.Sprintf("%d blocked (issues %s)", len(ids), strings.Join(ids, ", "))
-}
-
-// setupError marks a runOne failure that happened during environment setup
-// (worktree create, claim, skill linking, before_issue hook, prompt build)
-// rather than inside the sub-agent. When every issue in a batch fails setup,
-// the dispatch loop surfaces it as one environment error instead of looping
-// into the misleading "stuck: N blocked" path, where the shared root cause is
-// buried in per-issue blocked notes.
-type setupError struct {
-	reason   string
-	groupKey string
-}
-
-func (e *setupError) Error() string { return e.reason }
-
-// newSetupError builds a setupError, folding worktreePath (when known) out of
-// the grouping key. Without this the per-issue worktree path embedded in most
-// setup reasons makes identical causes look distinct, defeating the collapse.
-func newSetupError(reason, worktreePath string) *setupError {
-	groupKey := reason
-	if worktreePath != "" {
-		groupKey = strings.ReplaceAll(reason, worktreePath, "<worktree>")
-	}
-	return &setupError{reason: reason, groupKey: groupKey}
-}
-
-// allSetupFailed reports whether every result is a setup-phase failure — i.e.
-// no sub-agent ever ran. The returned string is the shared cause when all
-// results fail the same way (grouped by setupError.groupKey, which folds out the
-// per-issue worktree path), else a per-cause tally. Returns ("", false) for an
-// empty batch or any result that is a success or a non-setup (sub-agent) failure.
-func allSetupFailed(results []SubResult) (string, bool) {
-	if len(results) == 0 {
-		return "", false
-	}
-	reasons := make(map[string]int)
-	for _, r := range results {
-		var se *setupError
-		if !errors.As(r.Err, &se) {
-			return "", false
-		}
-		reasons[se.groupKey]++
-	}
-	if len(reasons) == 1 {
-		for reason := range reasons {
-			return reason, true
-		}
-	}
-	parts := make([]string, 0, len(reasons))
-	for reason, n := range reasons {
-		parts = append(parts, fmt.Sprintf("%d× %s", n, reason))
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, "; "), true
-}
-
-func (d *Dispatcher) printHITLSummary(issues []schema.Issue) {
-	fmt.Fprintln(d.out(), "HITL: the following issues require human input:")
-	for _, iss := range issues {
-		switch iss.Status {
-		case "done", "canceled", "in-review":
-			continue
-		}
-		if iss.HasLabel("HITL") {
-			fmt.Fprintf(d.out(), "  - #%d %s (%s)\n", iss.ID, iss.Name, iss.Status)
-		}
-	}
 }
 
 // ensureIntegrationBranch returns the branch name dispatch will merge into.
@@ -768,10 +507,14 @@ func runGitOutput(ctx context.Context, dir string, args ...string) (string, erro
 	return string(out), err
 }
 
+// requiredSkill is the implement-issue skill every issue worktree must carry.
+// linkSkills provisions it and verifies it lands so a missing skill fails at
+// link time.
+const requiredSkill = "bender-implement-issue"
+
 // linkPlansDir provisions the parent's .plan-bender/ and .claude/skills/ into
 // the worktree. Both are typically gitignored, so a fresh checkout lacks them —
-// the sub-agent's `pba complete` and BuildPrompt's skill lookup both depend on
-// them.
+// the sub-agent's `pba complete` and skill lookup both depend on them.
 func linkPlansDir(parent, worktreePath string) error {
 	if err := linkDir(parent, worktreePath, ".plan-bender"); err != nil {
 		return err
@@ -809,13 +552,13 @@ func linkDir(parent, worktreePath, rel string) error {
 // one symlink at a time, rather than symlinking the directory whole. A repo
 // that git-tracks even one skill (e.g. a project-bundled skill) makes git
 // recreate a real .claude/skills in every fresh worktree, which makes a
-// whole-dir symlink impossible — so the gitignored bender-* skills the prompt
-// builder needs would never arrive. Linking per child adds the missing skills
+// whole-dir symlink impossible — so the gitignored bender-* skills the
+// sub-agent needs would never arrive. Linking per child adds the missing skills
 // while leaving committed ones in place. Children already present (committed or
 // previously linked) are left untouched, so re-entry is idempotent.
 //
-// After provisioning, the skill BuildPrompt renders must be present, or this
-// fails here with a clear setup error instead of deep in prompt-build.
+// After provisioning, the required skill must be present, or this fails here
+// with a clear setup error.
 func linkSkills(parent, worktreePath string) error {
 	srcDir := filepath.Join(parent, ".claude", "skills")
 	entries, err := os.ReadDir(srcDir)
