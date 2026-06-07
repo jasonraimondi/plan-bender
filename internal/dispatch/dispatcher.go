@@ -275,8 +275,7 @@ var blockFromStatuses = []status.Status{
 // ignored — that's a no-op the operator doesn't need to see.
 //
 // The transition uses a fresh ctx detached from the parent: a canceled parent
-// (Ctrl-C, or the subprocess_timeout when the merge-conflict path runs after
-// a SIGKILL'd run) would otherwise drop the blocked-state write and leave the
+// (e.g. Ctrl-C) would otherwise drop the blocked-state write and leave the
 // issue in-progress for the next loop to re-pick.
 func (d *Dispatcher) markBlockedAndWarn(slug string, id int, reason string) {
 	ctx, cancel := context.WithTimeout(context.Background(), blockTransitionTimeout)

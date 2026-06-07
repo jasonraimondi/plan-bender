@@ -45,9 +45,7 @@ All available keys with their default values:
   ],
   "pipeline": {
     "skip": [],
-    "branch_strategy": "integration",
-    "subprocess_timeout": "30m",
-    "max_parallel": 3
+    "branch_strategy": "integration"
   },
   "hooks": {
     "before_issue": "",
@@ -87,9 +85,7 @@ Field notes:
 - `workflow_states` — the status chain an issue moves through. `needs-input` (default position between `blocked` and `in-review`) parks an issue on a pending **human decision**: a worker that hits product/policy/UX ambiguity commits its WIP and parks it there. Unlike `blocked` (a technical failure), `needs-input` persists across runs and is excluded from readiness until an operator resolves it and `pb retry` moves it back to `todo`.
 - `agents` — bool toggles registry defaults; or use object form for per-agent overrides (`project_dir`, `scope`, ...). Supported: `claude-code`, `opencode`, `openclaw`, `pi`.
 - `pipeline.skip` — skill names to exclude, e.g. `["bender-interview-me"]`.
-- `pipeline.branch_strategy` — `integration` (dispatch creates `<user>/<slug>` off the default branch and merges issue branches there) or `direct` (dispatch merges issue branches straight into the default branch).
-- `pipeline.subprocess_timeout` — Go duration string (`"30m"`, `"2h"`). Per-subprocess cap on each `claude --print` invocation; also caps `before_issue` / `after_issue` hooks. Validated at config load.
-- `pipeline.max_parallel` — cap on concurrent `claude` subprocesses inside one `dispatch` batch. Default `3`. Each subprocess is heavy (model API + MCP servers + a git worktree). Must be at least `1`.
+- `pipeline.branch_strategy` — `integration` (the merger creates `<user>/<slug>` off the default branch and merges issue branches there) or `direct` (merges issue branches straight into the default branch).
 - `hooks.before_issue` — runs in the worktree dir before each subprocess; non-zero exit blocks the issue and skips the subprocess.
 - `hooks.after_issue` — runs in the worktree dir after each subprocess; failures are logged but do not change issue status.
 - `hooks.after_batch` — runs after merge-back with cwd set to the per-slug integration worktree (the merged commits are checked out there); non-fatal. **Breaking change** from earlier versions, which ran it in the parent repo root.
