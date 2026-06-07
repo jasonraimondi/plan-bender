@@ -21,7 +21,7 @@
       "type": "array",
       "description": "Ordered workflow states an issue moves through.",
       "items": { "type": "string" },
-      "default": ["backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"]
+      "default": ["backlog", "todo", "in-progress", "blocked", "needs-input", "in-review", "qa", "done", "canceled"]
     },
     "plans_dir": {
       "type": "string",

@@ -310,6 +310,34 @@ func TestReadyAFK_BlockerDoneUnblocks(t *testing.T) {
 	assert.Equal(t, 2, ready[0].ID)
 }
 
+func TestReadyAFK_ExcludesNeedsInput(t *testing.T) {
+	issues := []schema.Issue{
+		mkIssue(1, "needs-input", "high"),
+		mkIssue(2, "todo", "high"),
+	}
+	ready := ReadyAFK(issues)
+	require.Len(t, ready, 1)
+	assert.Equal(t, 2, ready[0].ID)
+}
+
+func TestResolve_ExcludesNeedsInputFromPool(t *testing.T) {
+	issues := []schema.Issue{
+		mkIssue(1, "needs-input", "urgent"),
+		mkIssue(2, "todo", "low"),
+	}
+	r := Resolve(issues)
+	require.NotNil(t, r.Issue)
+	assert.Equal(t, 2, r.Issue.ID, "needs-input must never be chosen")
+
+	var reason string
+	for _, s := range r.Skipped {
+		if s.ID == 1 {
+			reason = s.Reason
+		}
+	}
+	assert.Contains(t, reason, "not in candidate pool")
+}
+
 func TestReadyAFK_AssignedIssueExcluded(t *testing.T) {
 	issues := []schema.Issue{
 		mkIssue(1, "todo", "high", withAssignee("alice")),

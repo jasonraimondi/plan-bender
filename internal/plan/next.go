@@ -53,7 +53,7 @@ func ReadyAFK(issues []schema.Issue) []schema.Issue {
 	for i := range issues {
 		iss := issues[i]
 		switch iss.Status {
-		case statusDone, statusCanceled, statusBlocked, "in-review":
+		case statusDone, statusCanceled, statusBlocked, "in-review", "needs-input":
 			continue
 		}
 		if iss.Assignee != nil && *iss.Assignee != "" {
