@@ -79,6 +79,9 @@ func NewAgentRootCmd(version string) *cobra.Command {
 	retryCmd := NewRetryCmd()
 	retryCmd.ValidArgsFunction = slugComplete
 
+	parkCmd := NewParkCmd()
+	parkCmd.ValidArgsFunction = slugComplete
+
 	root.AddCommand(
 		validateCmd,
 		NewContextCmd(),
@@ -92,6 +95,7 @@ func NewAgentRootCmd(version string) *cobra.Command {
 		worktreeCmd,
 		statusCmd,
 		retryCmd,
+		parkCmd,
 	)
 
 	return root

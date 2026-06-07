@@ -45,7 +45,8 @@ Re-run after config changes; it regenerates skills and re-symlinks. Regeneration
 | `pb dispatch <slug> --base <ref>` | Override auto-detected default branch (any `git rev-parse` ref) |
 | `pb merge <slug>` | Merge in-review/deps-done issues into the integration branch in dependency order |
 | `pb complete <slug> <id>` | Mark issue `in-review` (ready for review); prints the completion marker |
-| `pb retry <slug> <id>` | Reset a `blocked` issue back to `todo` |
+| `pb retry <slug> <id>` | Reset a `blocked` or `needs-input` issue back to `todo` |
+| `pb park <slug> <id>` | Park an `in-progress` issue as `needs-input` |
 | `pb worktree create <slug> <id>` | Branch + worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees + merged branches incl. the per-slug integration worktree (keeps unmerged) |
 | `pb sync linear push <slug>` | Local JSON → Linear |
@@ -79,7 +80,8 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 | `pba worktree create <slug> <id>` | `{path, branch, status}` — status is post-claim (`in-progress`) |
 | `pba worktree gc <slug>` | `{removed: [...]}`; cleans issue worktrees + per-slug integration worktree, unmerged branches preserved, logged to stderr |
 | `pba status <slug>` | `{plan, issues}` per-issue id, status, labels, branch, notes |
-| `pba retry <slug> <id>` | `{status, id, slug, new_status}`; refuses non-`blocked` status |
+| `pba retry <slug> <id>` | `{status, id, slug, new_status}`; refuses a status that is neither `blocked` nor `needs-input` |
+| `pba park <slug> <id>` | `{status, id, slug, new_status}`; refuses non-`in-progress` status |
 
 `write-prd` / `write-issue` read from stdin when no file is given (or when the file arg is `-`).
 
@@ -127,11 +129,11 @@ The marker is a progress line for logs and out-of-band tooling; it is **not** th
 ```bash
 pb status <slug>             # per-issue state; failure reason in `notes`
 # fix the underlying problem (build break, missing dep, etc.)
-pb retry <slug> <id>         # blocked → todo, appends `[date] blocked→todo: retry` note
+pb retry <slug> <id>         # blocked or needs-input → todo, appends `[date] blocked→todo: retry` note
 pb dispatch <slug>           # resume
 ```
 
-`retry` refuses any non-`blocked` status — fix `done` / `in-review` / `canceled` by hand if needed. The prior failure note is preserved as audit trail.
+`retry` refuses any status that is neither `blocked` nor `needs-input` — fix `done` / `in-review` / `canceled` by hand if needed. The prior failure note is preserved as audit trail.
 
 ## Config layering
 

@@ -15,6 +15,7 @@ var defaultCommands = map[string]string{
 	"dispatch":        "plan-bender-agent dispatch",
 	"complete":        "plan-bender-agent complete",
 	"retry":           "plan-bender-agent retry",
+	"park":            "plan-bender-agent park",
 	"worktree_create": "plan-bender-agent worktree create",
 }
 

@@ -99,6 +99,7 @@ func rootCmd() *cobra.Command {
 		group("workflow", cli.NewStatusCmd()),
 		group("workflow", cli.NewCompleteCmd()),
 		group("workflow", cli.NewRetryCmd()),
+		group("workflow", cli.NewParkCmd()),
 		group("workspace", cli.NewWorktreeCmd()),
 		group("workspace", cli.NewSyncCmd()),
 		group("project", cli.NewSetupCmd(version)),

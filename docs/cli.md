@@ -19,7 +19,8 @@
 | `pb worktree create <slug> <id>` | Create a git branch and worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan, including the per-slug integration worktree (preserves unmerged) |
 | `pb status <slug>` | Per-issue state for a plan: status counts, labels, blocked notes, branch/PR |
-| `pb retry <slug> <id>` | Reset a blocked issue to `todo` (appends a structured transition note) |
+| `pb retry <slug> <id>` | Reset a blocked or needs-input issue to `todo` (appends a structured transition note) |
+| `pb park <slug> <id>` | Park an in-progress issue as `needs-input` (appends a structured transition note) |
 | `pb completion <shell>` | Shell completion — bash, zsh, fish (hidden from `--help`) |
 | `pb docs` | Open GitHub repo in browser |
 | `pb docs --print` | Print repo URL without opening |
@@ -53,7 +54,8 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 | `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch, status}` — status is the post-claim issue status (`in-progress`) |
 | `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; cleans issue worktrees and the per-slug integration worktree, unmerged branches are preserved and logged to stderr |
 | `plan-bender-agent status <slug>` | JSON `{plan, issues}` — per-issue id, status, labels, branch, full notes |
-| `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] blocked→todo: retry` note. Refuses non-blocked status. |
+| `plan-bender-agent retry <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] blocked→todo: retry` (or `needs-input→todo: retry`) note. Refuses any status that is neither blocked nor needs-input. |
+| `plan-bender-agent park <slug> <id>` | JSON `{status, id, slug, new_status}`; appends a `[date] in-progress→needs-input: park` note. Refuses non-in-progress status. |
 
 `write-prd` and `write-issue` read from stdin when no file is given (or when the file arg is `-`).
 
@@ -93,4 +95,4 @@ A sub-agent signals completion by calling `pba complete <slug> <id>`, which flip
 
 ## Recovering from a stuck dispatch
 
-When `pba dispatch` exits non-zero, `pb status <slug>` shows the per-issue state with the failure reason in `notes`. After fixing the underlying problem (build break, missing dep, etc.), `pb retry <slug> <id>` flips the issue back to `todo` and appends a `[date] blocked→todo: retry` note (the prior failure note is preserved as audit trail) so the next dispatch will re-pick it. Retry refuses any non-`blocked` status — fix `done`/`in-review`/`canceled` issues by hand if you need to.
+When `pba dispatch` exits non-zero, `pb status <slug>` shows the per-issue state with the failure reason in `notes`. After fixing the underlying problem (build break, missing dep, etc.), `pb retry <slug> <id>` flips the issue back to `todo` and appends a `[date] blocked→todo: retry` note (the prior failure note is preserved as audit trail) so the next dispatch will re-pick it. Retry also resumes a `needs-input` issue back to `todo`. Retry refuses any status that is neither `blocked` nor `needs-input` — fix `done`/`in-review`/`canceled` issues by hand if you need to.
