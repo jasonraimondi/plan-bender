@@ -8,7 +8,9 @@ allowed-tools: Bash(linear:*), Bash(jq:*)
 
 # Work on PRD
 
-Work through a PRD's issues in dependency order. Default execution model: one integration feature branch, with parallel git worktrees for independent AFK issues, completed via an operator-chosen mode on clean dispatch exit.
+You are the **dispatcher**: a live agent that drives a PRD's issues to done by running a loop-until-stable of scout → parallel warm workers → merger, batching human decisions between rounds. Default execution model: one integration feature branch, parallel git-worktree-isolated workers per ready issue, completed via an operator-chosen mode once the plan reaches stable.
+
+You drive this with the harness **Workflow** tool — you author and run a JS orchestration script that spawns sub-agent workers in parallel (each in its own git worktree) and collects a validated structured object from each. This live-dispatcher path is Claude-Code-specific; that is an accepted opt-in.
 
 ## Input
 
@@ -22,17 +24,23 @@ If none provided, ask: "Which PRD should I work on? (project slug or path)"
 {{join " → " .workflow_states}}
 ```
 
+An issue is **ready** when its `blocked_by` are all `done`/`canceled` **and** its own status is in `{backlog, todo, in-progress}`. Readiness is label-agnostic — `needs-input`, `blocked`, `in-review`, `done`, and `canceled` are all excluded. `{{.commands.context}} {slug}` exposes every issue's status and dependencies, which is all you need to compute this.
+
 ## Process
 
-### 1. Read the PRD and issues
+### 1. Acquire the cross-run lock
+
+Two dispatcher sessions must not drive the same plan at once. At the very start, create `{{.plans_dir}}{slug}/.dispatcher.lock` containing today's date and a short run id. If a fresh one already exists, refuse to start and tell the user another dispatcher may be running — remove the file if it is stale. Remove the lock at the end of the run and on any early exit.
+
+This lock is **advisory** (the real merge-safety is the per-round `.dispatch.lock` flock that `{{.commands.merge}}` takes). It is deliberately a **distinct** sentinel from `.dispatch.lock`: if you held `.dispatch.lock` for the whole run, the merger could never acquire it.
+
+### 2. Read the PRD and capture the landing branch
 
 Read `{{.plans_dir}}{slug}/prd.json` and all files in `{{.plans_dir}}{slug}/issues/`.
 
-If no issue files exist, tell the user: "This PRD has no implementation issues. Run `/bender-write-plan` first."
+If no issue files exist, release the lock and tell the user: "This PRD has no implementation issues. Run `/bender-write-plan` first."
 
-### 2. Capture landing branch and choose completion mode
-
-Capture the **landing branch** — the parent repo's HEAD at this moment. Remember the value; you will act on it in step 4 after dispatch returns.
+Capture the **landing branch** — the parent repo's HEAD at this moment. Remember the value; you act on it in §6 once the plan reaches stable.
 
 ```bash
 git branch --show-current
@@ -44,37 +52,67 @@ Determine which completion modes to offer. The `merge` option is hidden when any
 - `git symbolic-ref --quiet HEAD` errors → hide `merge`, reason: `HEAD detached`
 - landing branch already equals the would-be integration branch `<user>/<slug>` → hide `merge`, reason: `landing branch is the integration branch`
 
-Then ask the operator which mode to use. Remember the choice — it fires in step 4 only on a clean dispatch exit (code 0). On any other exit, the choice is ignored.
+Then ask the operator which mode to use. Remember the choice — it fires in §6 only once the loop reaches **stable** and every issue is `done`. If issues remain blocked/needs-input, the choice is ignored.
 
 {{if eq .agent "claude-code"}}Use `AskUserQuestion` with these options (omit `merge` if any precondition above fired, surface the reason in the question header):
 
-- **merge** — on dispatch exit 0, run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
-- **branch** — no-op after dispatch. Integration branch left local; no push, no PR.
+- **merge** — run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
+- **branch** — no-op. Integration branch left local; no push, no PR.
 - **pr** — push the integration branch and open a PR off `<user>/<slug>` against the default branch.
 {{else}}Ask the user directly in conversation which completion mode they want. List only the modes that are not hidden by the preconditions above; if `merge` is hidden, mention the one-line reason.
 
-- **merge** — on dispatch exit 0, run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
-- **branch** — no-op after dispatch. Integration branch left local; no push, no PR.
+- **merge** — run `git merge --no-ff <user>/<slug>` onto the landing branch, then `git branch -d <user>/<slug>`.
+- **branch** — no-op. Integration branch left local; no push, no PR.
 - **pr** — push the integration branch and open a PR off `<user>/<slug>` against the default branch.
 {{end}}
 
-### 3. Run dispatch
+The integration branch is `<user>/<slug>`, created by the merger.
 
-Run `{{.commands.dispatch}} {slug}` and wait for it to exit. Dispatch handles the full implementation loop: integration branch setup, parallel worktrees per AFK issue, sub-agent spawning, prefixed log streaming, merge-back in dependency order, and worktree cleanup. The skill body's job is just to invoke it.
+### 3. Read context and preview the waves
 
-Exit codes:
+Run `{{.commands.context}} {slug}` and parse the issues + dependency graph. Compute an **informational** topological preview: group the ready issues by dependency depth into waves and display them. This is display-only context for the user — **not** the schedule. The real schedule is the dynamic loop-until-stable below, which re-scouts every round.
 
-- **0** — every issue is `done`. Proceed to §4.
-- **2** — only HITL issues remain. The HITL summary is on stdout — surface it to the user and suggest `/bender-implement-hitl {slug}`. **Ignore the completion mode** captured in step 2; the integration branch is preserved.
-- **non-zero (other)** — dispatch could not finish. **Ignore the completion mode** captured in step 2. Two distinct causes:
-  - *Dependency-stuck* (`dispatch stuck: ... N blocked`) — blocked issues with no AFK candidates ready. Inspect the output, mark/unblock issues, and re-run.
-  - *Environment/setup failure* (`dispatch setup failed for every ready issue ...`) — every issue failed before its sub-agent ran. Re-running won't help until the environment is fixed; the message names the shared cause. **Worktree skill-linking:** if the cause is `building prompt: reading skill ... bender-implement-issue/SKILL.md: no such file`, the gitignored `bender-*` skills weren't provisioned into the worktree. Confirm those skills exist under the repo's `.claude/skills/` (run `{{.commands.dispatch}}` from the repo root), then re-run.
+Read the rendered `bender-implement-issue` worker body once so you can hand it to each worker verbatim — it is the contract they execute (worktree claim, the three structured outcomes, self-advance via the CLI).
 
-Sub-agent stdout is streamed as `[issue-N] ...` so you can watch progress. Full per-issue logs land at `.plan-bender/logs/{slug}/{id}.log`.
+### 4. Drive the Workflow — loop until stable
 
-### 4. Execute the completion mode (dispatch exit 0 only)
+Author and run a Workflow script that loops rounds until no ready issues remain. Each round:
 
-On any non-zero exit, skip this section and surface the dispatch diagnostic from §3. Otherwise follow only the block matching the mode you captured in §2.
+a. **scout** — run `{{.commands.context}} {slug}`, parse the issues, and collect the READY ids (deps all `done`/`canceled` + status in `{backlog, todo, in-progress}`).
+
+b. if there are no ready ids → **break** the loop.
+
+c. **parallel workers** — spawn one worker sub-agent per ready id, each **worktree-isolated**, passing it the `bender-implement-issue` worker body plus that issue's JSON. Each worker returns the structured outcome:
+
+```
+{ outcome: "completed" | "blocked" | "needs-decision",
+  summary,
+  decision?: { question, options, recommendation, context } }
+```
+
+Workers self-advance their own status via the CLI (`{{.commands.worktree_create}}` → `in-progress`, `{{.commands.complete}}` → `in-review`, `{{.commands.park}}` → `needs-input`). **You never flip status for them.**
+
+d. **merger** — run `{{.commands.merge}} {slug}`. It integrates every `in-review` issue whose deps are `done`, in dependency order; merged issues flip to `done`, conflicts mark the issue `blocked` (its branch preserved). It returns `{merged, conflicted}`.
+
+e. **continue** — re-scout (back to a). The loop stops when a round yields no ready ids.
+
+Have the Workflow return the collected worker outcomes — the `needs-decision` payloads and any `blocked` ids — so you can act on them after the round-set.
+
+### 5. Batch needs-input interview, then resume
+
+After the Workflow round-set returns, gather every issue now in `needs-input` (run `{{.commands.context}} {slug}`) together with the captured `needs-decision` payloads.
+
+{{if eq .agent "claude-code"}}Use `AskUserQuestion` to ask **all** parked decisions together in one batched prompt. For each, include the worker's `recommendation` and the one-sentence consequence from its `context`.{{else}}Ask the user directly in conversation, resolving all parked decisions in one batched pass. For each, surface the worker's `recommendation` and the one-sentence consequence from its `context`.{{end}}
+
+Write each decision back **into the issue JSON** — sharpen `acceptance_criteria`, rewrite vague `steps` into `{{.step_pattern}}` pairs, and add chosen constraints to `notes` — so a future worker won't re-hit the same question. Never edit `status` or `branch` by hand.
+
+Then resume each resolved issue with `{{.commands.retry}} {slug} {id}` (moves `needs-input` → `todo`) and **re-invoke the Workflow** (§4).
+
+Repeat §4–§5 until **stable**: no ready issues and no `needs-input` remain — only `done`/`blocked`. Blocked issues (technical failures or merge conflicts) keep their dependents unready and are **not** auto-resolved; surface them.
+
+### 6. Execute the completion mode (stable + all done only)
+
+This fires only when the loop reached stable **and** every issue is `done`. If any issue remains `blocked` or `needs-input`, skip this section and report it in §7. Otherwise follow only the block matching the mode you captured in §2.
 
 #### If you chose `merge`
 
@@ -100,9 +138,9 @@ Open one PR off `<user>/<slug>` to the default branch. Title: the PRD title. Bod
 - one bullet per issue (id, title, key acceptance)
 - aggregated test plan from each issue's verification
 
-### 5. Status report
+### 7. Status report
 
-Use `{{.commands.context}} {slug}` to get current issue counts per track.
+Use `{{.commands.context}} {slug}` to get current issue counts per track. Release the cross-run lock from §1 at the end.
 
 If you chose `pr`:
 
@@ -140,7 +178,9 @@ Track coverage:
 {{end}}
 ```
 
-Update `prd.json` status to `complete` when all issues are done.
+Add a one-line mention of any still-`blocked` or still-`needs-input` issues so the user knows what's left.
+
+Update `prd.json` status to `complete` only when all issues are done.
 {{if .has_backend_sync}}
 
 ## Linear sync
