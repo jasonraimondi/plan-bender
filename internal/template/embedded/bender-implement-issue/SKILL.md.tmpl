@@ -28,26 +28,24 @@ If none provided, ask: "Which issue should I work on? (issue ref, or a plan slug
 
 ## Process (per issue)
 
-### 0. Detect your mode FIRST — integration vs standalone
+### 0. The warm-worker contract
 
-Before anything else, decide whether dispatch spawned you (**INTEGRATION mode**) or an operator invoked you directly (**STANDALONE mode**). Getting this wrong stalls the whole dispatch.
+You are a **warm worker**: a live in-session agent that takes ONE issue from `todo`/`backlog` to a structured outcome. The dispatcher may spawn you for an issue, or an operator may invoke you directly on a single issue — the contract below is the same either way.
 
-You are in **INTEGRATION mode** if ANY of these holds:
+**Claim the issue and work in its worktree.** Start by running `{{.commands.worktree_create}} {slug} {id}`. It claims the issue (`todo` → `in-progress`), stamps the `branch` field, and returns the worktree path + branch. Do ALL work from that worktree path on that branch. The CLI owns `status` and `branch` — **never** hand-edit those fields in the issue JSON.
 
-- your current working directory is inside a plan-bender worktree (the path contains `-wt/`), or
-- `git branch --show-current` returns a per-issue dispatch branch (it contains `--`, e.g. `<user>/<slug>--<id>-<issue-slug>`), or
-- the issue JSON in your prompt already shows `status: in-progress` with a `branch` you did not create.
+**You produce exactly ONE of three structured outcomes** and report it back to the caller (when spawned, the dispatcher's Workflow captures it):
 
-**In INTEGRATION mode you MUST:**
+- **completed** — implementation is done and committed, and you have run `{{.commands.complete}} {slug} {id}` (flips `in-progress` → `in-review` so the merger picks it up). Report: `completed`.
+- **blocked** — an unrecoverable **technical** failure: a build, environment, or dependency problem you cannot fix from inside the worktree. Leave a clear reason. Do not run `{{.commands.complete}}`. The issue stays workable so a human can retry after fixing the environment. Report: `blocked` + the reason.
+- **needs-decision** — you hit a genuine **human decision** (product / policy / UX / ambiguous requirement) you must not guess. Commit your work-in-progress first, then run `{{.commands.park}} {slug} {id}` to move the issue to `needs-input` (this persists across runs and excludes it from readiness). Report: `needs-decision` carrying `{question, options, recommendation, context}`.
 
-- SKIP §2 and §8 entirely — no landing branch, no completion-mode prompt, no merge/push/PR. Dispatch handles merge-back itself.
-- After committing (§7), run §9 `{{.commands.complete}} {slug} {id}` and then STOP.
-- NEVER ask the operator anything. Your stdout is consumed by dispatch — a question reaches no one, and dispatch will mark the issue blocked. Complete and exit.
-- NEVER hand-edit the issue JSON `status` or `branch` fields. Only `{{.commands.complete}}` advances status in this mode.
+**Escalate, don't guess.** Where you set the escalation threshold depends on the issue's labels:
 
-**In STANDALONE mode** (none of the above): follow §2 and §8 as written, then §9.
+- **HITL-labeled issues** — escalate **eagerly**. On ANY product/policy/UX ambiguity, prefer `needs-decision` over assuming.
+- **AFK / unlabeled issues** — proceed on a **stated low-risk assumption** (write the assumption into your work and your commit message) and escalate to `needs-decision` only when you are truly stuck or the decision is irreversible / high-impact.
 
-If unsure, assume INTEGRATION mode — it is the common case. Run §9 `{{.commands.complete}}` and do not ask.
+If a human operator is clearly present — the skill was invoked directly and interactively — you MAY ask them the decision in conversation instead of parking. When the dispatcher spawned you there is no operator to ask: commit WIP, park, and return `needs-decision`.
 
 ### 1. Read the issue
 
@@ -66,55 +64,7 @@ If unresolved blockers exist (blocked_by issues not in done/canceled), report th
 If the issue is blocked, confirm the blocker is cleared before resuming.
 If assigned to someone else, ask before taking it.
 
-### 2. Pre-flight: capture landing branch and choose completion mode (standalone only)
-
-**Skip this section when invoked under `bender-implement-prd` integration mode** — dispatch handles per-issue worktree cleanup and merge-back itself; the pre-flight prompt is for operator-driven standalone runs only.
-
-Capture the **landing branch** — the parent repo's HEAD at this moment. Remember the value; you will act on it in step 8 after implementation completes. Capture this BEFORE running `{{.commands.worktree_create}}` so it reflects the parent branch, not the per-issue branch.
-
-```bash
-git branch --show-current
-```
-
-Determine which completion modes to offer. The `merge` option is hidden when any of the following preconditions fire — show only the one-line reason that applies:
-
-- `git status --porcelain` returns non-empty output → hide `merge`, reason: `working tree dirty`
-- `git symbolic-ref --quiet HEAD` errors → hide `merge`, reason: `HEAD detached`
-- landing branch already equals the would-be per-issue branch `<user>/<slug>/<id>-<issue-slug>` → hide `merge`, reason: `landing branch is the issue branch`
-
-Then ask the operator which mode to use. Remember the choice — it fires in step 8 after implementation completes successfully. On any non-zero exit from implementation, the choice is ignored.
-
-{{if eq .agent "claude-code"}}Use `AskUserQuestion` with these options (omit `merge` if any precondition above fired, surface the reason in the question header):
-
-- **merge** — after implementation completes, run `git merge --no-ff <user>/<slug>/<id>-<issue-slug>` onto the landing branch, then `plan-bender-agent worktree gc <slug>` to remove the per-issue worktree and delete the branch.
-- **branch** — no-op after implementation. Worktree and per-issue branch left in place; nothing is pushed and no PR is opened.
-- **pr** — push the per-issue branch and open a PR off `<user>/<slug>/<id>-<issue-slug>` against the default branch.
-{{else}}Ask the user directly in conversation which completion mode they want. List only the modes that are not hidden by the preconditions above; if `merge` is hidden, mention the one-line reason.
-
-- **merge** — after implementation completes, run `git merge --no-ff <user>/<slug>/<id>-<issue-slug>` onto the landing branch, then `plan-bender-agent worktree gc <slug>` to remove the per-issue worktree and delete the branch.
-- **branch** — no-op after implementation. Worktree and per-issue branch left in place; nothing is pushed and no PR is opened.
-- **pr** — push the per-issue branch and open a PR off `<user>/<slug>/<id>-<issue-slug>` against the default branch.
-{{end}}
-
-### 3. Update status
-
-**Never** edit the JSON's `status` or `branch` fields by hand — the strict decoder rejects duplicate keys, and a misplaced Edit silently produces them. Use CLI commands; they round-trip through the issue struct so the file always parses.
-
-- worktree mode (you were spawned by `{{.commands.dispatch}}` or invoked `{{.commands.worktree_create}}`): the worktree creator already stamped `branch: <name>` and `status: in-progress`. Skip this step.
-- standalone, was `blocked`: run `{{.commands.retry}} {slug} {id}` to flip back to `todo`, then run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress`.
-- standalone, was `backlog`/`todo`: run `{{.commands.worktree_create}} {slug} {id}` to claim a branch and advance to `in-progress` in one atomic step.
-{{- if .has_backend_sync}}
-- if the issue has `linear_id`, also push this status change to Linear (see **Linear sync** section). The CLIs above only update the local JSON.
-{{- end}}
-
-### 4. Branch setup
-
-Check if the current branch is already dedicated to this issue or its parent project.
-
-- If yes: stay on the current branch
-- If no: create a new branch using `<user>/<project-slug>/<issue-id>-<issue-slug>`
-
-### 5. Explore the codebase
+### 2. Explore the codebase
 
 Understand:
 
@@ -122,7 +72,7 @@ Understand:
 - adjacent code paths and existing patterns
 - existing tests for similar behavior
 
-### 6. Implement
+### 3. Implement
 
 #### When `steps` exist
 
@@ -146,89 +96,44 @@ Fall back to acceptance criteria:
 - lint and test after implementation
 - fix lint and test failures before moving on
 
-### 7. Commit
+### 4. Commit
 
-Create meaningful commits using conventional commit format: `type(scope): description`.
+Create meaningful commits using conventional commit format: `type(scope): description`. Commit on the worktree branch only — you do not push, merge, or open a PR. Integration is the dispatcher's job (its merger and completion pre-flight handle merge-back).
 
-### 8. Complete the issue
+### 5. Complete the issue
 
-**Skip this step when invoked under `bender-implement-prd` integration mode** — the parent merges all issue branches into a single feature branch and opens one combined PR. In that mode: commit on the assigned branch only; do not push, do not open a PR.
+Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review` and bumps `updated`. **This status flip is the `completed` outcome** — the merger picks up the issue only once it sees `in-review`. The `<pba:complete issue-id="{id}"/>` line it prints is a human-readable marker, not the trigger. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
 
-Otherwise, execute the completion mode you captured in §2. Follow only the block matching the chosen mode.
-
-#### If you chose `merge`
-
-Run from the parent repo dir (where the landing branch is checked out):
-
-```bash
-git checkout <landing-branch>
-git merge --no-ff <user>/<slug>/<id>-<issue-slug>
-# if merge conflicts, resolve and `git commit`; the issue branch and worktree are preserved either way
-plan-bender-agent worktree gc <slug>
-```
-
-`plan-bender-agent worktree gc` removes the per-issue worktree directory AND deletes the branch in one step. The branch is still checked out in the worktree dir, so deletion must go through the worktree-aware command.
-
-#### If you chose `branch`
-
-No git actions. Per-issue worktree and branch are left in place. Nothing is pushed and no PR is opened.
-
-Status report names the worktree path and the per-issue branch so the operator can inspect:
-
-```text
-Worktree: <worktree-path>
-Branch:   <user>/<slug>/<id>-<issue-slug> @ <sha>
-```
-
-#### If you chose `pr`
-
-1. Push the branch with `-u`
-2. Create a PR with the issue reference in the title and body
-3. Include a concise test plan in the PR body
-
-### 9. Mark complete
-
-Run `{{.commands.complete}} {slug} {id}`. It atomically flips `status` to `in-review` and bumps `updated`. **This status flip is how dispatch detects completion**: after your subprocess exits, the parent re-reads the issue file and proceeds to merge-back only if it sees `in-review`. The `<pba:complete issue-id="{id}"/>` line it prints is a human-readable marker, not the trigger. **Never** edit `status` by hand: the strict decoder rejects duplicate keys and a naive Edit silently produces them.
-
-If you opened a PR in step 8, set the `pr` field with Edit on the **exact** existing line (`"pr": null`) so it replaces in place. Don't append a new `pr` entry.
-
-If blocked after starting, do not edit `status` by hand — exit non-zero and let the parent dispatch flip the issue to blocked via its `Transition` call.
+If you end on **blocked** instead, do not run `{{.commands.complete}}` — leave the reason and stop; the issue stays workable for a human retry. If you end on **needs-decision**, commit WIP, run `{{.commands.park}} {slug} {id}`, and return the decision payload.
 {{- if .has_backend_sync}}
 
-If the issue has `linear_id`, push status and PR attachment to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local JSON.
+If the issue has `linear_id`, push the status change to Linear (see **Linear sync** section). The `{{.commands.complete}}` CLI only updates the local JSON.
 {{- end}}
 
-### 10. Next issue
+### 6. Next issue
 
 If there are more issues, proceed to the next one.
 
-- stay on the same branch only when working on tightly coupled issues from the same project
-- otherwise create a new branch per issue
-- if any issue is blocked, skip it and report at the end
+- claim each issue with `{{.commands.worktree_create}} {slug} {id}` and work in its own worktree
+- if any issue ends in `blocked` or `needs-decision`, report it and move on
 {{if .has_backend_sync}}
 
 ## Linear sync
 
 When a plan has been synced to Linear (issues have a `linear_id` field), update both local JSON **and** Linear on every status change. Local JSON is always updated first. Linear updates are best-effort — if they fail, log the failure and continue.
 
-Check for `linear_id` once when reading the issue (step 1). If present, all status transitions in steps 3 and 9 push to Linear.
+Check for `linear_id` once when reading the issue (step 1). If present, the status transition in step 5 pushes to Linear.
 
 **Update status:**
 
 ```bash
 linear issue update {linear_id} --state "{new_status}"
 ```
-
-**Attach PR** (after creating a PR in step 8):
-
-```bash
-linear api --method POST --body '{"query":"mutation{attachmentCreate(input:{issueId:\"{linear_id}\",url:\"{pr_url}\",title:\"Pull Request\"}){success}}"}'
-```
 {{end}}
 
 ## Multiple issues
 
-When given multiple issues, work them sequentially. If any issue is blocked, skip it and report at the end.
+When given multiple issues, work them sequentially. If any issue ends in `blocked` or `needs-decision`, report it at the end.
 {{if .report_bugs}}
 ## Bug reports
 
