@@ -65,7 +65,6 @@ var defaultPipelinePhases = []PipelinePhase{
 	{Name: "Write Issue", Description: "Create a single issue", Skill: "bender-write-issue"},
 	{Name: "Review PRD", Description: "Review plan quality", Skill: "bender-review-prd"},
 	{Name: "Implement PRD", Description: "Work through issues", Skill: "bender-implement-prd", Implement: true},
-	{Name: "Implement HITL", Description: "Resolve human-gated issues", Skill: "bender-implement-hitl", Implement: true},
 	{Name: "Implement Issue", Description: "Implement one issue", Skill: "bender-implement-issue", Implement: true},
 	{Name: "Sync with Linear", Description: "Push local plan to Linear or pull Linear state", Skill: "bender-sync-linear", RequiresBackend: true},
 }

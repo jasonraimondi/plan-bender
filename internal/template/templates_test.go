@@ -61,7 +61,6 @@ func TestAllTemplatesLoad(t *testing.T) {
 		"bender-write-issue",
 		"bender-review-prd",
 		"bender-implement-prd",
-		"bender-implement-hitl",
 		"bender-implement-issue",
 		"bender-interview-me",
 		"bender-sync-linear",
@@ -85,30 +84,6 @@ func TestAllTemplatesRender(t *testing.T) {
 			assert.NotEmpty(t, out)
 		})
 	}
-}
-
-func TestImplementHitlTemplate_AgentConditional(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	tmplContent := tmpls["bender-implement-hitl"].Main()
-
-	t.Run("claude-code uses AskUserQuestionTool", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "claude-code"
-		out, err := Render("implement-hitl", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.Contains(t, out, "AskUserQuestionTool")
-	})
-
-	t.Run("openclaw uses conversational phrasing", func(t *testing.T) {
-		ctx := fixtureContext()
-		ctx["agent"] = "openclaw"
-		out, err := Render("implement-hitl", tmplContent, ctx)
-		require.NoError(t, err)
-		assert.NotContains(t, out, "AskUserQuestionTool")
-		assert.Contains(t, out, "Ask the user directly in conversation")
-	})
 }
 
 func TestReviewPrdTemplate_AgentConditional(t *testing.T) {
@@ -318,22 +293,6 @@ func TestWorkflowStatesJoin(t *testing.T) {
 	out, err := Render("implement-issue", tmpls["bender-implement-issue"].Main(), ctx)
 	require.NoError(t, err)
 	assert.Contains(t, out, strings.Join(ctx["workflow_states"].([]string), " → "))
-}
-
-func TestImplementHitlTemplate_UsesResolverAndIssueWorkflow(t *testing.T) {
-	tmpls, err := LoadTemplates(t.TempDir())
-	require.NoError(t, err)
-
-	ctx := fixtureContext()
-	out, err := Render("implement-hitl", tmpls["bender-implement-hitl"].Main(), ctx)
-	require.NoError(t, err)
-
-	assert.Contains(t, out, "plan-bender-agent next")
-	assert.Contains(t, out, "plan-bender-agent status")
-	assert.Contains(t, out, "plan-bender-agent validate")
-	assert.Contains(t, out, "plan-bender-agent worktree create")
-	assert.Contains(t, out, "plan-bender-agent complete")
-	assert.Contains(t, out, "/bender-implement-prd")
 }
 
 func TestImplementPrdTemplate_BatchesNeedsInputInterview(t *testing.T) {
