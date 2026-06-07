@@ -41,7 +41,6 @@ func fixtureContext() map[string]any {
 			"archive":         "plan-bender-agent archive",
 			"next":            "plan-bender-agent next",
 			"status":          "plan-bender-agent status",
-			"dispatch":        "plan-bender-agent dispatch",
 			"complete":        "plan-bender-agent complete",
 			"merge":           "plan-bender-agent merge",
 			"retry":           "plan-bender-agent retry",
