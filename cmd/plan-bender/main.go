@@ -98,6 +98,7 @@ func rootCmd() *cobra.Command {
 
 	root.AddCommand(
 		group("workflow", cli.NewDispatchCmd(version)),
+		group("workflow", cli.NewMergeCmd()),
 		group("workflow", cli.NewNextCmd()),
 		group("workflow", cli.NewStatusCmd()),
 		group("workflow", cli.NewCompleteCmd()),

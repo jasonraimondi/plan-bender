@@ -14,6 +14,7 @@
 | `pb self-update` | Update to latest release |
 | `pb next <slug>` | Show recommended next issue (formatted text) |
 | `pb dispatch <slug>` | Run the autonomous implementation loop for a plan |
+| `pb merge <slug>` | Merge completed (in-review, deps-done) issues into the integration branch in dependency order |
 | `pb complete <slug> <id>` | Mark an issue in-review (ready for review); prints the completion marker |
 | `pb worktree create <slug> <id>` | Create a git branch and worktree for one issue |
 | `pb worktree gc <slug>` | Remove plan-bender worktrees and merged branches for a plan, including the per-slug integration worktree (preserves unmerged) |
@@ -47,6 +48,7 @@ Codes: `PLAN_NOT_FOUND`, `INVALID_PLAN` (json on disk doesn't parse — includes
 | `plan-bender-agent sync linear pull <slug>` | Pull remote state to local |
 | `plan-bender-agent archive <slug>` | Move completed plan to `.archive/` |
 | `plan-bender-agent dispatch <slug>` | Autonomous implementation loop (see below) |
+| `plan-bender-agent merge <slug>` | JSON `{merged: [...], conflicted: [...]}`; merges in-review/deps-done issues into the integration branch in dependency order |
 | `plan-bender-agent complete <slug> <id>` | Mark issue in-review; JSON includes the completion `marker` |
 | `plan-bender-agent worktree create <slug> <id>` | JSON `{path, branch, status}` — status is the post-claim issue status (`in-progress`) |
 | `plan-bender-agent worktree gc <slug>` | JSON `{removed: [...]}`; cleans issue worktrees and the per-slug integration worktree, unmerged branches are preserved and logged to stderr |
@@ -80,6 +82,10 @@ Merge-back never touches the parent repo's HEAD. On first MergeBack of a run, di
 The integration worktree persists across runs of the same slug for fast resumption and is GC'd only on `AllDone` (or unconditionally via `pba worktree gc <slug>`). See [ADR-0003](./adr/0003-merge-in-dedicated-integration-worktree.md) for the rationale.
 
 Exit codes: `0` (all done), `2` (HITL-only remain; run `/bender-implement-hitl`), `1` (other failure). A `1` has two distinct shapes: *stuck-on-blocked* / lock contention (a dependency or operational problem — fix the issues and re-run), and *setup failure* (`dispatch setup failed for every ready issue ...`, an environment problem where no sub-agent ran — re-running won't help until it's fixed; the message names the shared cause). When `report_bugs` is enabled, a *setup failure* (and only that shape) also writes a `pb-error-report-<UTC>.log` to the repo root capturing the command and error — that failure happens in Go before any sub-agent runs, so the agent-facing report_bugs prompt can't cover it. Stuck-on-blocked and lock contention are user-resolvable, not bugs, so they don't write a report.
+
+### Standalone merge
+
+`pb merge <slug>` (or `pba merge`) runs the merge-back step on its own, without the dispatch loop. It takes the same per-slug `.dispatch.lock` (failing fast if a dispatch or another merge holds it), then merges every issue that is `in-review` with a branch set **and** whose `blocked_by` are all done (or are themselves being merged in the same call) into the integration branch in dependency order. Merged issues flip to `done`; a conflicting merge is `git merge --abort`'d and the issue is marked `blocked` while siblings still merge. Like dispatch's merge-back, all git work happens inside the per-slug integration worktree, so the parent repo's HEAD is never touched, and ADR-0003's strategy is preserved. With nothing in-review it is a no-op. Human output is a one-line summary; agent mode emits `{"merged":[...],"conflicted":[...]}`.
 
 ### Completion marker
 

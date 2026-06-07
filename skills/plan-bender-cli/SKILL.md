@@ -43,6 +43,7 @@ Re-run after config changes; it regenerates skills and re-symlinks. Regeneration
 | `pb status <slug>` | Per-issue state: status counts, labels, blocked notes, branch/PR |
 | `pb dispatch <slug>` | Autonomous implementation loop |
 | `pb dispatch <slug> --base <ref>` | Override auto-detected default branch (any `git rev-parse` ref) |
+| `pb merge <slug>` | Merge in-review/deps-done issues into the integration branch in dependency order |
 | `pb complete <slug> <id>` | Mark issue `in-review` (ready for review); prints the completion marker |
 | `pb retry <slug> <id>` | Reset a `blocked` issue back to `todo` |
 | `pb worktree create <slug> <id>` | Branch + worktree for one issue |
@@ -73,6 +74,7 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 | `pba archive <slug>` | Move completed plan to `.archive/` |
 | `pba sync linear push\|pull <slug>` | JSON-emitting variant |
 | `pba dispatch <slug>` | Autonomous loop (see below) |
+| `pba merge <slug>` | `{merged: [...], conflicted: [...]}`; merges in-review/deps-done issues into the integration branch |
 | `pba complete <slug> <id>` | Flip to `in-review` + emit `<pba:complete issue-id="N"/>` |
 | `pba worktree create <slug> <id>` | `{path, branch, status}` — status is post-claim (`in-progress`) |
 | `pba worktree gc <slug>` | `{removed: [...]}`; cleans issue worktrees + per-slug integration worktree, unmerged branches preserved, logged to stderr |
@@ -100,6 +102,10 @@ JSON-only output. Errors are `{"error": "...", "code": "..."}` with non-zero exi
 7. **`after_batch` hook** runs with cwd set to the integration worktree.
 
 Merge-back never touches the parent repo's HEAD: all merges, status flips, and the `after_batch` hook run in a long-lived per-slug integration worktree (lazy-created on first merge-back, GC'd on all-done). The parent repo can stay on any branch with uncommitted changes — dispatch no longer captures/restores HEAD and no longer refuses a dirty parent. See [ADR-0003](../../docs/adr/0003-merge-in-dedicated-integration-worktree.md).
+
+### Standalone merge
+
+`pb merge <slug>` (or `pba merge`) runs that same merge-back step on its own, without the dispatch loop. It takes the per-slug `.dispatch.lock` (fails fast if dispatch or another merge holds it), then merges every issue that is `in-review` with a branch set **and** whose `blocked_by` are all done (or are being merged in the same call) into the integration branch in dependency order. Merged → `done`; a conflict is `git merge --abort`'d and the issue → `blocked` while siblings still merge. All git work runs in the per-slug integration worktree (parent HEAD untouched, ADR-0003 preserved). Nothing in-review → no-op. Agent mode emits `{"merged":[...],"conflicted":[...]}`.
 
 ### Completion marker
 
