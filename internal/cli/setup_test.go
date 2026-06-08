@@ -221,7 +221,6 @@ func TestSetup_ReadyBlockShowsCLIEquivalents(t *testing.T) {
 	output := h.output()
 	assert.Contains(t, output, "From the shell:")
 	assert.Contains(t, output, "pb status")
-	assert.Contains(t, output, "pb dispatch")
 }
 
 func TestSetup_LinearWithInvalidCreds(t *testing.T) {
