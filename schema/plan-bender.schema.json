@@ -21,7 +21,7 @@
       "type": "array",
       "description": "Ordered workflow states an issue moves through.",
       "items": { "type": "string" },
-      "default": ["backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"]
+      "default": ["backlog", "todo", "in-progress", "blocked", "needs-input", "in-review", "qa", "done", "canceled"]
     },
     "plans_dir": {
       "type": "string",
@@ -65,17 +65,6 @@
           "description": "How implementation branches are managed. 'integration' merges issue branches into one feature branch; 'direct' commits to a single branch.",
           "enum": ["integration", "direct"],
           "default": "integration"
-        },
-        "subprocess_timeout": {
-          "type": "string",
-          "description": "Go duration string capping each agent subprocess (e.g. \"30m\", \"1h30m\"). Empty defaults to 30m.",
-          "default": "30m"
-        },
-        "max_parallel": {
-          "type": "integer",
-          "description": "Max agent subprocesses run concurrently in a batch.",
-          "minimum": 1,
-          "default": 3
         }
       }
     },

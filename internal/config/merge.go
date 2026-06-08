@@ -43,12 +43,6 @@ func merge(base Config, layer PartialConfig) Config {
 		if layer.Pipeline.BranchStrategy != "" {
 			out.Pipeline.BranchStrategy = layer.Pipeline.BranchStrategy
 		}
-		if layer.Pipeline.SubprocessTimeout != "" {
-			out.Pipeline.SubprocessTimeout = layer.Pipeline.SubprocessTimeout
-		}
-		if layer.Pipeline.MaxParallel != nil {
-			out.Pipeline.MaxParallel = layer.Pipeline.MaxParallel
-		}
 	}
 	if layer.IssueSchema != nil {
 		out.IssueSchema.CustomFields = layer.IssueSchema.CustomFields

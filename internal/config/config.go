@@ -3,38 +3,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/jasonraimondi/plan-bender/internal/agents"
 )
-
-const defaultSubprocessTimeout = 30 * time.Minute
-
-// defaultMaxParallel caps batch concurrency when pipeline.max_parallel is
-// unset. Each claude subprocess is heavy (model API + MCP servers + a git
-// worktree), so the default stays low.
-const defaultMaxParallel = 3
-
-// ResolvedMaxParallel returns the configured batch concurrency cap, or
-// defaultMaxParallel when unset. validate() rejects a value < 1 at Load time.
-func (p PipelineConfig) ResolvedMaxParallel() int {
-	if p.MaxParallel == nil {
-		return defaultMaxParallel
-	}
-	return *p.MaxParallel
-}
-
-// validate() rejects unparseable values at Load time, so this never returns an error.
-func (p PipelineConfig) ResolvedSubprocessTimeout() time.Duration {
-	if p.SubprocessTimeout == "" {
-		return defaultSubprocessTimeout
-	}
-	d, err := time.ParseDuration(p.SubprocessTimeout)
-	if err != nil || d <= 0 {
-		return defaultSubprocessTimeout
-	}
-	return d
-}
 
 type CustomFieldDef struct {
 	Name       string   `json:"name"`
@@ -54,12 +25,6 @@ type LinearConfig struct {
 type PipelineConfig struct {
 	Skip           []string `json:"skip,omitempty"`
 	BranchStrategy string   `json:"branch_strategy,omitempty"`
-	// SubprocessTimeout caps each `claude` invocation — a hung sub-agent
-	// otherwise blocks dispatch indefinitely. Empty falls back to defaultSubprocessTimeout.
-	SubprocessTimeout string `json:"subprocess_timeout,omitempty"`
-	// MaxParallel caps how many claude subprocesses RunBatch runs at once.
-	// Nil falls back to defaultMaxParallel.
-	MaxParallel *int `json:"max_parallel,omitempty"`
 }
 
 type HooksConfig struct {

@@ -62,26 +62,15 @@ func TestResolve_TodoBeatsBacklog(t *testing.T) {
 	assert.Equal(t, 2, r.Issue.ID)
 }
 
-func TestResolve_AFKBeatsHITL(t *testing.T) {
+func TestResolve_LabelsDoNotGateSelection(t *testing.T) {
+	// HITL and AFK labels are irrelevant: priority within the status tier decides.
 	issues := []schema.Issue{
 		mkIssue(1, "todo", "urgent", withLabels("HITL")),
 		mkIssue(2, "todo", "low", withLabels("AFK")),
 	}
 	r := Resolve(issues)
 	require.NotNil(t, r.Issue)
-	assert.Equal(t, 2, r.Issue.ID)
-	assert.False(t, r.RequiresHuman)
-}
-
-func TestResolve_HITLSurfacesWhenNoAFK(t *testing.T) {
-	issues := []schema.Issue{
-		mkIssue(1, "todo", "urgent", withLabels("HITL")),
-		mkIssue(2, "todo", "high", withLabels("HITL")),
-	}
-	r := Resolve(issues)
-	require.NotNil(t, r.Issue)
-	assert.Equal(t, 1, r.Issue.ID)
-	assert.True(t, r.RequiresHuman)
+	assert.Equal(t, 1, r.Issue.ID, "urgent HITL outranks low AFK — labels do not gate")
 }
 
 func TestResolve_PriorityWithinStatusTier(t *testing.T) {
@@ -238,84 +227,79 @@ func TestResolve_SkippedListsEverythingNotChosen(t *testing.T) {
 	assert.NotContains(t, skippedByID, 2)
 }
 
-func TestResolve_HITLSkippedReasonWhenAFKWins(t *testing.T) {
+func TestReady_ReturnsDepSatisfiedNonTerminalRegardlessOfLabels(t *testing.T) {
+	// Unblocked issues are returned regardless of AFK/HITL/no labels; id=4 is
+	// still blocked by an open dep and excluded.
 	issues := []schema.Issue{
-		mkIssue(1, "todo", "urgent", withLabels("HITL")),
-		mkIssue(2, "todo", "low", withLabels("AFK")),
+		mkIssue(1, "todo", "high", withLabels("AFK")),
+		mkIssue(2, "todo", "medium", withLabels("HITL")),
+		mkIssue(3, "todo", "low", withLabels()),
+		mkIssue(4, "todo", "low", withBlockedBy(1)),
 	}
-	r := Resolve(issues)
-	require.NotNil(t, r.Issue)
-	assert.Equal(t, 2, r.Issue.ID)
-
-	var hitlReason string
-	for _, s := range r.Skipped {
-		if s.ID == 1 {
-			hitlReason = s.Reason
-		}
-	}
-	assert.Contains(t, hitlReason, "HITL")
-}
-
-func TestReadyAFK_ReturnsAllUnblockedAFKIssues(t *testing.T) {
-	issues := []schema.Issue{
-		mkIssue(1, "todo", "high"),
-		mkIssue(2, "todo", "medium"),
-		mkIssue(3, "todo", "low", withBlockedBy(1)),
-	}
-	ready := ReadyAFK(issues)
-	require.Len(t, ready, 2)
+	ready := Ready(issues)
+	require.Len(t, ready, 3)
 	assert.Equal(t, 1, ready[0].ID)
 	assert.Equal(t, 2, ready[1].ID)
+	assert.Equal(t, 3, ready[2].ID)
 }
 
-func TestReadyAFK_ExcludesHITLEvenWhenUnblocked(t *testing.T) {
-	issues := []schema.Issue{
-		mkIssue(1, "todo", "high"),
-		mkIssue(2, "todo", "high", withLabels("HITL")),
-	}
-	ready := ReadyAFK(issues)
-	require.Len(t, ready, 1)
-	assert.Equal(t, 1, ready[0].ID)
-}
-
-func TestReadyAFK_ExcludesTerminalAndInReviewAndBlocked(t *testing.T) {
+func TestReady_ExcludesTerminalInReviewBlockedAndNeedsInput(t *testing.T) {
 	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "canceled", "high"),
 		mkIssue(3, "in-review", "high"),
 		mkIssue(4, "blocked", "high"),
-		mkIssue(5, "todo", "high"),
+		mkIssue(5, "needs-input", "high"),
+		mkIssue(6, "todo", "high"),
 	}
-	ready := ReadyAFK(issues)
+	ready := Ready(issues)
 	require.Len(t, ready, 1)
-	assert.Equal(t, 5, ready[0].ID)
+	assert.Equal(t, 6, ready[0].ID)
 }
 
-func TestReadyAFK_AllDoneReturnsEmpty(t *testing.T) {
+func TestReady_AllDoneReturnsEmpty(t *testing.T) {
 	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "done", "low"),
 	}
-	ready := ReadyAFK(issues)
+	ready := Ready(issues)
 	assert.Empty(t, ready)
 }
 
-func TestReadyAFK_BlockerDoneUnblocks(t *testing.T) {
+func TestReady_BlockerDoneUnblocks(t *testing.T) {
 	issues := []schema.Issue{
 		mkIssue(1, "done", "high"),
 		mkIssue(2, "todo", "high", withBlockedBy(1)),
 	}
-	ready := ReadyAFK(issues)
+	ready := Ready(issues)
 	require.Len(t, ready, 1)
 	assert.Equal(t, 2, ready[0].ID)
 }
 
-func TestReadyAFK_AssignedIssueExcluded(t *testing.T) {
+func TestResolve_ExcludesNeedsInputFromPool(t *testing.T) {
+	issues := []schema.Issue{
+		mkIssue(1, "needs-input", "urgent"),
+		mkIssue(2, "todo", "low"),
+	}
+	r := Resolve(issues)
+	require.NotNil(t, r.Issue)
+	assert.Equal(t, 2, r.Issue.ID, "needs-input must never be chosen")
+
+	var reason string
+	for _, s := range r.Skipped {
+		if s.ID == 1 {
+			reason = s.Reason
+		}
+	}
+	assert.Contains(t, reason, "not in candidate pool")
+}
+
+func TestReady_AssignedIssueExcluded(t *testing.T) {
 	issues := []schema.Issue{
 		mkIssue(1, "todo", "high", withAssignee("alice")),
 		mkIssue(2, "todo", "high"),
 	}
-	ready := ReadyAFK(issues)
+	ready := Ready(issues)
 	require.Len(t, ready, 1)
 	assert.Equal(t, 2, ready[0].ID)
 }

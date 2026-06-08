@@ -176,9 +176,9 @@ func runSetup(cmd *cobra.Command, deps setupDeps, yes, useLinear bool) error {
 	fmt.Fprintf(out, "  In your agent (Claude Code, Pi, etc.):\n")
 	fmt.Fprintf(out, "    /bender-orchestrator    — see your planning dashboard\n")
 	fmt.Fprintf(out, "    /bender-write-plan      — start a new plan (PRD + issues in one pass)\n")
+	fmt.Fprintf(out, "    /bender-implement-prd   — dispatch a plan (parallel workers, dep-ordered merge)\n")
 	fmt.Fprintf(out, "  From the shell:\n")
 	fmt.Fprintf(out, "    pb status <slug>           — per-issue state for a plan\n")
-	fmt.Fprintf(out, "    pb dispatch <slug>         — autonomous implementation loop\n")
 	if useLinear {
 		fmt.Fprintf(out, "    pb sync linear push <slug> — push existing plan to Linear (creates project + issues)\n")
 	}

@@ -221,7 +221,6 @@ func TestSetup_ReadyBlockShowsCLIEquivalents(t *testing.T) {
 	output := h.output()
 	assert.Contains(t, output, "From the shell:")
 	assert.Contains(t, output, "pb status")
-	assert.Contains(t, output, "pb dispatch")
 }
 
 func TestSetup_LinearWithInvalidCreds(t *testing.T) {
@@ -294,7 +293,7 @@ func TestSetup_SymlinksToAgentProjectDir(t *testing.T) {
 	targetDir := filepath.Join(dir, ".claude", "skills")
 	entries, err := os.ReadDir(targetDir)
 	require.NoError(t, err)
-	assert.Len(t, entries, 9)
+	assert.Len(t, entries, 8)
 
 	for _, e := range entries {
 		info, err := os.Lstat(filepath.Join(targetDir, e.Name()))
@@ -365,7 +364,7 @@ func TestSetup_NoImplementRemovesInstalledImplementSkills(t *testing.T) {
 	require.NoError(t, testSetupCmd(setupDeps{}).execute())
 
 	targetDir := filepath.Join(dir, ".claude", "skills")
-	implSkills := []string{"bender-implement-prd", "bender-implement-hitl", "bender-implement-issue"}
+	implSkills := []string{"bender-implement-prd", "bender-implement-issue"}
 	for _, name := range implSkills {
 		_, err := os.Lstat(filepath.Join(targetDir, name))
 		require.NoError(t, err, "%s symlink installed before flag flip", name)

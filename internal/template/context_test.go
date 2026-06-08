@@ -45,21 +45,6 @@ func TestBuildContext_NoExtraKeysIsClean(t *testing.T) {
 	assert.NotNil(t, ctx["plans_dir"])
 }
 
-func TestBuildContext_IncludesImplementHitlPhase(t *testing.T) {
-	cfg := config.Defaults()
-	ctx := BuildContext(cfg, config.ResolvedAgent{Name: "claude-code"})
-
-	phases, _ := ctx["pipeline_phases"].([]map[string]string)
-	found := false
-	for _, p := range phases {
-		if p["skill"] == "bender-implement-hitl" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "HITL implementation phase must be present")
-}
-
 func TestBuildContext_BackendOnlyPhaseHiddenWhenLinearDisabled(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Linear.Enabled = false
@@ -95,7 +80,6 @@ func TestSkillRequiresBackend(t *testing.T) {
 
 func TestSkillIsImplement(t *testing.T) {
 	assert.True(t, SkillIsImplement("bender-implement-prd"))
-	assert.True(t, SkillIsImplement("bender-implement-hitl"))
 	assert.True(t, SkillIsImplement("bender-implement-issue"))
 	assert.False(t, SkillIsImplement("bender-write-plan"))
 	assert.False(t, SkillIsImplement("does-not-exist"))

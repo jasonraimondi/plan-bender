@@ -14,6 +14,7 @@ const (
 	StatusInProgress Status = "in-progress"
 	StatusBlocked    Status = "blocked"
 	StatusInReview   Status = "in-review"
+	StatusNeedsInput Status = "needs-input"
 	StatusDone       Status = "done"
 	StatusCanceled   Status = "canceled"
 )

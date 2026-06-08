@@ -21,7 +21,7 @@ func Defaults() Config {
 	ac, _ := agents.Get("claude-code")
 	return Config{
 		Tracks:         []string{"intent", "experience", "data", "rules", "resilience"},
-		WorkflowStates: []string{"backlog", "todo", "in-progress", "blocked", "in-review", "qa", "done", "canceled"},
+		WorkflowStates: []string{"backlog", "todo", "in-progress", "blocked", "needs-input", "in-review", "qa", "done", "canceled"},
 		PlansDir:       "./.plan-bender/plans/",
 		MaxPoints:      3,
 		rawAgents:      map[string]*AgentEntry{"claude-code": {Enabled: true}},

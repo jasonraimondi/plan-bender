@@ -94,6 +94,23 @@ func TestRetry_FlipsBlockedToTodo(t *testing.T) {
 	assert.Equal(t, time.Now().Format("2006-01-02"), issue.Updated)
 }
 
+func TestRetry_FlipsNeedsInputToTodo(t *testing.T) {
+	dir := setupRetryPlan(t, "needs-input", true)
+
+	cmd := NewRetryCmd()
+	cmd.SetArgs([]string{"ship", "4"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Execute())
+
+	assert.Contains(t, out.String(), "blocked → todo")
+
+	issue := loadRetryIssue(t, dir)
+	assert.Equal(t, "todo", issue.Status)
+	require.NotNil(t, issue.Notes, "owner appends a structured note on transition")
+	assert.Contains(t, *issue.Notes, "needs-input→todo: retry")
+}
+
 func TestRetry_RefusesNonBlocked(t *testing.T) {
 	for _, st := range []string{"in-progress", "in-review", "done", "canceled"} {
 		t.Run(st, func(t *testing.T) {
@@ -111,7 +128,7 @@ func TestRetry_RefusesNonBlocked(t *testing.T) {
 			require.ErrorAs(t, err, &agentErr)
 			assert.Equal(t, ErrValidationFailed, agentErr.Code)
 			assert.Contains(t, agentErr.Error(), st, "error message reports current state")
-			assert.Contains(t, agentErr.Error(), "not blocked")
+			assert.Contains(t, agentErr.Error(), "neither blocked nor needs-input")
 
 			issue := loadRetryIssue(t, dir)
 			assert.Equal(t, st, issue.Status, "status should not change on refusal")
@@ -217,7 +234,7 @@ func TestRetry_ConcurrentRaceSurfacesCASMismatch(t *testing.T) {
 		var agentErr *AgentError
 		require.ErrorAs(t, retryErr, &agentErr, "retry error must be AgentError")
 		assert.Equal(t, ErrValidationFailed, agentErr.Code)
-		assert.Contains(t, agentErr.Error(), "not blocked")
+		assert.Contains(t, agentErr.Error(), "neither blocked nor needs-input")
 		casMismatches++
 	}
 	if competeErr == nil {

@@ -23,13 +23,13 @@ func TestGenerateSkills_CreatesSkillFiles(t *testing.T) {
 	count, err := GenerateSkills(dir, cfg, &out)
 	require.NoError(t, err)
 
-	assert.Equal(t, 9, count)
-	assert.Contains(t, out.String(), "9 skills generated")
+	assert.Equal(t, 8, count)
+	assert.Contains(t, out.String(), "8 skills generated")
 
 	agentDir := filepath.Join(dir, ".plan-bender", "skills", "claude-code")
 	entries, err := os.ReadDir(agentDir)
 	require.NoError(t, err)
-	assert.Len(t, entries, 9)
+	assert.Len(t, entries, 8)
 
 	for _, e := range entries {
 		data, err := os.ReadFile(filepath.Join(agentDir, e.Name(), "SKILL.md"))
@@ -80,10 +80,10 @@ func TestGenerateSkills_OmitsImplementSkillsWhenNoImplement(t *testing.T) {
 	count, err := GenerateSkills(dir, cfg, &out)
 	require.NoError(t, err)
 
-	// Default config generates 9 skills; no_implement drops the 3 implement ones.
+	// Default config generates 8 skills; no_implement drops the 2 implement ones.
 	assert.Equal(t, 6, count)
 
-	for _, name := range []string{"bender-implement-prd", "bender-implement-hitl", "bender-implement-issue"} {
+	for _, name := range []string{"bender-implement-prd", "bender-implement-issue"} {
 		_, err := os.Stat(filepath.Join(dir, ".plan-bender", "skills", "claude-code", name))
 		assert.True(t, os.IsNotExist(err), "%s must not be generated when no_implement is set", name)
 	}
@@ -152,23 +152,14 @@ func TestGenerateSkills_MultipleAgents(t *testing.T) {
 	count, err := GenerateSkills(dir, cfg, &out)
 	require.NoError(t, err)
 
-	assert.Equal(t, 18, count)
-	assert.Contains(t, out.String(), "18 skills generated")
+	assert.Equal(t, 16, count)
+	assert.Contains(t, out.String(), "16 skills generated")
 
 	for _, agent := range []string{"claude-code", "openclaw"} {
 		entries, err := os.ReadDir(filepath.Join(dir, ".plan-bender", "skills", agent))
 		require.NoError(t, err)
-		assert.Len(t, entries, 9, "agent %s should have 9 skill dirs", agent)
+		assert.Len(t, entries, 8, "agent %s should have 8 skill dirs", agent)
 	}
-
-	ccData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "claude-code", "bender-implement-hitl", "SKILL.md"))
-	require.NoError(t, err)
-	assert.Contains(t, string(ccData), "AskUserQuestionTool")
-
-	ocData, err := os.ReadFile(filepath.Join(dir, ".plan-bender", "skills", "openclaw", "bender-implement-hitl", "SKILL.md"))
-	require.NoError(t, err)
-	assert.NotContains(t, string(ocData), "AskUserQuestionTool")
-	assert.Contains(t, string(ocData), "Ask the user directly in conversation")
 }
 
 func TestGenerateCmd_NoForkedNextTemplates_NoWarning(t *testing.T) {

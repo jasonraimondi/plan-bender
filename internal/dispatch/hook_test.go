@@ -12,8 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/jasonraimondi/plan-bender/internal/config"
 )
 
 func TestRunHook_EmptyCmdIsNoOp(t *testing.T) {
@@ -104,83 +102,37 @@ func TestRunHook_TimeoutReturnsDespiteSurvivingGrandchild(t *testing.T) {
 		"RunHook must return on a bounded delay, not wait out the grandchild lifetime")
 }
 
-// Wiring: before_issue hook failure marks the issue blocked and skips the
-// subprocess.
-func TestDispatcher_BeforeIssueHookFailureBlocksIssue(t *testing.T) {
-	fix := setupDispatch(t)
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
-	installSkillFile(t, fix.root)
-	// stub claude that would succeed if it ran — we'll prove it didn't.
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
-exit 0
-`, fix.plansDir))
-
-	cfg := config.Defaults()
-	cfg.Hooks.BeforeIssue = `echo prep && exit 1`
-	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Out: &bytes.Buffer{}}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	err := d.Run(ctx, "demo")
-	require.Error(t, err)
-
-	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
-	assert.Equal(t, "blocked", post.Status, "issue should be blocked when before_issue fails")
-	require.NotNil(t, post.Notes)
-	assert.Contains(t, *post.Notes, "before_issue hook failed")
-}
-
-// Wiring: after_issue hook failure does not change issue status.
-func TestDispatcher_AfterIssueHookFailureLogsButContinues(t *testing.T) {
-	fix := setupDispatch(t)
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
-	installSkillFile(t, fix.root)
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
-exit 0
-`, fix.plansDir))
-
-	cfg := config.Defaults()
-	cfg.Hooks.AfterIssue = `echo afterfail >&2; exit 1`
-	var out bytes.Buffer
-	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Out: &out}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	require.NoError(t, d.Run(ctx, "demo"))
-
-	post := loadIssueJSON(t, fix.plansDir, 1, "alpha")
-	assert.Equal(t, "done", post.Status, "after_issue hook failure must not block the issue")
-	assert.Contains(t, out.String(), "after_issue hook failed")
-}
-
 // TestDispatcher_AfterBatchHookCwdIsIntegrationWorktree asserts the after_batch
 // hook runs with cwd set to the per-slug integration worktree, NOT the parent
 // repo. Hooks that run tests (`pnpm test`) need to see the post-merge state,
-// which only exists in the integration worktree under the new MergeBack flow.
+// which only exists in the integration worktree under the MergeBack flow.
 func TestDispatcher_AfterBatchHookCwdIsIntegrationWorktree(t *testing.T) {
 	fix := setupDispatch(t)
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	branch := "tester/demo--1-alpha"
+	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
+	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Branch = &branch
+	writeIssue(t, fix.plansDir, iss)
 	installSkillFile(t, fix.root)
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
-exit 0
-`, fix.plansDir))
 
 	markerPath := filepath.Join(t.TempDir(), "after_batch_cwd")
-	cfg := config.Defaults()
-	cfg.Hooks.AfterBatch = fmt.Sprintf(`pwd > %q`, markerPath)
-	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Out: &bytes.Buffer{}}
+	d.Config.Hooks.AfterBatch = fmt.Sprintf(`pwd > %q`, markerPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	require.NoError(t, d.Run(ctx, "demo"))
+	_, err = d.Merge(ctx, "demo")
+	require.NoError(t, err)
 
 	data, err := os.ReadFile(markerPath)
 	require.NoError(t, err)
 
 	// pwd in the hook may resolve symlinks; EvalSymlinks the expected path to
-	// match. The iwt itself is GC'd at AllDone, so we resolve symlinks on the
-	// parent dir (which survives) and append the iwt basename rather than
-	// EvalSymlinks'ing the leaf path directly.
+	// match. We resolve symlinks on the parent dir and append the iwt basename
+	// rather than EvalSymlinks'ing the leaf path directly.
 	parent, err := filepath.EvalSymlinks(filepath.Dir(fix.root))
 	require.NoError(t, err)
 	expected := filepath.Join(parent, "repo-wt", "demo", "_integration")
@@ -195,23 +147,26 @@ exit 0
 // Wiring: after_batch hook runs after merge-back; failure logs but does not abort.
 func TestDispatcher_AfterBatchHookRuns(t *testing.T) {
 	fix := setupDispatch(t)
-	writeIssue(t, fix.plansDir, mkAFKIssue(1, "alpha", "todo"))
+	d := newDispatcher(fix)
+	integrationBranch, err := d.ensureIntegrationBranch(context.Background(), "demo")
+	require.NoError(t, err)
+
+	branch := "tester/demo--1-alpha"
+	makeMergeableBranch(t, fix.root, integrationBranch, branch, "alpha.txt")
+	iss := mkAFKIssue(1, "alpha", "in-review")
+	iss.Branch = &branch
+	writeIssue(t, fix.plansDir, iss)
 	installSkillFile(t, fix.root)
-	installClaudeStub(t, fmt.Sprintf(`sed -i.bak 's/"status": "in-progress"/"status": "in-review"/' "%s/demo/issues/1-alpha.json"
-exit 0
-`, fix.plansDir))
 
 	markerPath := filepath.Join(t.TempDir(), "after_batch_ran")
-	cfg := config.Defaults()
-	cfg.Hooks.AfterBatch = fmt.Sprintf(`echo done > %q`, markerPath)
-	d := &Dispatcher{Config: cfg, Root: fix.root, PlansDir: fix.plansDir, Out: &bytes.Buffer{}}
+	d.Config.Hooks.AfterBatch = fmt.Sprintf(`echo done > %q`, markerPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	require.NoError(t, d.Run(ctx, "demo"))
+	_, err = d.Merge(ctx, "demo")
+	require.NoError(t, err)
 
 	data, err := os.ReadFile(markerPath)
 	require.NoError(t, err)
 	assert.Equal(t, "done\n", string(data))
 }
-

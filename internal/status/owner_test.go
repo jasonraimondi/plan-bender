@@ -64,6 +64,42 @@ func TestTransition_AllAllowedEdgesSucceed(t *testing.T) {
 	}
 }
 
+func TestTransition_NeedsInputEdges(t *testing.T) {
+	allowed := []struct {
+		from, to Status
+	}{
+		{StatusInProgress, StatusNeedsInput},
+		{StatusNeedsInput, StatusTodo},
+		{StatusNeedsInput, StatusInProgress},
+	}
+	for _, c := range allowed {
+		t.Run("allowed_"+string(c.from)+"->"+string(c.to), func(t *testing.T) {
+			o, store, _ := newTestOwner(t)
+			store.seed("p", issueAt(1, string(c.from)))
+
+			err := o.Transition(context.Background(), "p", 1, []Status{c.from}, c.to, "")
+			require.NoError(t, err)
+
+			got, err := store.Load("p")
+			require.NoError(t, err)
+			require.Equal(t, string(c.to), got[0].Status)
+		})
+	}
+
+	t.Run("rejected_needs-input->done", func(t *testing.T) {
+		o, store, _ := newTestOwner(t)
+		store.seed("p", issueAt(1, string(StatusNeedsInput)))
+
+		err := o.Transition(context.Background(), "p", 1, []Status{StatusNeedsInput}, StatusDone, "")
+
+		var illegal *ErrIllegalTransition
+		require.ErrorAs(t, err, &illegal)
+		require.Equal(t, StatusNeedsInput, illegal.From)
+		require.Equal(t, StatusDone, illegal.To)
+		require.Equal(t, 0, store.saves)
+	})
+}
+
 func TestTransition_DisallowedEdgeReturnsErrIllegalTransition(t *testing.T) {
 	o, store, _ := newTestOwner(t)
 	store.seed("p", issueAt(1, string(StatusTodo)))

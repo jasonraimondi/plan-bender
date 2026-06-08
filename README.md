@@ -9,7 +9,7 @@
 
 **Structured planning pipeline for AI coding agents — from interview to implementation.**
 
-[Install](#install) • [Quickstart](#quickstart) • [How it works](#how-it-works) • [Skills](#skills) • [Dispatch](#autonomous-dispatch) • [Configuration](#configuration) • [Docs](#docs)
+[Install](#install) • [Quickstart](#quickstart) • [How it works](#how-it-works) • [Skills](#skills) • [Implement](#autonomous-implementation) • [Configuration](#configuration) • [Docs](#docs)
 
 </div>
 
@@ -21,7 +21,7 @@ plan-bender turns vague product ideas into thin, dependency-ordered, agent-ready
 interview ──► PRD ──► thin-sliced issues ──► implementation ──► PR
 ```
 
-It is **not** an agent runtime. It writes JSON and skill markdown; your agent (Claude Code, opencode, openclaw, or Pi) does the work. The `pba dispatch` loop fans out parallel git worktrees so multiple AFK issues can run concurrently.
+It is **not** an agent runtime. It writes JSON and skill markdown; your agent (Claude Code, opencode, openclaw, or Pi) does the work. The `/bender-implement-prd` dispatcher fans out parallel git-worktree workers so independent issues run concurrently, merging each back in dependency order.
 
 > [!NOTE]
 > plan-bender is pre-1.0. The CLI surface is stable for day-to-day use but expect rough edges. Feedback and issues welcome.
@@ -30,7 +30,7 @@ It is **not** an agent runtime. It writes JSON and skill markdown; your agent (C
 
 - **Opinionated planning workflow** — interview → PRD → issues → review → implement, each step a dedicated skill
 - **Thin vertical slices** — hard `max_points: 3` cap forces decomposition into tracer-bullet issues
-- **Autonomous dispatch** — `pba dispatch` runs the implementation loop end-to-end with parallel worktrees, dependency-ordered merge-back, and lifecycle hooks
+- **Autonomous implementation** — the `/bender-implement-prd` dispatcher drives a loop of parallel git-worktree workers with dependency-ordered merge-back (`pba merge`) and lifecycle hooks
 - **JSON state** — PRDs and issues live in `.plan-bender/plans/<slug>/` next to your code, diffable and reviewable
 - **Multi-agent** — emits skills for `claude-code`, `opencode`, `openclaw`, and `pi`
 - **Optional Linear backend** — sync local issues with a Linear project; local JSON stays the source of truth
@@ -89,8 +89,7 @@ plan-bender is a methodology made executable. Each phase has a dedicated skill t
 | Discovery | `/bender-interview-me` | Stress-tested idea, surfaced assumptions |
 | Plan | `/bender-write-plan` | `prd.json` plus thin-sliced issues with dep graph and tracks, in one pass |
 | Review | `/bender-review-prd` | Principal-engineer pass with auto-fix |
-| Implementation | `/bender-implement-prd` | `pba dispatch` runs all AFK issues |
-| HITL issue | `/bender-implement-hitl` | Resolve human decisions, then AFK or implement |
+| Implementation | `/bender-implement-prd` | Parallel workers drive issues to done |
 | Single issue | `/bender-implement-issue` | Branch → code → test → PR |
 
 ### Plan layout
@@ -129,7 +128,7 @@ A minimal issue:
 }
 ```
 
-`track` is `intent` | `experience` | `data` | `rules` | `resilience`. `points` is hard-capped at `max_points` (default 3). `labels` use `AFK` (autonomous) or `HITL` (needs human input).
+`track` is `intent` | `experience` | `data` | `rules` | `resilience`. `points` is hard-capped at `max_points` (default 3). `labels` use `AFK` or `HITL` as **escalation hints** — they tune how eagerly a worker escalates a human decision, not which issues are workable.
 
 See [docs/schema.md](docs/schema.md) for the full schema.
 
@@ -145,7 +144,6 @@ flowchart LR
     P["/bender-write-plan"]
     R["/bender-review-prd"]:::optional
     M["/bender-implement-prd"]
-    H["/bender-implement-hitl"]:::optional
     WI["/bender-write-issue"]
     II["/bender-implement-issue"]
     L["/bender-sync-linear"]:::side
@@ -157,9 +155,6 @@ flowchart LR
     R --> M
     P -.skip review.-> M
     M --> Done
-    M -.HITL remains.-> H
-    H --> M
-    H --> Done
 
     I -.single issue.-> WI
     WI --> II
@@ -178,35 +173,39 @@ flowchart LR
 | `/bender-write-plan` | Interview + explore codebase + write `prd.json` and decompose into issues in one pass |
 | `/bender-write-issue` | Create a single issue |
 | `/bender-review-prd` | Principal-engineer review with auto-fix |
-| `/bender-implement-prd` | Run `pba dispatch` to work all issues in dependency order |
-| `/bender-implement-hitl` | Resolve human-gated issues and either hand back to AFK or implement now |
+| `/bender-implement-prd` | Drive parallel workers to implement all issues in dependency order |
 | `/bender-implement-issue` | One issue end-to-end: branch, code, test, PR |
 | `/bender-sync-linear` | Sync plan with Linear (Linear backend only) |
 
-## Autonomous dispatch
+## Autonomous implementation
 
-`pba dispatch <slug>` is the autonomous loop behind `/bender-implement-prd`. It:
+`/bender-implement-prd <slug>` is a live **dispatcher**: it drives the harness Workflow tool through a loop until the plan is stable.
 
-1. Resolves an integration branch from `pipeline.branch_strategy` (`integration` creates `<git-user>/<slug>` off the default branch; `direct` merges straight to default).
-2. Computes the next batch of unblocked AFK issues.
-3. For each issue: creates a worktree → atomically claims it (`status: in-progress` + `branch:`) → runs `before_issue` hook → spawns `claude --print` in the worktree → runs `after_issue` hook.
-4. Per-subprocess transcripts stream as `[issue-N] …` and land in `.plan-bender/logs/<slug>/<id>.log`. Each subprocess is capped by `pipeline.subprocess_timeout` (default `30m`).
-5. Merges successful branches into the integration branch in dependency order, flipping each merged issue to `done`. Conflicts mark the issue `blocked` and abort.
-6. Runs the `after_batch` hook in the repo root.
+1. **Scout** — selects the *ready* issues: those whose `blocked_by` are all `done` and whose status is `backlog`/`todo`/`in-progress`. Readiness is label-agnostic.
+2. **Workers** — spawns one git-worktree-isolated worker per ready issue (`/bender-implement-issue`). Each claims its issue, implements and tests it, then signals one of three outcomes: `complete` (→ `in-review`), `park` (→ `needs-input`, a genuine human decision), or leaves it `blocked` (a technical failure).
+3. **Merge** — `pba merge <slug>` integrates every `in-review`, dependency-satisfied issue into the integration branch in dependency order, flipping each to `done`. A conflict marks that issue `blocked` and aborts its merge; siblings still land. The `after_batch` hook runs in the integration worktree.
+4. **Loop** — re-scouts and repeats. Between rounds it batches any `needs-input` issues into one round of questions, writes your decisions back into the issue JSON, and `retry`s them to `todo`.
 
-> [!IMPORTANT]
-> Dispatch refuses to run with a dirty working tree. It captures and restores `HEAD` on exit so a successful run never silently leaves you on the integration branch.
+When every issue is `done`, the dispatcher runs your chosen completion mode (`merge` / `branch` / `pr`). Issues left `blocked` or `needs-input` keep their dependents unready and are reported, not guessed.
 
-**Exit codes:** `0` (all done) • `2` (only HITL issues remain — run `/bender-implement-hitl <slug>`) • `1` (failure — stuck-on-blocked, dirty repo, etc.)
+All merge-back happens inside a dedicated per-slug integration worktree, so the parent repo's `HEAD` is never touched — you can keep working in it during a run (see [ADR-0003](docs/adr/0003-merge-in-dedicated-integration-worktree.md)).
 
-### Recovering from a stuck dispatch
+> [!NOTE]
+> The dispatcher drives the Claude Code **Workflow** tool, so the autonomous loop is Claude-Code-specific. The worker skill (`/bender-implement-issue`) stays portable across agents.
+
+### Standalone merge-back
+
+`pb merge <slug>` (or `pba merge`) runs just the dependency-ordered merge-back — integrating completed (`in-review`, deps-done) issues into the integration branch — without the dispatcher loop. It is idempotent and never moves the parent repo's `HEAD`.
+
+### Recovering from a stuck issue
 
 ```sh
 pb status <slug>            # see per-issue state and failure notes
 # fix the underlying problem
-pb retry <slug> <id>        # flip blocked → todo (appends transition note)
-pb dispatch <slug>          # resume
+pb retry <slug> <id>        # flip blocked/needs-input → todo (appends a note)
 ```
+
+Then re-run `/bender-implement-prd <slug>` to pick up where it left off.
 
 ## Configuration
 
@@ -282,9 +281,10 @@ Local JSON remains the source of truth; Linear mirrors it.
 pb setup                       # idempotent — write config + regenerate skills
 pb next <slug>                 # recommended next issue
 pb status <slug>               # per-issue state + failure notes
-pb dispatch <slug>             # autonomous loop
+pb merge <slug>                # merge completed issues in dependency order
 pb complete <slug> <id>        # flip to in-review (used by sub-agents)
-pb retry <slug> <id>           # blocked → todo, clear notes
+pb park <slug> <id>            # in-progress → needs-input (human decision)
+pb retry <slug> <id>           # blocked/needs-input → todo
 pb worktree create <slug> <id> # branch + worktree for one issue
 pb worktree gc <slug>          # clean up merged branches/worktrees
 pb sync linear <push|pull> <slug>
@@ -300,7 +300,7 @@ The `locksafe` workflow runs `go run ./tools/locksafe/cmd/locksafe ./...`; maint
 
 ## Docs
 
-- [CLI reference](docs/cli.md) — every command, dispatch lifecycle, recovery
+- [CLI reference](docs/cli.md) — every command, the merge command, recovery
 - [Configuration](docs/configuration.md) — full config keys, templates, agents
 - [Schema](docs/schema.md) — PRD and issue JSON shapes
 

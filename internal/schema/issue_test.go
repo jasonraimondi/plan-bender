@@ -3,10 +3,10 @@ package schema
 import (
 	"testing"
 
+	"encoding/json"
 	"github.com/jasonraimondi/plan-bender/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"encoding/json"
 )
 
 func defaultConfig() config.Config {
@@ -127,6 +127,13 @@ func TestIssueValidate_AllValidPriorities(t *testing.T) {
 	}
 }
 
+func TestIssueValidate_NeedsInputStatus(t *testing.T) {
+	issue := validIssue()
+	issue.Status = "needs-input"
+	errs := issue.Validate(defaultConfig())
+	assert.Empty(t, errs, "needs-input must be a valid status under default config")
+}
+
 func TestIssueJSON_RoundTrip(t *testing.T) {
 	issue := validIssue()
 	data, err := json.Marshal(&issue)
@@ -135,4 +142,16 @@ func TestIssueJSON_RoundTrip(t *testing.T) {
 	var parsed Issue
 	require.NoError(t, json.Unmarshal(data, &parsed))
 	assert.Equal(t, issue, parsed)
+}
+
+func TestIssueNeedsInput_RoundTrip(t *testing.T) {
+	issue := validIssue()
+	issue.Status = "needs-input"
+	data, err := json.Marshal(&issue)
+	require.NoError(t, err)
+
+	var parsed Issue
+	require.NoError(t, json.Unmarshal(data, &parsed))
+	assert.Equal(t, "needs-input", parsed.Status)
+	assert.Empty(t, parsed.Validate(defaultConfig()))
 }

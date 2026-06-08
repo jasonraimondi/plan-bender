@@ -65,9 +65,6 @@ func writeNextHuman(w io.Writer, r plan.Result) {
 	if r.WasBlocked {
 		flags += " [stale-blocked]"
 	}
-	if r.RequiresHuman {
-		flags += " [HITL]"
-	}
 	fmt.Fprintf(w, "#%d %s%s\n", r.Issue.ID, r.Issue.Name, flags)
 	fmt.Fprintf(w, "  reason: %s\n", r.Reason)
 	if len(r.Skipped) > 0 {
