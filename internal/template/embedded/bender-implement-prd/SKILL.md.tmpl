@@ -1,6 +1,7 @@
 ---
 name: bender-implement-prd
 description: Work through a PRD's issues in dependency order using JSON workflow states, batched human-decision escalation, and proper status tracking. Defaults to parallel git worktrees merged into one feature branch.
+disable-model-invocation: true
 {{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
 {{end}}

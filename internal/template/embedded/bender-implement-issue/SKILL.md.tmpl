@@ -1,6 +1,7 @@
 ---
 name: bender-implement-issue
 description: Implement one or more plan issues end-to-end with proper branching, testing, and status tracking via JSON workflow states.
+disable-model-invocation: true
 {{if .has_backend_sync}}
 allowed-tools: Bash(linear:*), Bash(jq:*)
 {{end}}
