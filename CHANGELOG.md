@@ -2,6 +2,36 @@
 
 All notable changes to plan-bender are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); plan-bender is pre-1.0 so breaking changes ship in patch releases until v1.
 
+## v0.0.71
+
+### Changed
+
+- All bender skills now set `disable-model-invocation: true` in their frontmatter. The agent can no longer auto-trigger them off conversational phrasing; they run only when explicitly invoked (`/bender-orchestrator`, `/bender-write-plan`, etc.) or dispatched by another skill.
+
+## v0.0.70
+
+### Added
+
+- `pb merge <slug>` / `pba merge`: standalone dependency-ordered merge-back. Acquires the per-slug `.dispatch.lock`, selects in-review issues whose `blocked_by` are all done (or merged in the same call), and reuses the integration-branch machinery — all git work stays inside the integration worktree, so the parent HEAD is never touched (ADR-0003).
+- `needs-input` workflow status plus a `park` command to move an issue into it; `retry` is generalized to resume parked issues alongside blocked ones.
+- ADR-0006 documenting the harness-driven dispatcher model; CONTEXT dispatch glossary, CLI docs, and README updated to match.
+
+### Changed
+
+- **Breaking:** `bender-implement-prd` is rewritten as a live Workflow dispatcher. Instead of delegating to the `pb dispatch` subcommand, the skill drives the harness Workflow tool directly: a loop-until-stable of scout → parallel worktree-isolated workers → merger, with batched needs-input interviews (AskUserQuestion + retry-resume) between rounds. A cross-run `.dispatcher.lock` guards the loop, distinct from merge's per-round `.dispatch.lock`. Completion-mode pre-flight, merge/branch/pr mechanics, and the status report survive with their triggers adapted from dispatch exit codes to loop-reaches-stable + all-done.
+- **Breaking:** `bender-implement-issue` is rewritten as a warm in-session worker contract, replacing the INTEGRATION-vs-STANDALONE framing. The worker claims the issue via worktree create, does all work in that worktree, and returns exactly one structured outcome: completed (ran `complete`), blocked (unrecoverable technical failure), or needs-decision (park to needs-input with a decision payload). The worker no longer integrates — merge-back belongs to the dispatcher.
+- Readiness is now label-agnostic: `Ready` returns dependency-satisfied non-terminal issues regardless of AFK/HITL labels, and the `requires_human` computation is gone. Human involvement is handled by the dispatcher's escalation path, not the dep graph.
+
+### Removed
+
+- **Breaking:** the `dispatch` command and the cold `claude --print` subprocess engine (subprocess runner, prompt builder, verdict check, HITL summary, bug-report command). Only the merge-back internals and the hook system survive.
+- **Breaking:** the `bender-implement-hitl` skill — its interview logic is folded into the dispatcher's batched needs-input round. The generate pipeline's wipe-and-prune already removes previously generated copies and symlinks.
+- **Breaking:** dead config keys `max_parallel` and `subprocess_timeout`.
+
+### Fixed
+
+- The `pb setup` success banner no longer advertises the removed `pb dispatch`; the implementation entry point is now listed as `/bender-implement-prd` under the agent section.
+
 ## v0.0.62
 
 ### Added
